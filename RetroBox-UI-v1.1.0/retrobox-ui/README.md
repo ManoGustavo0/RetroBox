@@ -51,7 +51,7 @@ category:AddButton({
 })
 ```
 
-O avatar, o nome de exibição e o @usuário vêm do `LocalPlayer`. A engrenagem ao lado abre temas e configurações. A library fornece a interface e o estado dos componentes; você escreve a lógica nos callbacks.
+O avatar, o nome de exibição e o @usuário vêm do `LocalPlayer`. A engrenagem seleciona a aba Configurações, que já vem na library. A library fornece a interface e o estado dos componentes; você escreve a lógica nos callbacks.
 
 O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carregamento. [Loader.lua](Loader.lua) é uma alternativa com mensagens de erro de download, compilação e inicialização. O arquivo principal não depende de outros downloads de código.
 
@@ -62,10 +62,15 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Seis temas: **Retro98, Terminal, GameBoy, Paper, Midnight e Monokai**, além de temas próprios.
 - Bordas em relevo, fonte monoespaçada, cores de destaque e linhas CRT opcionais.
 - Abas, categorias, busca e colunas que se empilham em telas menores.
+- Aba Configurações automática, com lista de saves nomeados, salvar/carregar e confirmação antes de sobrescrever.
+- Pesquisa com resultados que levam à aba e ao controle escolhido, sem executar sua ação.
 - Toggle, Slider, Button, Input, Dropdown simples/múltiplo, Keybind, ColorPicker, Progress, Console, Label, Separator e Image.
 - Tooltip opcional em todos os controles: explicação ao passar o mouse ou segurar o título/descrição no celular.
 - HSV, campos R/G/B e HEX, opacidade e RGB animado com duração de ciclo configurável.
 - Notificações, callbacks protegidos, listeners e mudanças de valores por código.
+- Diálogos retrô, confirmações e feedback de execução/sucesso/erro em botões.
+- Captura de teclas e Mouse 1/2/3; keybind ao lado de um toggle e linhas de controles combinados.
+- Atalhos flutuantes para toque, com arraste, tamanho/opacidade e posições salvas.
 - JSON, perfis e salvamento automático opcional.
 - Limpeza de eventos ao destruir controles ou a janela; `OnDestroy` para limpar eventos do seu próprio script.
 
@@ -91,6 +96,42 @@ control:SetTooltip("Você pode mudar a explicação depois.")
 ```
 
 `Tip` também é aceito como nome da opção. A dica acompanha o tema, quebra linhas e ajusta sua posição aos limites da tela. Ler uma dica não chama o callback do controle. Veja [tooltips.lua](examples/tooltips.lua) e [as opções completas](docs/API.md#tooltip).
+
+## Toggle com tecla ao lado e atalho no celular
+
+```lua
+local feature = category:AddToggle({
+    Id = "feature", Title = "Ativar recurso",
+    Keybind = { Default = Enum.UserInputType.MouseButton2, Mode = "Toggle" },
+    Floating = { Text = "RECURSO", Position = Vector2.new(.04,.65) },
+    Callback = function(enabled)
+        -- Atualize o estado do seu script aqui.
+        print("Recurso:", enabled)
+    end,
+})
+```
+
+Clique no campo do atalho e pressione uma tecla ou botão do mouse. Escape cancela; Backspace remove. Hold ativa enquanto pressionado; Toggle alterna. `feature.Keybind` permite consultar ou mudar o binding por código. O botão flutuante aparece em dispositivos com toque quando o menu está oculto/minimizado; arraste pela barra `::` para reposicioná-lo.
+
+O X **oculta** a janela por padrão. **Shift direito** e o botão `UI` permitem reabrir. Em Configurações, o jogador pode trocar o atalho da janela, habilitar o botão de reabrir, mudar seu texto e ajustar tamanho/opacidade dos atalhos. `DestroyOnClose = true` mantém a opção de destruir pelo X.
+
+## Diálogos e feedback
+
+```lua
+category:AddButton({
+    Title = "Executar ação", Feedback = true, BusyText = "Processando...",
+    Callback = function()
+        -- Sua ação pode retornar false, "motivo" para informar uma falha.
+        return true
+    end,
+})
+window:Confirm({
+    Title = "Continuar?", Content = "Executar a ação escolhida?",
+    OnConfirm = function() print("Ação confirmada") end,
+})
+```
+
+`CreateRow()` permite colocar componentes na mesma linha, empilhando-os em telas estreitas. A pesquisa mostra os resultados com aba/categoria: clique, ou use setas e Enter, para encontrar o controle. Veja [workflows.lua](examples/workflows.lua) e [API.md](docs/API.md).
 
 ## RGB conectado ao seu script
 
@@ -134,6 +175,8 @@ print(window.StorageMode) -- "file", "memory" ou "custom"
 
 Use `Id`, IDs de controles e `ConfigFolder` estáveis para restaurar configurações em outra execução. Com os padrões, a pasta é `RetroBox/script-<Id codificado>`. Perfis recebem nomes como `profile-default.json`; caracteres especiais são codificados para impedir colisões e separadores de caminho.
 
+A aba Configurações permite digitar o nome do save, salvar e depois selecioná-lo na lista para carregar. Um índice mantém os nomes disponíveis em outra execução quando há armazenamento em arquivo. O save inclui valores, atribuições de teclas/mouse, cores/RGB, tema, escala e aparência/posições dos atalhos. O jogador recebe aviso de sucesso ou erro. Saves em memória duram enquanto a janela estiver aberta.
+
 `LoadConfig` chama os callbacks por padrão. `{ Silent = true }` evita os callbacks; nesse caso, sincronize sua lógica por `GetFlag`. Valores inválidos são rejeitados antes de alterar a janela. `AutoSave` usa debounce de 0.8 s e **não carrega** o perfil automaticamente.
 
 `FileStorage = false` seleciona memória da sessão. `Storage = { Save = ..., Load = ... }` tem prioridade sobre os arquivos e permite um backend próprio. Veja [o exemplo de configurações](examples/storage-adapter.lua).
@@ -147,12 +190,13 @@ Use `Id`, IDs de controles e `ConfigFolder` estáveis para restaurar configuraç
 | [custom-theme.lua](examples/custom-theme.lua) | Paleta própria |
 | [storage-adapter.lua](examples/storage-adapter.lua) | Arquivos, AutoSave e backend próprio |
 | [tooltips.lua](examples/tooltips.lua) | Dicas simples, personalizadas e alteradas por código |
+| [workflows.lua](examples/workflows.lua) | Saves, keybind combinado, atalhos, pesquisa, feedback e diálogos |
 | [executor-smoke.lua](tests/executor-smoke.lua) | Conferência na engine pelo executor |
 
-Loader e exemplos usam o raw deste repositório. Para carregar a atualização, `RetroBox.lua` nesse caminho precisa conter a versão 1.2.0 ou posterior. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
+Loader e exemplos usam o raw deste repositório. Para carregar a atualização, `RetroBox.lua` nesse caminho precisa conter a versão 1.3.0 ou posterior. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
 
 ## Validação e licença
 
-49 testes locais passaram, incluindo carregamento simulado do código raw, os cinco exemplos, callbacks, cores, configurações, arquivos, permissões de GUI e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+72 testes locais passaram, incluindo carregamento simulado do código raw, os seis exemplos, callbacks, saves entre execuções, entrada de mouse/teclado/toque, diálogos, busca, atalhos, cores, arquivos e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026

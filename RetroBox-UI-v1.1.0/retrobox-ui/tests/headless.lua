@@ -292,16 +292,19 @@ test("file folders reject traversal and profile encoding has no collisions",func
     for _,name in ipairs({"a b","a%20b","..","CON","ação"}) do assert(window:SaveConfig(name)) end
     local count=0
     for path in pairs(fs.Files) do
-        assert(path:match("^RetroBox/Paths/profile%-[^/]+%.json$")); count=count+1
+        if path~="RetroBox/Paths/profiles-index.json" then
+            assert(path:match("^RetroBox/Paths/profile%-[^/]+%.json$")); count=count+1
+        end
     end
     assert(count==5 and fs.Files["RetroBox/Paths/profile-a%20b.json"] and fs.Files["RetroBox/Paths/profile-a%2520b.json"])
+    assert(#window:GetConfigNames()==5)
     window:Destroy(); clearFiles(); Mock.pump(); assert(Mock.Connections==0)
 end)
 test("optional file predicates are not required",function()
     local fs=filesystem(); isfile=nil; isfolder=nil
     local window=Library:CreateWindow({Id="minimal-files"})
     assert(window.StorageMode=="file" and window:SaveConfig("default") and window:LoadConfig("default"))
-    assert(window:SaveConfig("default") and fs.Writes==2)
+    assert(window:SaveConfig("default") and fs.Writes==3)
     window:Destroy(); clearFiles(); Mock.pump(); assert(Mock.Connections==0)
 end)
 test("custom storage and explicit memory take precedence over files",function()
@@ -318,12 +321,13 @@ test("autosave debounces changes into the latest file state",function()
     local window=Library:CreateWindow({Id="auto",ConfigFolder="RetroBox/Auto",AutoSave="latest"})
     local control=window:CreateTab("Main"):CreateSection("Main"):AddSlider({Id="amount",Min=0,Max=10,Default=0})
     control:SetValue(2); control:SetValue(7); Mock.pump(.79); assert(fs.Writes==0)
-    Mock.pump(.02); assert(fs.Writes==1)
+    Mock.pump(.02); assert(fs.Writes==2) -- profile + first-time name index
     local config=Mock.Services.HttpService:JSONDecode(fs.Files["RetroBox/Auto/profile-latest.json"])
     assert(config.Flags.amount.Value==7)
-    control:SetValue(9); window:Destroy(); Mock.pump(1); assert(fs.Writes==1)
+    control:SetValue(9); window:Destroy(); Mock.pump(1); assert(fs.Writes==2)
     clearFiles(); assert(Mock.Connections==0)
 end)
+dofile("tests/workflows.lua")(Mock,Library,test)
 test("diagnostic loader reports HTTP, compile and library errors",function()
     loadstring=load
     for _,response in ipairs({function() error("HTTP failed") end,function() return "local" end,function() return "return {}" end,function() return "" end}) do
@@ -343,7 +347,7 @@ test("all shipped examples use the public API and clean up",function()
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -352,7 +356,7 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==5 and #loaded==5)
+    assert(requests==6 and #loaded==6)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
             window:ShowSettings(true); window:ShowSettings(false)

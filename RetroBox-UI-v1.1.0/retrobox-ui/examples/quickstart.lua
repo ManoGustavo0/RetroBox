@@ -18,6 +18,8 @@ category:AddToggle({
     Title = "Ativar recurso",
     Tooltip = "Ativa ou desativa o recurso. O callback recebe true ou false.",
     Default = false,
+    Keybind = { Default = Enum.KeyCode.F, Mode = "Toggle" },
+    Floating = { Text = "RECURSO", Position = Vector2.new(.04, .65) },
     Callback = function(enabled)
         print("Recurso:", enabled)
     end,
@@ -43,4 +45,6 @@ category:AddButton({
 })
 
 -- Avatar and player names are filled in automatically.
--- The gear opens built-in themes, accessibility options and configurations.
+-- Settings is a built-in tab. The gear selects it.
+-- X hides the menu; RightShift or the draggable UI button opens it again.
+-- Floating shortcuts appear on touch devices while the menu is hidden/minimized.

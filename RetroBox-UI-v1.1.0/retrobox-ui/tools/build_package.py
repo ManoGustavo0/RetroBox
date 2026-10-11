@@ -51,7 +51,7 @@ def visual_concept():
         text(x + w - offset + 6, y + 15, caption, size=15)
     text(x + 17, y + 60, "Pequenas peças. Interfaces completas.", "Muted", 15)
     nav_x, nav_y = x + 14, y + 96
-    for i, caption in enumerate([">  Início", "*  Visual", "+  Componentes", "#  Eventos"]):
+    for i, caption in enumerate([">  Início", "*  Visual", "+  Componentes", "#  Eventos", "⚙  Configurações"]):
         box = (nav_x, nav_y + i * 49, nav_x + 186, nav_y + i * 49 + 40)
         raised(box, "Accent" if i == 1 else "Surface")
         text(nav_x + 12, box[1] + 10, caption, "AccentText" if i == 1 else "Text", 16)
@@ -67,6 +67,8 @@ def visual_concept():
     text(left_x + 15, left_y + 51, "Exemplo visual do seu script.", size=14)
     text(left_x + 15, left_y + 75, "A cor acompanha o ColorPicker.", "Muted", 13)
     text(left_x + 15, left_y + 121, "Mostrar círculo", size=16)
+    raised((left_x + left_w - 153, left_y + 117, left_x + left_w - 62, left_y + 146))
+    text(left_x + left_w - 143, left_y + 125, "Mouse 2", "Muted", 12)
     raised((left_x + left_w - 51, left_y + 117, left_x + left_w - 20, left_y + 146), down=True)
     text(left_x + left_w - 43, left_y + 120, "X", "Accent", 18)
     text(left_x + 15, left_y + 179, "Diâmetro do círculo", size=15)

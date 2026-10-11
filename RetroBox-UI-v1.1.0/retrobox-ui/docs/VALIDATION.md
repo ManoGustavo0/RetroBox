@@ -1,15 +1,16 @@
-# Validação · RetroBox UI 1.2.0
+# Validação · RetroBox UI 1.3.0
 
 ## Executado
 
 - Compilação sintática de todos os arquivos Lua pelo subconjunto compatível com Lua 5.4.
-- **49 testes de lógica** com sinais, instâncias e serviços simulados.
-- Carregamento dos cinco exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`.
+- **72 testes de lógica** com sinais, instâncias e serviços simulados.
+- Carregamento dos seis exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`.
 - Loader com respostas inválidas, falha de download e erro de compilação.
 - GUI por gethui/CoreGui/PlayerGui: preferência, fallback quando falta permissão, Parent explícito, falhas e limpeza ao executar de novo.
 - Arquivos: detecção parcial, fallback para memória, pastas criadas sob demanda, restauração em outra instância da library, JSON inválido, falha de escrita, nomes sem colisões, caminhos inválidos, funções opcionais e debounce do AutoSave.
 - Componentes, callbacks, listeners, enums, cores, RGB compartilhado, importação atômica, temas, teclas, foco, configurações, buffers, notificações e limpeza das conexões.
 - Oito testes de tooltip: atraso/cancelamento do hover, painel único, Tip e atualização, toque longo, fechamento, limites da tela/tema, limpeza, validação atômica, clipping, arraste e foco. Ler dicas não altera valores nem chama callbacks.
+- 23 testes de novos fluxos: aba Configurações, X/RightShift/reabrir, saves nomeados por UI, confirmação, índice entre execuções, arquivos antigos, corrupção, Storage.List, captura de mouse, combinações, Hold, filas anteriores ao load, linhas responsivas, feedback, modais, pesquisa, atalhos flutuantes, aparência/posições e toque longo.
 - Verificação dos links locais da documentação, fontes dentro do ZIP e integridade CRC.
 
 ```bash
@@ -32,13 +33,14 @@ Os testes não renderizam texto, bordas, rolagem ou imagens, nem executam evento
 
 ## Conferir no executor
 
-1. Publique a fonte 1.2.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo.
+1. Publique a fonte 1.3.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo.
 2. Execute o showcase e confira perfil, temas, textos, rolagem, arraste, redimensionamento, minimizar/maximizar e RightShift.
 3. Confira HSV, R/G/B, HEX, opacidade, RGB e velocidade. O círculo do showcase é um exemplo de ligação por callback.
-4. Salve um perfil, altere valores e carregue-o. Execute de novo com o mesmo ID para conferir a substituição da janela e a restauração do arquivo.
+4. Na aba Configurações, crie saves com nomes próprios, selecione/carregue e confira callbacks/valores. Confirme e cancele sobrescritas. Execute de novo com os mesmos IDs/ConfigFolder e confira a lista de saves e os arquivos restaurados.
 5. Execute `examples/tooltips.lua`. Confira o atraso do hover, sair do controle, trocar abas, buscar, tema e dicas perto dos limites da tela. Em toque, segure o título/descrição, solte e toque para fechar; confirme que o callback não foi executado por ler a dica.
-6. Verifique toque e tela pequena nos dispositivos que quiser suportar; execute `tests/executor-smoke.lua`. O teste cria todos os componentes, troca temas, importa configurações, alterna RGB e abre/atualiza/fecha uma dica usando a engine real.
-7. Confira a mensagem `[RetroBox] Real-engine smoke passed`, depois inspecione a aparência e entrada. Essa mensagem sozinha não valida a experiência visual.
-8. Teste `window:Destroy()` e confirme que atalhos, RGB e callbacks anteriores foram encerrados.
+6. Execute `examples/workflows.lua`: capture teclas e Mouse 1/2/3, teste Toggle/Press/Hold, soltar fora da interface e troca do binding. Verifique linhas combinadas, setas/Enter na busca, destaque sem callback, confirmações e botão ocupado/feedback. No toque, confira arraste dos atalhos pela barra ::, ação sem arraste, tamanho/opacidade e posições restauradas. X deve ocultar e o launcher/RightShift reabrir.
+7. Verifique toque e tela pequena nos dispositivos que quiser suportar; execute `tests/executor-smoke.lua`. O teste cria componentes, troca temas, importa configurações, alterna RGB, usa diálogos/busca/atalhos e abre/atualiza/fecha uma dica pela API da engine real.
+8. Confira a mensagem `[RetroBox] Real-engine smoke passed`, depois inspecione a aparência e entrada. Essa mensagem sozinha não valida a experiência visual.
+9. Teste `window:Destroy()` e confirme que atalhos, RGB, modais e callbacks anteriores foram encerrados.
 
 `docs/visual-concept.png` é uma ilustração gerada a partir da paleta; não é captura de tela da GUI em execução.

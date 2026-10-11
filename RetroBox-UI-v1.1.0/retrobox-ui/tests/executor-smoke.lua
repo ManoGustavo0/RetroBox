@@ -1,8 +1,9 @@
 -- Native smoke test: run in your executor; update the raw URL if you move the library.
 local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
-local window = RetroBox:CreateWindow({ Id = "executor-smoke", Title = "RetroBox / engine smoke", ReducedMotion = true })
+local window = RetroBox:CreateWindow({ Id = "executor-smoke", Title = "RetroBox / engine smoke", ReducedMotion = true, ConfigFolder = "RetroBox/EngineSmoke" })
 local section = window:CreateTab("Engine"):CreateSection("Todos os componentes")
-local toggle = section:AddToggle({ Id = "toggle", Default = false, Tooltip = "Esta função ativa o recurso de exemplo." })
+local toggle = section:AddToggle({ Id = "toggle", Default = false, Tooltip = "Esta função ativa o recurso de exemplo.",
+    Keybind = Enum.UserInputType.MouseButton2, Floating = { Text = "TEST", MobileOnly = false } })
 local slider = section:AddSlider({ Id = "slider", Min = 0, Max = 10, Default = 5 })
 section:AddButton({ Title = "Button" })
 section:AddInput({ Id = "input", Default = "Executor" })
@@ -14,11 +15,20 @@ section:AddProgress({ Default = 25 })
 section:AddConsole({ Title = "Console" }):Append("Engine smoke started")
 section:AddLabel("Label"); section:AddSeparator("Separator"); section:AddImage({ Image = "rbxassetid://0" })
 window:ShowSettings(true); task.wait(.3); window:ShowSettings(false)
+local row = section:CreateRow()
+row:AddButton({ Title = "A", Feedback = true }); row:AddToggle({ Title = "B" })
 toggle:SetValue(true, true); slider:SetValue(7, true)
 local json = window:ExportConfig()
 slider:SetValue(1, true)
 assert(window:ImportConfig(json, { Silent = true }))
 assert(slider:GetValue() == 7 and toggle:GetValue() == true)
+assert(toggle.Keybind:GetValue() == Enum.UserInputType.MouseButton2)
+local confirmed = false
+window:Confirm({ Content = "Native dialog smoke", OnConfirm = function() confirmed = true end }):Choose(2)
+task.wait(.05); assert(confirmed)
+assert(window:FocusControl(slider))
+-- Inspect X manually; Activated is a native signal, not a callable function.
+window:Hide(); assert(toggle.FloatingButton.Frame.Visible and window.Launcher.Visible); window:Show()
 for _, name in ipairs(RetroBox:GetThemeNames()) do window:SetTheme(name); task.wait(.08) end
 picker:SetRainbow(true); task.wait(.15); picker:SetRainbow(false)
 assert(picker:GetColor() == Color3.fromRGB(51, 102, 153))
