@@ -1,4 +1,4 @@
--- RetroBox UI 1.2.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.3.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,10 +9,11 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.2.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.3.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
+local Row = {}; Row.__index = Row; setmetatable(Row,{__index=Section})
 local Control = {}; Control.__index = Control
 local RGB = Color3.fromRGB
 local U2 = UDim2.fromOffset
@@ -64,12 +65,20 @@ local function connect(owner, signal, callback)
     return connection
 end
 local function call(window, callback, ...)
-    if type(callback) ~= "function" or window.Destroyed then return end
+    if type(callback) ~= "function" or window.Destroyed or window._suppressCallbacks then return end
     local args = table.pack(...)
+    if window._closing or window._syncCallbacks then
+        local ok,err=pcall(callback,table.unpack(args,1,args.n))
+        if not ok then warn("[RetroBox] Cleanup callback: "..tostring(err)) end
+        return
+    end
     task.spawn(function()
         if window.Destroyed then return end
         local ok, err = pcall(callback, table.unpack(args, 1, args.n))
-        if not ok then warn("[RetroBox] Callback: " .. tostring(err)) end
+        if not ok then
+            warn("[RetroBox] Callback: " .. tostring(err))
+            if window.ErrorNotifications then window:Notify({Title=window:_text("error"),Content=tostring(err),Kind="error"}) end
+        end
     end)
 end
 local function keycode(value)
@@ -79,6 +88,27 @@ local function keycode(value)
         if ok and item then return item end
     end
     error("Expected an Enum.KeyCode or a valid key name", 3)
+end
+local mouseButtons={MouseButton1=true,MouseButton2=true,MouseButton3=true}
+local function bindingValue(value,allowMouse)
+    if typeof(value)=="EnumItem" and value.EnumType==Enum.UserInputType then
+        assert(allowMouse~=false and mouseButtons[value.Name],"Only mouse buttons 1–3 can be bound")
+        return value
+    end
+    if type(value)=="string" and mouseButtons[value] then
+        assert(allowMouse~=false,"Mouse buttons are disabled for this binding")
+        return Enum.UserInputType[value]
+    end
+    return keycode(value)
+end
+local function inputBinding(input)
+    if input.UserInputType==Enum.UserInputType.Keyboard then return input.KeyCode end
+    if mouseButtons[input.UserInputType.Name] then return input.UserInputType end
+end
+local function bindingLabel(value)
+    if value.Name=="Unknown" then return "---" end
+    if mouseButtons[value.Name] then return "Mouse "..value.Name:sub(-1) end
+    return value.Name
 end
 local function hex(color)
     return string.format("#%02X%02X%02X", math.floor(color.R * 255 + .5),
@@ -158,24 +188,30 @@ Library.Themes.Monokai = palette({
 
 local translations = {
     ["pt-BR"] = {
-        search="Buscar nesta aba...", settings="PERSONALIZAR", theme="Tema", accent="Cor de destaque",
+        search="Pesquisar funções...", settings="Configurações", theme="Tema", accent="Cor de destaque",
         scale="Escala da interface", motion="Reduzir animações", lines="Linhas CRT", launcher="Botão de reabrir",
         notices="Notificações", appearance="Aparência", accessibility="Interface e acessibilidade",
         shortcut="Atalho da janela", configs="Configurações", profile="Nome da configuração", save="Salvar",
         load="Carregar", export="Exportar JSON", import="Importar JSON", reset="Restaurar padrões",
         ready="Pronto", fixed="Cor fixa", rainbow="RGB animado", cycle="s/ciclo", opacity="Opacidade",
-        choose="Selecionar...", empty="Sem resultados", capture="Pressione uma tecla...", saved="Configuração salva",
+        choose="Selecionar...", empty="Sem resultados", capture="Pressione uma tecla ou um botão do mouse...", saved="Configuração salva",
         loaded="Configuração carregada", error="Não foi possível", close="Fechar", about="RetroBox UI",
+        profiles="Saves disponíveis", refresh="Atualizar lista", overwrite="Sobrescrever save?", confirm="Confirmar", cancel="Cancelar",
+        running="Executando...", success="Concluído", quickActions="Atalhos flutuantes", floatSize="Tamanho dos atalhos", floatOpacity="Opacidade dos atalhos",
+        launcherText="Texto do botão de reabrir", memoryProfiles="Saves disponíveis enquanto esta janela estiver aberta.", fileProfiles="Saves gravados podem ser carregados em outra execução.",
     },
     ["en-US"] = {
-        search="Search this tab...", settings="CUSTOMIZE", theme="Theme", accent="Accent color",
+        search="Search features...", settings="Settings", theme="Theme", accent="Accent color",
         scale="Interface scale", motion="Reduce animations", lines="CRT scanlines", launcher="Reopen button",
         notices="Notifications", appearance="Appearance", accessibility="Interface and accessibility",
         shortcut="Window shortcut", configs="Configurations", profile="Configuration name", save="Save",
         load="Load", export="Export JSON", import="Import JSON", reset="Restore defaults",
         ready="Ready", fixed="Fixed color", rainbow="Animated RGB", cycle="s/cycle", opacity="Opacity",
-        choose="Select...", empty="No results", capture="Press a key...", saved="Configuration saved",
+        choose="Select...", empty="No results", capture="Press a key or mouse button...", saved="Configuration saved",
         loaded="Configuration loaded", error="Could not complete", close="Close", about="RetroBox UI",
+        profiles="Available saves", refresh="Refresh list", overwrite="Overwrite save?", confirm="Confirm", cancel="Cancel",
+        running="Running...", success="Completed", quickActions="Floating shortcuts", floatSize="Shortcut size", floatOpacity="Shortcut opacity",
+        launcherText="Reopen button text", memoryProfiles="Saves available while this window remains open.", fileProfiles="Saved profiles can be loaded in another execution.",
     },
 }
 
@@ -275,7 +311,7 @@ function Window:_hideTooltip()
     if self.TooltipFrame then self.TooltipFrame.Visible=false end
 end
 function Window:_tooltipEligible(control,position)
-    if self.Destroyed or control.Destroyed or not control.Tooltip or not self.Main.Visible or self.Minimized or self._drag or self._binding then return false end
+    if self.Destroyed or control.Destroyed or not control.Tooltip or not self.Main.Visible or self.Minimized or self._drag or self._binding or self._dialog then return false end
     if self._settingsOpen and not control._internal then return false end
     if self._openDropdown and self._openDropdown~=control then return false end
     if position and not inside(control.Frame,position) then return false end
@@ -372,7 +408,9 @@ function Control:_connectTooltip()
         if window._tooltipMode=="hover" and (window._tooltipOwner==self or window._pendingTooltip==self) then window:_hideTooltip() end
     end)
     local function touch(positions,state)
-        if state==Enum.UserInputState.Begin and positions[1] and self.Tooltip then self._window:_showTooltip(self,positions[1],"touch") end
+        if state==Enum.UserInputState.Begin and positions[1] and self.Tooltip then
+            self._touchWasLongPress=true; self._window:_showTooltip(self,positions[1],"touch")
+        end
     end
     connect(self,self.TitleLabel.TouchLongPress,touch)
     connect(self,self.DescriptionLabel.TouchLongPress,touch)
@@ -412,7 +450,7 @@ function Window:_endDrag()
     if drag and drag.Finish then drag.Finish() end
 end
 function Window:_scheduleSave()
-    if not self.AutoSave or self._importing or self.Destroyed then return end
+    if not self.AutoSave or self._importing or self._syncingSettings or self._refreshingProfiles or self.Destroyed then return end
     self._saveToken = self._saveToken + 1
     local token = self._saveToken
     task.delay(.8, function()
@@ -427,8 +465,13 @@ function Window:_register(control, options)
         assert(type(options.Id) == "string" and #options.Id > 0, "Id must be a nonempty string")
         assert(not options.Id:match("^__retrobox/") or options.Internal, "The __retrobox/ prefix is reserved")
     end
-    self._nextId = self._nextId + 1
-    control.Id = options.Id or ("control/" .. self._nextId)
+    if options.Internal then
+        self._nextInternalId=(self._nextInternalId or 0)+1
+        control.Id=options.Id or ("__retrobox/internal/"..self._nextInternalId)
+    else
+        self._nextId = self._nextId + 1
+        control.Id = options.Id or ("control/" .. self._nextId)
+    end
     assert(not self.Controls[control.Id], "Duplicate control Id: " .. control.Id)
     self.Controls[control.Id] = control
     control.Persist = options.Persist ~= false and not options.Internal
@@ -442,24 +485,33 @@ function Control:_emit()
     self._window.Flags[self.Id] = copy(value)
     self:_callbackNow()
     for listener in pairs(self._listeners) do
-        if listener.Connected then call(self._window, listener.Callback, copy(value)) end
+        if listener.Connected then
+            local epoch=self._callbackEpoch
+            call(self._window,function(v) if not self.Destroyed and listener.Connected and self._callbackEpoch==epoch then listener.Callback(v) end end,copy(value))
+        end
     end
     self._window:_scheduleSave()
 end
 function Control:_callbackNow()
+    local callback=self._callback; local epoch=self._callbackEpoch
+    local function emit(...)
+        if not self.Destroyed and self._callbackEpoch==epoch and type(callback)=="function" then return callback(...) end
+    end
     if self.Type == "ColorPicker" then
-        call(self._window, self._callback, self:GetColor(), self.Value.Opacity, self:GetValue())
+        call(self._window, emit, self:GetColor(), self.Value.Opacity, self:GetValue())
     else
-        call(self._window, self._callback, self:GetValue())
+        call(self._window, emit, self:GetValue())
     end
 end
 function Control:SetValue(value, silent)
     assert(not self.Destroyed, "This control has been destroyed")
     local normalized = self:_normalize(value)
     local changed = not same(self.Value, normalized)
+    if changed and self.Type=="Keybind" and self.Mode=="Hold" and self.Active then self:Trigger(false) end
     self.Value = copy(normalized)
     self._window.Flags[self.Id] = self:GetValue()
     if self._render then self:_render() end
+    if self._window._syncFloating then self._window:_syncFloating(self) end
     if changed and not silent then self:_emit() end
     return self
 end
@@ -476,11 +528,14 @@ function Control:OnChanged(callback)
     return listener
 end
 function Control:SetDisabled(disabled)
+    if disabled==true and self.FloatingButton then self.FloatingButton:Release() end
     if disabled == true and self.Type == "Keybind" and self.Mode == "Hold" and self.Active then self:Trigger(false) end
     if disabled == true and self._window._binding == self then self._window._binding = nil end
     self.Disabled = disabled == true
     self.TitleLabel.TextTransparency = self.Disabled and .5 or 0
     if self._render then self:_render() end
+    if self.Keybind then self.Keybind:SetDisabled(self.Disabled) end
+    if self._window._syncFloating then self._window:_syncFloating(self) end
     if self.Type == "ColorPicker" then self._window:_updateRGB() end
     if self.Disabled and self._window._drag and self._window._drag.Owner == self then self._window:_endDrag() end
     return self
@@ -502,8 +557,15 @@ function Control:SetDescription(text)
     return self
 end
 function Control:Destroy()
-    if self.Destroyed then return end
+    if self.Destroyed or self._destroyingControl then return end
+    self._destroyingControl=true
+    self._callbackEpoch=(self._callbackEpoch or 0)+1
+    local oldSync=self._window._syncCallbacks; self._window._syncCallbacks=true
+    if self.Keybind then self.Keybind:Destroy(); self.Keybind=nil end
+    if self.FloatingButton then self.FloatingButton:Destroy(); self.FloatingButton=nil end
     if self.Type == "Keybind" and self.Mode == "Hold" and self.Active then self:Trigger(false) end
+    for _,floating in pairs(self._window._floatingButtons) do if floating.Control==self then floating:Destroy() end end
+    self._window._syncCallbacks=oldSync
     self.Destroyed = true
     self:HideTooltip()
     cleanup(self)
@@ -514,11 +576,17 @@ function Control:Destroy()
     self._window.Flags[self.Id] = nil
     self._window._rainbows[self] = nil
     self._window._keybinds[self] = nil
+    self._window._touchToggles[self]=nil
     for listener in pairs(self._listeners) do listener.Connected = false end
     self._listeners = {}
     self.Frame:Destroy()
     local index = table.find(self._section.Controls, self)
     if index then table.remove(self._section.Controls, index) end
+    if self._section._parentSection then
+        local parent=self._section._parentSection
+        local outer=table.find(parent.Controls,self); if outer then table.remove(parent.Controls,outer) end
+        self._section:_layout()
+    end
     self._window:_updateRGB()
 end
 
@@ -526,11 +594,13 @@ local function base(section, kind, options, height)
     options = options or {}
     assert(not section.Destroyed and not section._window.Destroyed, "Section has been destroyed")
     local window = section._window
+    assert(options.Floating==nil or type(options.Floating)=="boolean" or type(options.Floating)=="table","Floating must be a boolean or options table")
+    assert(not options.Floating or kind=="Toggle" or kind=="Button" or kind=="Keybind","Floating supports Toggle, Button or Keybind")
     local tip=options.Tooltip
     if tip==nil then tip=options.Tip end
     local tooltip=tooltipValue(tip)
     local self = setmetatable({ Type=kind, Title=tostring(options.Title or kind), Description=tostring(options.Description or ""),
-        Tooltip=tooltip,_window=window, _section=section, _connections={}, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
+        Tooltip=tooltip,_window=window, _section=section, _connections={},_callbackEpoch=0, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
     window:_register(self, options)
     section._count = section._count + 1
     self.Frame = frame(window, section.Content, {
@@ -544,7 +614,16 @@ local function base(section, kind, options, height)
     }, "Muted")
     if tooltip then self:_connectTooltip() end
     table.insert(section.Controls, self)
+    if section._parentSection then table.insert(section._parentSection.Controls,self) end
     connect(self, self.Frame.Destroying, function() if not self.Destroyed then self:Destroy() end end)
+    if section._isRow then
+        self._rowHeight=height or 76
+        connect(self,self.Frame:GetPropertyChangedSignal("Size"),function()
+            if not section._layingOut then self._rowHeight=self.Frame.Size.Y.Offset; section:_layout() end
+        end)
+        connect(self,self.Frame:GetPropertyChangedSignal("Visible"),function() section:_layout() end)
+        section:_layout()
+    end
     return self
 end
 local function init(control, options, default)
@@ -555,7 +634,8 @@ local function init(control, options, default)
     control._default = control:GetValue()
     control._hasDefault = true
     control:SetDisabled(control.Disabled)
-    if options.FireOnInit then task.defer(function() if not control.Destroyed then control:_emit() end end) end
+    if options.FireOnInit then local epoch=control._callbackEpoch; task.defer(function() if not control.Destroyed and control._callbackEpoch==epoch then control:_emit() end end) end
+    if options.Floating then control:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return control
 end
 
@@ -575,11 +655,37 @@ function Section:AddToggle(options)
         box.Active = not self.Disabled; box.TextTransparency = self.Disabled and .5 or 0
     end
     connect(self, self.Frame.InputBegan, function(input)
-        if pointer(input) and not self.Disabled and not inside(box, point(input)) then self:SetValue(not self.Value) end
+        if pointer(input) and not self.Disabled and not self._window._binding and not self._window._dialog and not inside(box, point(input))
+            and (not self.Keybind or not inside(self.Keybind.Frame,point(input))) then
+            if input.UserInputType==Enum.UserInputType.Touch then
+                self._touchWasLongPress=false; self._window._touchToggles[self]={Input=input,Position=point(input)}
+            else self:SetValue(not self.Value) end
+        end
     end)
     self.Frame.Active = true
     self.Button = box
-    return init(self, options, false)
+    init(self, options, false)
+    if options.Keybind~=nil then
+        local bindOptions=typeof(options.Keybind)=="table" and copy(options.Keybind) or {Default=options.Keybind}
+        bindOptions.Id=bindOptions.Id or self.Id.."/keybind"; bindOptions.Title=self.Title
+        bindOptions.Mode=bindOptions.Mode or "Toggle"; bindOptions.Floating=nil
+        local extra=bindOptions.Callback
+        bindOptions.Callback=function(active,binding)
+            if self.Destroyed then return end
+            if bindOptions.Mode=="Press" then self:SetValue(not self.Value) else self:SetValue(active) end
+            if type(extra)=="function" then call(self._window,extra,self.Value,binding) end
+        end
+        local ok,binding=pcall(Section.AddKeybind,self._section,bindOptions)
+        if not ok then self:Destroy(); error(binding,2) end
+        self.Keybind=binding; binding._inlineParent=self; binding._target=self
+        binding.Frame.Parent=self.Frame; binding.Frame.Position=UDim2.new(1,-150,0,0); binding.Frame.Size=U2(112,30)
+        binding.TitleLabel.Visible=false; binding.DescriptionLabel.Visible=false
+        binding.Button.Position=U2(0,0); binding.Button.Size=U2(112,28)
+        self.TitleLabel.Size=UDim2.new(1,-162,0,23); self.DescriptionLabel.Size=UDim2.new(1,-162,0,18)
+        self:SetDisabled(self.Disabled)
+        if self._section._isRow then self._section:_layout() end
+    end
+    return self
 end
 
 function Section:AddSlider(options)
@@ -628,25 +734,40 @@ function Section:AddButton(options)
     options = options or {}
     local self = base(self, "Button", options, #tostring(options.Description or "") > 0 and 79 or 56)
     self.Persist = false
+    self.Feedback=options.Feedback==true
+    self._normalText=options.Text or self.Title
     local y = #self.Description > 0 and 44 or 24
     local action
     action = button(self._window,self,self.Frame,options.Text or self.Title,{ Position=U2(0,y),Size=UDim2.new(1,0,0,30) },function() self:Press() end)
     function self:_normalize(value) return value end
-    function self:_render() action.Active = not self.Disabled; action.TextTransparency = self.Disabled and .5 or 0 end
+    function self:_render()
+        action.Active = not self.Disabled and not self._busy
+        action.Text=self._busy and (options.BusyText or self._window:_text("running")) or self._normalText
+        action.TextTransparency = self.Disabled and .5 or 0
+    end
     function self:Press()
         if self.Disabled or self.Destroyed or self._busy then return false end
         self._busy = true
+        self:_render()
+        self._window:_syncFloating(self)
         task.spawn(function()
             if self.Destroyed or self._window.Destroyed then self._busy=false; return end
-            local ok,err = true,nil
-            if type(self._callback) == "function" then ok,err = pcall(self._callback,self) end
-            if not ok then warn("[RetroBox] Button " .. self.Id .. ": " .. tostring(err)) end
+            local ok,result,reason = true,nil,nil
+            if type(self._callback) == "function" then ok,result,reason = pcall(self._callback,self) end
+            local success=ok and result~=false
+            if not ok then warn("[RetroBox] Button " .. self.Id .. ": " .. tostring(result)) end
             self._busy = false
+            if not self.Destroyed and not self._window.Destroyed then
+                self:_render(); self._window:_syncFloating(self)
+                if self.Feedback then self._window:Notify({Title=self.Title,Kind=success and "success" or "error",
+                    Content=success and (options.SuccessText or self._window:_text("success")) or tostring(ok and (reason or options.ErrorText or self._window:_text("error")) or result)}) end
+            end
         end)
         return true
     end
     self.Button = action
     self:SetDisabled(self.Disabled)
+    if options.Floating then self:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return self
 end
 
@@ -836,10 +957,11 @@ end
 function Section:AddKeybind(options)
     options = options or {}
     assert(options.Mode == nil or options.Mode == "Press" or options.Mode == "Toggle" or options.Mode == "Hold", "Keybind Mode must be Press, Toggle, or Hold")
-    local initial = keycode(options.Default or Enum.KeyCode.Unknown)
+    local initial = bindingValue(options.Default or Enum.KeyCode.Unknown,options.AllowMouse)
     local self = base(self,"Keybind",options,#tostring(options.Description or "") > 0 and 46 or 30)
     self.Mode, self.Active = options.Mode or "Press", false
     self.CaptureOnly = options.CaptureOnly == true
+    self.AllowMouse=options.AllowMouse~=false
     self.TitleLabel.Size = UDim2.new(1,-116,0,23)
     self.DescriptionLabel.Size = UDim2.new(1,-116,0,18)
     local capture
@@ -851,21 +973,32 @@ function Section:AddKeybind(options)
         self._window._binding = nil
         if previous and previous ~= self then previous:_render() end
         self._window._binding = self; capture.Text = "..."
+        self._window:_hideTooltip()
         self._window:Notify({ Title=self.Title,Content=self._window:_text("capture"),Duration=2 })
     end)
-    function self:_normalize(value) return keycode(value) end
+    function self:_normalize(value) return bindingValue(value,self.AllowMouse) end
     function self:_render()
-        capture.Text = self._window._binding == self and "..." or (self.Value.Name == "Unknown" and "---" or self.Value.Name)
+        capture.Text = self._window._binding == self and "..." or bindingLabel(self.Value)
         capture.TextTransparency = self.Disabled and .5 or 0
     end
     function self:_callbackNow() end
     function self:Trigger(active)
-        if self.Destroyed or self.Disabled or self.CaptureOnly then return end
-        if self.Mode == "Toggle" then self.Active = not self.Active
+        if self.Destroyed or self.CaptureOnly then return end
+        if (self.Disabled or self._target and self._target.Disabled) and not (self.Mode=="Hold" and active==false) then return end
+        if self.Mode == "Toggle" then
+            if self._target then self.Active=not self._target:GetValue() else self.Active=not self.Active end
         elseif self.Mode == "Hold" then self.Active = active == true
         else self.Active = true end
-        call(self._window,self._callback,self.Active,self.Value)
+        local callback=self._callback; local epoch=self._callbackEpoch
+        local dispatch=function(active,value)
+            if not self.Destroyed and self._callbackEpoch==epoch and type(callback)=="function" then callback(active,value) end
+        end
+        if self._target then
+            local ok,err=pcall(dispatch,self.Active,self.Value)
+            if not ok then warn("[RetroBox] Inline binding: "..tostring(err)) end
+        else call(self._window,dispatch,self.Active,self.Value) end
         if self.Mode == "Press" then self.Active = false end
+        self._window:_syncFloating(self)
     end
     self._window._keybinds[self] = true
     self.Button = capture
@@ -1134,6 +1267,7 @@ function Window:_applyTheme()
     for _,control in pairs(self.Controls) do if not control.Destroyed and control._render and (control.Value~=nil or control.Type=="Button" or control.Type=="Dropdown") then control:_render() end end
     for _,tab in ipairs(self.Tabs) do tab:_renderSelection() end
     self:_syncSettings()
+    self:_syncFloating()
 end
 function Window:SetTheme(name,keepAccent)
     assert(self._themeOverrides[name] or Library.Themes[name],"Unknown theme: " .. tostring(name))
@@ -1197,14 +1331,20 @@ function Window:OnDestroy(callback)
 end
 function Window:Show()
     if self.Destroyed then return self end
-    self.Main.Visible=true; self.Launcher.Visible=false; return self
+    self.Main.Visible=true; self.Launcher.Visible=false; self:_layoutFloating(); return self
 end
 function Window:Hide()
     if self.Destroyed then return self end
     self:_hideTooltip()
+    self:_hideSearchResults()
+    if self._dialog then self._dialog:Close("hidden") end
+    self:_releaseBindings()
     self:ShowSettings(false); self:_endDrag()
     if self._binding then local binding=self._binding; self._binding=nil; binding:_render() end
     self.Main.Visible=false; self.Launcher.Visible=self.LauncherEnabled
+    local focused=UserInputService:GetFocusedTextBox(); local parent=focused
+    while parent do if parent==self.Gui then focused:ReleaseFocus(); break end; parent=parent.Parent end
+    self:_layoutFloating()
     for binding in pairs(self._keybinds) do
         if binding.Mode=="Hold" and binding.Active then binding:Trigger(false) end
     end
@@ -1213,6 +1353,7 @@ end
 function Window:Toggle() if self.Main.Visible then return self:Hide() else return self:Show() end end
 function Window:Minimize(value)
     self:_hideTooltip()
+    self:_hideSearchResults()
     self.Minimized=value == nil and not self.Minimized or value == true
     if self.Minimized then self:ShowSettings(false) end
     self:_layout(); return self
@@ -1230,8 +1371,9 @@ function Window:SetSearch(query)
                 local visible=false
                 for _,control in ipairs(section.Controls) do
                     if not control.Destroyed then
-                        local text=(control.Title.." "..control.Description.." "..control.Id.." "..section.Title):lower()
-                        control.Frame.Visible=control._visible and (self._query=="" or text:find(self._query,1,true)~=nil)
+                        local rootControl=control._inlineParent or control
+                        local text=(rootControl.Title.." "..rootControl.Description.." "..rootControl.Id.." "..section.Title):lower()
+                        control.Frame.Visible=control._visible and rootControl._visible and (self._query=="" or text:find(self._query,1,true)~=nil)
                         if control.Frame.Visible then visible=true end
                     end
                 end
@@ -1240,7 +1382,84 @@ function Window:SetSearch(query)
             end
         end
     end
+    self:_rebuildSearchResults()
     return self
+end
+function Window:SearchControls(query)
+    query=tostring(query or ""):lower()
+    local results={}
+    for _,tab in ipairs(self.Tabs) do
+        if not tab.Hidden and not tab.Destroyed then
+            for _,section in ipairs(tab.Sections) do
+                if not section.Destroyed and section._visible~=false then
+                    for _,control in ipairs(section.Controls) do
+                        if not control.Destroyed and not control._internal and not control._inlineParent and control._visible and control._section._visible~=false then
+                            local text=(control.Title.." "..control.Description.." "..control.Id.." "..section.Title.." "..tab.Title):lower()
+                            if text:find(query,1,true) then results[#results+1]={Control=control,Tab=tab,Section=section} end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return results
+end
+function Window:_hideSearchResults()
+    if self.SearchResults then self.SearchResults.Visible=false end
+end
+function Window:_selectSearchResult(index)
+    local count=#(self._searchMatches or {})
+    self._searchSelection=count>0 and clamp(index,1,count) or 0
+    for number,cell in ipairs(self._searchCells or {}) do
+        cell.BackgroundColor3=self.Palette[number==self._searchSelection and "Accent" or "Surface"]
+        cell.TextColor3=self.Palette[number==self._searchSelection and "AccentText" or "Text"]
+    end
+    if self.SearchResults and count>0 then self.SearchResults.CanvasPosition=Vector2.new(0,math.max(0,(self._searchSelection-3)*42)) end
+end
+function Window:_rebuildSearchResults()
+    if not self.Search or self.Destroyed then return end
+    self._searchGeneration=(self._searchGeneration or 0)+1
+    if self._searchOwner then cleanup(self._searchOwner) end
+    self._searchOwner={_connections={}}
+    self._searchMatches={}; self._searchCells={}
+    if self.SearchResults then for _,child in ipairs(self.SearchResults:GetChildren()) do child:Destroy() end end
+    if self._query=="" or self._settingsOpen or self._dialog or not self.Main.Visible or self.Minimized then self:_hideSearchResults(); return end
+    local matches=self:SearchControls(self._query)
+    for index,entry in ipairs(matches) do if index>30 then break end; self._searchMatches[#self._searchMatches+1]=entry end
+    if not self.SearchResults then
+        self.SearchResults=ui(self,"ScrollingFrame",{Parent=self.Main,Name="SearchResults",BorderSizePixel=1,ZIndex=70,
+            CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,
+            ScrollBarThickness=4,ClipsDescendants=true},{BackgroundColor3="Surface",BorderColor3="Border",ScrollBarImageColor3="Border"})
+    end
+    local origin=self.Search.Position
+    self.SearchResults.Position=UDim2.new(origin.X.Scale,origin.X.Offset,origin.Y.Scale,origin.Y.Offset+34)
+    self.SearchResults.Size=UDim2.new(self.Search.Size.X.Scale,self.Search.Size.X.Offset,0,
+        math.min(math.max(42,#self._searchMatches*42),230,math.max(42,self._logicalSize.Y-origin.Y.Offset-78)))
+    list(self,self.SearchResults,2,false)
+    if #self._searchMatches==0 then label(self,self.SearchResults,self:_text("empty"),{Size=UDim2.new(1,-8,0,40),ZIndex=71}) end
+    for index,entry in ipairs(self._searchMatches) do
+        local text=entry.Control.Title.."  ["..entry.Tab.Title.." / "..entry.Section.Title.."]"
+        self._searchCells[index]=button(self,self._searchOwner,self.SearchResults,text,{LayoutOrder=index,Size=UDim2.new(1,-6,0,40),
+            TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=71},function() self:FocusControl(entry.Control) end)
+    end
+    self.SearchResults.Visible=true; self:_selectSearchResult(1)
+end
+function Window:FocusControl(control)
+    if type(control)=="string" then control=self.Controls[control] end
+    if not control or control._window~=self or control.Destroyed or not control._visible then return false,"Control is unavailable" end
+    local tab=control._section._tab
+    if tab.Hidden or control._section._visible==false then return false,"Control is hidden" end
+    self:Show(); self:Minimize(false)
+    self.Search.Text=""; self:SetSearch(""); tab:Select(); self:_hideSearchResults()
+    if UserInputService:GetFocusedTextBox()==self.Search then self.Search:ReleaseFocus() end
+    local canvas=tab.Frame.CanvasPosition or Vector2.new(0,0)
+    local y=canvas.Y+(control.Frame.AbsolutePosition.Y-tab.Frame.AbsolutePosition.Y)/math.max(.1,self._actualScale)
+    tab.Frame.CanvasPosition=Vector2.new(0,math.max(0,y-12))
+    if control._focusBorder==nil then control._focusBorder=control.Frame.BorderSizePixel end
+    control.Frame.BorderColor3=self.Palette.Accent; control.Frame.BorderSizePixel=1
+    control._focusToken=(control._focusToken or 0)+1; local token=control._focusToken
+    task.delay(1.5,function() if not control.Destroyed and control._focusToken==token then control.Frame.BorderSizePixel=control._focusBorder; control._focusBorder=nil end end)
+    return true
 end
 
 function Tab:_renderSelection()
@@ -1254,10 +1473,16 @@ function Tab:Select()
     if self.Hidden then return self end
     local window=self._window
     window:_hideTooltip()
+    window:_hideSearchResults()
+    if self._settingsConfig then window:_releaseBindings() end
+    window._settingsOpen=self._settingsConfig==true
+    if not self._settingsConfig then window._lastContentTab=self end
     window.ActiveTab=self
     if window._openDropdown then window._openDropdown:SetOpen(false) end
     for _,tab in ipairs(window.Tabs) do if not tab.Hidden then tab.Frame.Visible=tab==self end; tab:_renderSelection() end
     window.Status.Text=self.Title.."  |  v"..Library.Version
+    if self._settingsConfig then window:_syncSettings(); window:_refreshProfiles() end
+    window:_layoutFloating()
     return self
 end
 function Tab:_layout()
@@ -1274,7 +1499,7 @@ function Window:CreateTab(options)
     assert(not self.Destroyed,"Window has been destroyed")
     assert(options.Columns==nil or options.Columns==1 or options.Columns==2,"Columns must be 1 or 2")
     local selfTab=setmetatable({ Title=tostring(options.Title or "Tab"),Columns=options.Columns or 1,Hidden=options.Hidden==true,
-        _window=self,_connections={},Sections={},_sectionCount=0 },Tab)
+        _internal=options.Internal==true,_window=self,_connections={},Sections={},_sectionCount=0 },Tab)
     selfTab.Frame=ui(self,"ScrollingFrame",{
         Name=selfTab.Title,Parent=self.PageHost,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
         BorderSizePixel=0,ScrollBarThickness=5,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,
@@ -1294,7 +1519,7 @@ function Window:CreateTab(options)
     connect(selfTab,selfTab.Frame:GetPropertyChangedSignal("AbsoluteSize"),function() selfTab:_layout() end)
     connect(selfTab,selfTab.Frame.Destroying,function() if not selfTab.Destroyed then selfTab:Destroy() end end)
     selfTab:_layout(); self:_layout()
-    if not self.ActiveTab and not selfTab.Hidden then selfTab:Select() end
+    if not self.ActiveTab and not selfTab.Hidden and not selfTab._internal then selfTab:Select() end
     return selfTab
 end
 function Tab:CreateSection(options)
@@ -1319,11 +1544,59 @@ function Tab:CreateSection(options)
     self:_layout()
     return section
 end
+function Section:CreateRow(options)
+    options=options or {}
+    assert(not self._isRow,"Rows cannot be nested")
+    assert(not self.Destroyed and not self._window.Destroyed,"Section has been destroyed")
+    local gap=options.Gap or 10; local stackAt=options.StackAt or 440
+    assert(finite(gap) and gap>=0 and gap<=32,"Row Gap must be 0–32")
+    assert(finite(stackAt) and stackAt>=200 and stackAt<=1000,"Row StackAt must be 200–1000")
+    self._count=self._count+1
+    local row=setmetatable({_isRow=true,_parentSection=self,_window=self._window,_tab=self._tab,
+        Title=self.Title,Controls={},_connections={},_count=0,Gap=gap,StackAt=stackAt},Row)
+    row.Frame=frame(self._window,self.Content,{LayoutOrder=self._count,Size=UDim2.new(1,0,0,1),BackgroundTransparency=1})
+    row.Content=row.Frame
+    row.Layout=list(self._window,row.Frame,gap,true)
+    self.Rows=self.Rows or {}; self.Rows[#self.Rows+1]=row
+    connect(row,row.Frame:GetPropertyChangedSignal("AbsoluteSize"),function() row:_layout() end)
+    connect(row,row.Frame.Destroying,function() if not row.Destroyed then row:Destroy() end end)
+    return row
+end
+function Row:_layout()
+    if self.Destroyed or self._layingOut then return end
+    self._layingOut=true
+    local visible={}; local maximum=0; local total=0
+    for _,control in ipairs(self.Controls) do
+        if not control.Destroyed and not control._inlineParent and control.Frame.Visible then
+            visible[#visible+1]=control; maximum=math.max(maximum,control._rowHeight or 30); total=total+(control._rowHeight or 30)
+        end
+    end
+    local count=#visible
+    self.Stacked=self.Frame.AbsoluteSize.X<self.StackAt or count>3
+    self.Layout.FillDirection=self.Stacked and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+    self.Frame.Size=UDim2.new(1,0,0,count==0 and 0 or self.Stacked and total+self.Gap*(count-1) or maximum)
+    for _,control in ipairs(visible) do
+        control.Frame.Size=UDim2.new(self.Stacked and 1 or 1/count,self.Stacked and 0 or -self.Gap*(count-1)/count,0,self.Stacked and control._rowHeight or maximum)
+    end
+    self._layingOut=false
+end
+function Row:Destroy()
+    if self.Destroyed then return end
+    self.Destroyed=true
+    local controls={table.unpack(self.Controls)}
+    for _,control in ipairs(controls) do control:Destroy() end
+    cleanup(self); self.Frame:Destroy()
+    local index=table.find(self._parentSection.Rows or {},self); if index then table.remove(self._parentSection.Rows,index) end
+end
+function Row:SetVisible(value)
+    self._visible=value~=false; self.Frame.Visible=self._visible; self._window:SetSearch(self._window._query); return self
+end
 function Section:SetTitle(value) self.Title=tostring(value); self.Header.Text=self.Title:upper(); return self end
 function Section:SetVisible(value) self._visible=value~=false; self._window:SetSearch(self._window._query); return self end
 function Section:Destroy()
     if self.Destroyed then return end
     self.Destroyed=true
+    for _,row in ipairs({table.unpack(self.Rows or {})}) do row:Destroy() end
     local controls={}
     for _,control in ipairs(self.Controls) do table.insert(controls,control) end
     for _,control in ipairs(controls) do control:Destroy() end
@@ -1365,6 +1638,10 @@ function Window:ExportConfig(asTable)
             Scale=self.UserScale,ReducedMotion=self.ReducedMotion,Scanlines=self.Scanlines,
             Notifications=self.NotificationsEnabled,Launcher=self.LauncherEnabled,ToggleKey=self.ToggleKey.Name },
     }
+    result.Appearance.Floating={Enabled=self.QuickActionsEnabled,Size=self.FloatSize,Opacity=self.FloatOpacity,Positions={}}
+    for id,position in pairs(self._floatingPositions) do result.Appearance.Floating.Positions[id]={X=position.X,Y=position.Y} end
+    result.Appearance.LauncherText=self.LauncherText
+    result.Appearance.LauncherPosition={X=self.LauncherPosition.X,Y=self.LauncherPosition.Y}
     if asTable then return result end
     return HttpService:JSONEncode(result)
 end
@@ -1410,10 +1687,36 @@ function Window:ImportConfig(source,options)
         else
             assert(self._themeOverrides[appearance.Theme] or Library.Themes[appearance.Theme],"Unknown theme: "..appearance.Theme)
         end
+        if look.LauncherText~=nil then
+            assert(type(look.LauncherText)=="string" and #look.LauncherText>=1 and #look.LauncherText<=16,"Invalid launcher text")
+            appearance.LauncherText=look.LauncherText
+        end
+        local function position(value)
+            assert(type(value)=="table" and finite(value.X) and finite(value.Y) and value.X>=0 and value.X<=1 and value.Y>=0 and value.Y<=1,"Invalid floating position")
+            return Vector2.new(value.X,value.Y)
+        end
+        if look.LauncherPosition~=nil then appearance.LauncherPosition=position(look.LauncherPosition) end
+        if look.Floating~=nil then
+            local floating=look.Floating
+            assert(type(floating)=="table" and type(floating.Enabled)=="boolean" and finite(floating.Size) and floating.Size>=44 and floating.Size<=96
+                and finite(floating.Opacity) and floating.Opacity>=.2 and floating.Opacity<=1 and type(floating.Positions)=="table","Invalid floating appearance")
+            appearance.Floating={Enabled=floating.Enabled,Size=floating.Size,Opacity=floating.Opacity,Positions={}}
+            local count=0
+            for id,p in pairs(floating.Positions) do
+                count=count+1; assert(count<=256 and type(id)=="string" and #id>=1 and #id<=128,"Invalid floating Id")
+                appearance.Floating.Positions[id]=position(p)
+            end
+        end
         return { Changes=changes,Appearance=appearance }
     end)
     if not ok then return false,tostring(prepared) end
     self._importing=true
+    for _,control in pairs(self.Controls) do control._callbackEpoch=(control._callbackEpoch or 0)+1 end
+    local previousSync,previousSuppress=self._syncCallbacks,self._suppressCallbacks
+    self._syncCallbacks=true; self._suppressCallbacks=options.Silent==true
+    self:_releaseBindings()
+    self._syncCallbacks=previousSync; self._suppressCallbacks=previousSuppress
+    if self.Destroyed then self._importing=false; return false,"Window was destroyed during a callback" end
     local look=prepared.Appearance
     if look.Colors then self._themeOverrides[look.Theme]=look.Colors end
     self.Theme=look.Theme; self.Accent=look.Accent; self.UserScale=look.Scale; self.ToggleKey=look.ToggleKey
@@ -1421,11 +1724,20 @@ function Window:ImportConfig(source,options)
     if look.Scanlines~=nil then self.Scanlines=look.Scanlines end
     if look.Notifications~=nil then self.NotificationsEnabled=look.Notifications end
     if look.Launcher~=nil then self.LauncherEnabled=look.Launcher end
+    if look.LauncherText then self.LauncherText=look.LauncherText end
+    if look.LauncherPosition then self.LauncherPosition=look.LauncherPosition end
+    if look.Floating then
+        self.QuickActionsEnabled=look.Floating.Enabled; self.FloatSize=look.Floating.Size; self.FloatOpacity=look.Floating.Opacity
+        self._floatingPositions=look.Floating.Positions
+    end
     for id,record in pairs(prepared.Changes) do self.Controls[id]:SetValue(record.Value,true) end
     self:_applyTheme(); self:_layout()
     self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
-    if not options.Silent then for id in pairs(prepared.Changes) do self.Controls[id]:_emit() end end
+    if not options.Silent then for id in pairs(prepared.Changes) do
+        local control=self.Controls[id]; if control and not self.Destroyed then control:_emit() end
+    end end
     self._importing=false; self:_scheduleSave()
+    if self.Destroyed then return false,"Window was destroyed during a callback" end
     return true
 end
 local function profileName(name)
@@ -1451,7 +1763,7 @@ function Library:GetCapabilities()
     return {
         GetHui=type(gethui)=="function",
         ReadFile=type(readfile)=="function",WriteFile=type(writefile)=="function",
-        MakeFolder=type(makefolder)=="function",IsFile=type(isfile)=="function",IsFolder=type(isfolder)=="function",
+        MakeFolder=type(makefolder)=="function",IsFile=type(isfile)=="function",IsFolder=type(isfolder)=="function",ListFiles=type(listfiles)=="function",
         FileStorage=type(readfile)=="function" and type(writefile)=="function" and type(makefolder)=="function",
     }
 end
@@ -1462,6 +1774,7 @@ function Library:CreateFileStorage(folder)
     local read,write,mkdir=readfile,writefile,makefolder
     local hasFile=type(isfile)=="function" and isfile or nil
     local hasFolder=type(isfolder)=="function" and isfolder or nil
+    local enumerate=type(listfiles)=="function" and listfiles or nil
     local function ensureFolders()
         local path=""
         for segment in folder:gmatch("[^/]+") do
@@ -1470,13 +1783,63 @@ function Library:CreateFileStorage(folder)
         end
     end
     local function path(name) return folder.."/profile-"..filePart(profileName(name))..".json" end
+    local indexPath=folder.."/profiles-index.json"
+    local function readIndex()
+        if hasFile and not hasFile(indexPath) then return {} end
+        local ok,text=pcall(read,indexPath)
+        if not ok then
+            if hasFile then error(text) end
+            return {} -- Without isfile, an absent index raises through readfile.
+        end
+        assert(type(text)=="string" and #text<=65536,"Profile index exceeds its limit")
+        local data=HttpService:JSONDecode(text)
+        assert(type(data)=="table" and data.Schema==1 and type(data.Names)=="table" and #data.Names<=256,"Invalid profile index")
+        local result,seen={},{}
+        for _,name in ipairs(data.Names) do
+            profileName(name)
+            if not seen[name] then result[#result+1]=name; seen[name]=true end
+        end
+        return result
+    end
+    local function discovered()
+        local result=readIndex(); local seen={}
+        for _,name in ipairs(result) do seen[name]=true end
+        if enumerate then
+            local ok,files=pcall(enumerate,folder)
+            if ok and type(files)=="table" then
+                for index,file in ipairs(files) do
+                    if index>4096 then break end
+                    if type(file)=="string" then
+                        local encoded=file:gsub("\\","/"):match("/profile%-(.-)%.json$")
+                        if encoded then
+                            local name=encoded:gsub("%%(%x%x)",function(byte) return string.char(tonumber(byte,16)) end)
+                            if pcall(profileName,name) and filePart(name)==encoded and not seen[name] and #result<256 then
+                                result[#result+1]=name; seen[name]=true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        local existing={}
+        for _,name in ipairs(result) do if not hasFile or hasFile(path(name)) then existing[#existing+1]=name end end
+        table.sort(existing); return existing
+    end
     return {
         Kind="file",Folder=folder,
         Save=function(name,json)
             assert(type(json)=="string","Storage expects JSON text")
+            profileName(name)
+            local known=discovered(); local fresh=not table.find(known,name)
+            assert(not fresh or #known<256,"Profile limit is 256")
             local target=path(name); ensureFolders()
             local result=write(target,json)
             assert(result~=false,"Executor refused to write the profile")
+            if fresh then
+                known[#known+1]=name; table.sort(known)
+                local indexed=write(indexPath,HttpService:JSONEncode({Schema=1,Names=known}))
+                assert(indexed~=false,"Profile saved, but the executor refused its index")
+            end
             return true
         end,
         Load=function(name)
@@ -1484,6 +1847,7 @@ function Library:CreateFileStorage(folder)
             if hasFile and not hasFile(target) then return nil,"Profile was not found" end
             return read(target)
         end,
+        List=discovered,
     }
 end
 function Window:SetStorage(adapter)
@@ -1501,8 +1865,10 @@ function Window:SaveConfig(name)
             assert(success~=false,reason or "Storage refused save")
         end
         self._profiles[name]=json
+        self.LastConfigName=name
         return json
     end)
+    if ok and self._refreshProfiles then self:_refreshProfiles() end
     return ok,result
 end
 function Window:LoadConfig(name,options)
@@ -1519,21 +1885,40 @@ function Window:LoadConfig(name,options)
         return value
     end)
     if not ok then return false,tostring(data) end
-    return self:ImportConfig(data,options)
+    local applied,err=self:ImportConfig(data,options)
+    if applied then self.LastConfigName=name; self._profiles[name]=type(data)=="string" and data or HttpService:JSONEncode(data) end
+    return applied,err
 end
 function Window:GetConfigNames()
-    local result={}
-    for name in pairs(self._profiles) do table.insert(result,name) end
+    local result,seen={},{}
+    if self.Storage and type(self.Storage.List)=="function" then
+        local ok,listed=pcall(self.Storage.List)
+        if not ok then return {},tostring(listed) end
+        if type(listed)~="table" then return {},"Storage.List must return an array" end
+        for _,name in ipairs(listed) do
+            if not pcall(profileName,name) then return {},"Storage.List returned an invalid profile name" end
+            if not seen[name] then seen[name]=true; result[#result+1]=name end
+        end
+    end
+    for name in pairs(self._profiles) do if not seen[name] then result[#result+1]=name end end
     table.sort(result); return result
 end
 function Window:Reset(silent)
     self._importing=true
+    for _,control in pairs(self.Controls) do control._callbackEpoch=(control._callbackEpoch or 0)+1 end
+    local previousSync,previousSuppress=self._syncCallbacks,self._suppressCallbacks
+    self._syncCallbacks=true; self._suppressCallbacks=silent==true; self:_releaseBindings()
+    self._syncCallbacks=previousSync; self._suppressCallbacks=previousSuppress
+    if self.Destroyed then self._importing=false; return self end
     for _,control in pairs(self.Controls) do if control.Persist and control._hasDefault then control:SetValue(control._default,true) end end
     self.Theme=self._initial.Theme; self.Accent=self._initial.Accent; self.UserScale=self._initial.Scale
     self._themeOverrides[self._initial.Theme]=copy(self._initial.ThemeColors)
     self.ReducedMotion=self._initial.ReducedMotion; self.Scanlines=self._initial.Scanlines
     self.NotificationsEnabled=self._initial.Notifications; self.LauncherEnabled=self._initial.Launcher
     self.ToggleKey=self._initial.ToggleKey
+    self.FloatSize=self._initial.FloatSize; self.FloatOpacity=self._initial.FloatOpacity; self.QuickActionsEnabled=self._initial.QuickActions
+    self.LauncherText=self._initial.LauncherText; self.LauncherPosition=self._initial.LauncherPosition; self._floatingPositions={}
+    for _,floating in pairs(self._floatingButtons) do floating.Position=floating._defaultPosition end
     self:_applyTheme(); self:_layout(); self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
     if not silent then for _,control in pairs(self.Controls) do if control.Persist then control:_emit() end end end
     self._importing=false; self:_scheduleSave(); return self
@@ -1581,6 +1966,8 @@ function Window:_layout()
         clamp(center.Y,size.Y/2+24,math.max(size.Y/2+24,view.Y-size.Y/2-8)))
     self.Main.Position=U2(center.X,center.Y)
     if self._position then self._position=center end
+    self:_layoutFloating()
+    if self._dialog then self._dialog:_layout() end
 end
 
 function Window:_syncSettings()
@@ -1595,84 +1982,109 @@ function Window:_syncSettings()
     controls.Notifications:SetValue(self.NotificationsEnabled,true)
     controls.Launcher:SetValue(self.LauncherEnabled,true)
     controls.Shortcut:SetValue(self.ToggleKey,true)
+    controls.LauncherText:SetValue(self.LauncherText,true)
+    controls.QuickActions:SetValue(self.QuickActionsEnabled,true)
+    controls.FloatSize:SetValue(self.FloatSize,true)
+    controls.FloatOpacity:SetValue(self.FloatOpacity,true)
     self._syncingSettings=false
 end
+function Window:_refreshProfiles()
+    local controls=self._settingsControls
+    if not controls or self._refreshingProfiles then return end
+    self._refreshingProfiles=true
+    local known,err=self:GetConfigNames()
+    controls.Profiles:SetOptions(known,true)
+    local selected=controls.Profiles:GetValue()
+    if not selected then controls.Profiles:SetValue(known[1],true) end
+    controls.Load:SetDisabled(err~=nil)
+    controls.ProfileStatus:SetText(err or self:_text(self.StorageMode=="file" and "fileProfiles" or "memoryProfiles"))
+    self._refreshingProfiles=false
+    return known,err
+end
 function Window:_createSettings()
-    if self._settingsOverlay then return end
-    local overlay=ui(self,"TextButton",{
-        Parent=self.Main,Name="SettingsOverlay",Size=UDim2.fromScale(1,1),BackgroundColor3=RGB(0,0,0),
-        BackgroundTransparency=.35,Text="",BorderSizePixel=0,ZIndex=40,AutoButtonColor=false,Visible=false,
-    })
-    local panel=frame(self,overlay,{ AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-        Size=UDim2.new(1,-32,1,-52),ZIndex=41,BorderSizePixel=1 },"Background")
-    self:_bind(panel,{ BackgroundColor3="Background",BorderColor3="Border" }); bevel(self,panel,false)
-    label(self,panel,self:_text("settings"),{ Position=U2(12,7),Size=UDim2.new(1,-52,0,28),TextSize=13 })
-    button(self,self,panel,"X",{ Position=UDim2.new(1,-36,0,8),Size=U2(26,26),ZIndex=42 },function() self:ShowSettings(false) end)
-    local tab=self:CreateTab({ Title=self:_text("settings"),Hidden=true,Columns=1 })
-    tab.Frame.Parent=panel; tab.Frame.Position=U2(10,42); tab.Frame.Size=UDim2.new(1,-20,1,-52); tab.Frame.Visible=true
+    if self._settingsTab then return end
+    local tab=self:CreateTab({Title=self:_text("settings"),Icon="⚙",Internal=true})
+    tab._settingsConfig=true; tab.Button.LayoutOrder=100000
+    self._settingsTab=tab
     local function opts(id,title,extra)
-        local result={ Id="__retrobox/"..id,Title=title,Internal=true,Persist=false }
+        local result={Id="__retrobox/"..id,Title=title,Internal=true,Persist=false}
         for k,v in pairs(extra or {}) do result[k]=v end
         return result
     end
-    local look=tab:CreateSection(self:_text("appearance"))
-    local controls={}
-    controls.Theme=look:AddDropdown(opts("theme",self:_text("theme"),{
-        Options=self:GetThemeNames(),Default=self.Theme,
-        Callback=function(value) self:SetTheme(value) end,
-    }))
-    controls.Accent=look:AddColorPicker(opts("accent",self:_text("accent"),{
-        Default=self.Palette.Accent,AllowRainbow=false,AllowOpacity=false,
-        Callback=function(color) self:SetAccent(color) end,
-    }))
-    local access=tab:CreateSection(self:_text("accessibility"))
-    controls.Scale=access:AddSlider(opts("scale",self:_text("scale"),{
-        Min=.75,Max=1.5,Step=.05,Default=self.UserScale,Suffix="x",Callback=function(value) self:SetScale(value) end,
-    }))
-    controls.Motion=access:AddToggle(opts("motion",self:_text("motion"),{ Default=self.ReducedMotion,Callback=function(v) self:SetReducedMotion(v) end }))
-    controls.Scanlines=access:AddToggle(opts("scanlines",self:_text("lines"),{ Default=self.Scanlines,Callback=function(v) self:SetScanlines(v) end }))
-    controls.Notifications=access:AddToggle(opts("notices",self:_text("notices"),{ Default=self.NotificationsEnabled,Callback=function(v) self:SetNotifications(v) end }))
-    controls.Launcher=access:AddToggle(opts("launcher",self:_text("launcher"),{ Default=self.LauncherEnabled,Callback=function(v) self:SetLauncher(v) end }))
-    controls.Shortcut=access:AddKeybind(opts("shortcut",self:_text("shortcut"),{ Default=self.ToggleKey,CaptureOnly=true }))
-    controls.Shortcut:OnChanged(function(value) self:SetToggleKey(value) end)
+    local controls={}; self._settingsControls=controls
     local configs=tab:CreateSection(self:_text("configs"))
-    local profile=configs:AddInput(opts("config-name",self:_text("profile"),{ Default="default",MaxLength=64 }))
-    local json=configs:AddInput(opts("config-json","JSON",{ Default="",Multiline=true,MaxLength=self.MaxConfigBytes }))
-    configs:AddButton(opts("config-save",self:_text("save"),{ Callback=function()
-        local ok,result=self:SaveConfig(profile:GetValue())
-        self:Notify({ Title=self:_text(ok and "saved" or "error"),Content=ok and profile:GetValue() or result,Kind=ok and "success" or "error" })
-    end }))
-    configs:AddButton(opts("config-load",self:_text("load"),{ Callback=function()
-        local ok,result=self:LoadConfig(profile:GetValue())
-        self:Notify({ Title=self:_text(ok and "loaded" or "error"),Content=ok and profile:GetValue() or result,Kind=ok and "success" or "error" })
-    end }))
-    configs:AddButton(opts("config-export",self:_text("export"),{ Callback=function() json:SetValue(self:ExportConfig(),true); json.Input:CaptureFocus() end }))
-    configs:AddButton(opts("config-import",self:_text("import"),{ Callback=function()
+    controls.ProfileStatus=configs:AddLabel(opts("config-status","",{Default=self:_text("memoryProfiles"),Height=42}))
+    local profile=configs:AddInput(opts("config-name",self:_text("profile"),{Default="default",MaxLength=64}))
+    controls.ProfileName=profile
+    controls.Profiles=configs:AddDropdown(opts("config-list",self:_text("profiles"),{Options={},Searchable=true,
+        Callback=function(value) if value then profile:SetValue(value,true) end end}))
+    local actions=configs:CreateRow()
+    actions:AddButton(opts("config-save",self:_text("save"),{Callback=function()
+        local name=profile.Input.Text
+        local valid,reason=pcall(profileName,name)
+        if not valid then self:Notify({Title=self:_text("error"),Content=reason,Kind="error"}); return end
+        local known,err=self:GetConfigNames()
+        if err then self:Notify({Title=self:_text("error"),Content=err,Kind="error"}); return end
+        local function save()
+            local ok,result=self:SaveConfig(name)
+            if ok then controls.Profiles:SetValue(name,true); profile:SetValue(name,true) end
+            self:Notify({Title=self:_text(ok and "saved" or "error"),Content=ok and name or result,Kind=ok and "success" or "error"})
+        end
+        if table.find(known,name) then self:Confirm({Title=self:_text("overwrite"),Content=name,OnConfirm=save}) else save() end
+    end}))
+    controls.Load=actions:AddButton(opts("config-load",self:_text("load"),{Callback=function()
+        local name=controls.Profiles:GetValue() or profile.Input.Text
+        if not name then self:Notify({Title=self:_text("error"),Content=self:_text("empty"),Kind="error"}); return end
+        local ok,result=self:LoadConfig(name)
+        self:Notify({Title=self:_text(ok and "loaded" or "error"),Content=ok and name or result,Kind=ok and "success" or "error"})
+    end}))
+    configs:AddButton(opts("config-refresh",self:_text("refresh"),{Callback=function()
+        local _,err=self:_refreshProfiles()
+        if err then self:Notify({Title=self:_text("error"),Content=err,Kind="error"}) end
+    end}))
+    local transfer=tab:CreateSection("JSON")
+    local json=transfer:AddInput(opts("config-json","JSON",{Default="",Multiline=true,MaxLength=self.MaxConfigBytes}))
+    local transfers=transfer:CreateRow()
+    transfers:AddButton(opts("config-export",self:_text("export"),{Callback=function() json:SetValue(self:ExportConfig(),true); json.Input:CaptureFocus() end}))
+    transfers:AddButton(opts("config-import",self:_text("import"),{Callback=function()
         local ok,result=self:ImportConfig(json.Input.Text)
-        self:Notify({ Title=self:_text(ok and "loaded" or "error"),Content=ok and self:_text("ready") or result,Kind=ok and "success" or "error" })
-    end }))
-    configs:AddButton(opts("config-reset",self:_text("reset"),{ Callback=function() self:Reset() end }))
-    self._settingsOverlay=overlay; self._settingsPanel=panel; self._settingsTab=tab; self._settingsControls=controls
-    connect(self,overlay.Activated,function(input)
-        if input and inside(panel,point(input)) then return end
-        self:ShowSettings(false)
-    end)
-    self:_syncSettings()
+        self:Notify({Title=self:_text(ok and "loaded" or "error"),Content=ok and self:_text("ready") or result,Kind=ok and "success" or "error"})
+    end}))
+    local look=tab:CreateSection(self:_text("appearance"))
+    controls.Theme=look:AddDropdown(opts("theme",self:_text("theme"),{Options=self:GetThemeNames(),Default=self.Theme,Callback=function(value) self:SetTheme(value) end}))
+    controls.Accent=look:AddColorPicker(opts("accent",self:_text("accent"),{Default=self.Palette.Accent,AllowRainbow=false,AllowOpacity=false,Callback=function(color) self:SetAccent(color) end}))
+    local access=tab:CreateSection(self:_text("accessibility"))
+    controls.Scale=access:AddSlider(opts("scale",self:_text("scale"),{Min=.75,Max=1.5,Step=.05,Default=self.UserScale,Suffix="x",Callback=function(value) self:SetScale(value) end}))
+    controls.Motion=access:AddToggle(opts("motion",self:_text("motion"),{Default=self.ReducedMotion,Callback=function(v) self:SetReducedMotion(v) end}))
+    controls.Scanlines=access:AddToggle(opts("scanlines",self:_text("lines"),{Default=self.Scanlines,Callback=function(v) self:SetScanlines(v) end}))
+    controls.Notifications=access:AddToggle(opts("notices",self:_text("notices"),{Default=self.NotificationsEnabled,Callback=function(v) self:SetNotifications(v) end}))
+    controls.Launcher=access:AddToggle(opts("launcher",self:_text("launcher"),{Default=self.LauncherEnabled,Callback=function(v) self:SetLauncher(v) end}))
+    controls.LauncherText=access:AddInput(opts("launcher-text",self:_text("launcherText"),{Default=self.LauncherText,MaxLength=16,
+        Validate=function(value) return #value>0 end,Callback=function(value) self:SetLauncherOptions({Text=value}) end}))
+    controls.Shortcut=access:AddKeybind(opts("shortcut",self:_text("shortcut"),{Default=self.ToggleKey,CaptureOnly=true,AllowMouse=false}))
+    controls.Shortcut:OnChanged(function(value) self:SetToggleKey(value) end)
+    local floats=tab:CreateSection(self:_text("quickActions"))
+    controls.QuickActions=floats:AddToggle(opts("quick-actions",self:_text("quickActions"),{Default=self.QuickActionsEnabled,Callback=function(value) self:SetFloatingOptions({Enabled=value}) end}))
+    controls.FloatSize=floats:AddSlider(opts("float-size",self:_text("floatSize"),{Min=44,Max=96,Default=self.FloatSize,Callback=function(value) self:SetFloatingOptions({Size=value}) end}))
+    controls.FloatOpacity=floats:AddSlider(opts("float-opacity",self:_text("floatOpacity"),{Min=.2,Max=1,Step=.05,Default=self.FloatOpacity,Callback=function(value) self:SetFloatingOptions({Opacity=value}) end}))
+    access:AddButton(opts("config-reset",self:_text("reset"),{Callback=function()
+        self:Confirm({Title=self:_text("reset"),Content=self:_text("confirm"),Kind="danger",OnConfirm=function() self:Reset() end})
+    end}))
+    self:_syncSettings(); self:_refreshProfiles()
 end
 function Window:ShowSettings(value)
-    if self.Destroyed or not self.SettingsEnabled then return self end
-    self:_hideTooltip()
+    if not self.SettingsEnabled or self.Destroyed then return self end
+    if not self._settingsTab then self:_createSettings() end
     if value==nil then value=not self._settingsOpen end
+    self:_hideTooltip(); self:_hideSearchResults()
     if value then
-        self:Show(); if self.Minimized then self:Minimize(false) end
-        self:_createSettings()
+        if self.ActiveTab and self.ActiveTab~=self._settingsTab then self._lastContentTab=self.ActiveTab end
+        self:_syncSettings(); self:_refreshProfiles(); self._settingsTab:Select()
+    elseif self.ActiveTab==self._settingsTab then
+        local previous=self._lastContentTab
+        if previous and not previous.Destroyed then previous:Select()
+        else for _,tab in ipairs(self.Tabs) do if tab~=self._settingsTab and not tab.Hidden then tab:Select(); break end end end
     end
-    self._settingsOpen=value == true
-    if self._settingsOverlay then self._settingsOverlay.Visible=self._settingsOpen end
-    if not self._settingsOpen and self._binding and self._binding._internal then
-        local binding=self._binding; self._binding=nil; binding:_render()
-    end
-    if not self._settingsOpen and self._openDropdown and self._openDropdown._internal then self._openDropdown:SetOpen(false) end
     return self
 end
 
@@ -1716,6 +2128,224 @@ function Window:Notify(options)
     return notification
 end
 
+local function normalizedPosition(value)
+    assert(typeof(value)=="Vector2" and finite(value.X) and finite(value.Y) and value.X>=0 and value.X<=1 and value.Y>=0 and value.Y<=1,
+        "Position must be a Vector2 with coordinates between 0 and 1")
+    return Vector2.new(value.X,value.Y)
+end
+function Window:_layoutFloating()
+    if not self.Root then return end
+    local view=self.Root.AbsoluteSize
+    local function place(object,position,size)
+        object.Size=U2(size.X,size.Y)
+        object.Position=U2(clamp(position.X*view.X,8,math.max(8,view.X-size.X-8)),clamp(position.Y*view.Y,20,math.max(20,view.Y-size.Y-8)))
+    end
+    if self.Launcher then
+        place(self.Launcher,self.LauncherPosition,Vector2.new(self.FloatSize,40))
+        self.Launcher.Text=self.LauncherText; self.Launcher.BackgroundTransparency=1-self.FloatOpacity
+    end
+    for _,floating in pairs(self._floatingButtons) do
+        if not floating.Destroyed then
+            place(floating.Frame,self._floatingPositions[floating.Id] or floating.Position,Vector2.new(self.FloatSize,self.FloatSize+14))
+            floating.Frame.Visible=self.QuickActionsEnabled and floating.Visible and (not floating.MobileOnly or UserInputService.TouchEnabled==true)
+                and (not self.Main.Visible or self.Minimized or floating.VisibleWithMenu)
+            floating.Button.BackgroundTransparency=1-self.FloatOpacity; floating.Button.TextTransparency=1-self.FloatOpacity
+            self:_syncFloating(floating.Control)
+        end
+    end
+end
+function Window:_syncFloating(control)
+    if not self._floatingButtons then return end
+    for _,floating in pairs(self._floatingButtons) do
+        if not floating.Destroyed and (not control or floating.Control==control) then
+            local target=floating.Control; local active=target and (target.Type=="Toggle" and target.Value==true or target.Type=="Keybind" and target.Active==true)
+            floating.Button.Text=target and target._busy and "..." or floating.Text
+            floating.Button.BackgroundColor3=self.Palette[active and "Accent" or "Surface"]
+            floating.Button.TextColor3=self.Palette[active and "AccentText" or "Text"]
+            floating.Button.Active=not (target and (target.Disabled or target.Destroyed or target._busy))
+        end
+    end
+end
+function Window:SetFloatingOptions(options)
+    options=options or {}
+    local size=options.Size; if size==nil then size=self.FloatSize end
+    local opacity=options.Opacity; if opacity==nil then opacity=self.FloatOpacity end
+    assert(finite(size) and size>=44 and size<=96,"Floating Size must be 44–96")
+    assert(finite(opacity) and opacity>=.2 and opacity<=1,"Floating Opacity must be 0.2–1")
+    assert(options.Enabled==nil or type(options.Enabled)=="boolean","Floating Enabled must be boolean")
+    self.FloatSize=size; self.FloatOpacity=opacity
+    if options.Enabled~=nil then self.QuickActionsEnabled=options.Enabled end
+    if not self.QuickActionsEnabled then self:_releaseBindings() end
+    self:_layoutFloating(); self:_scheduleSave(); return self
+end
+function Window:SetLauncherOptions(options)
+    options=options or {}
+    local text=options.Text~=nil and options.Text or self.LauncherText
+    assert(type(text)=="string" and #text>=1 and #text<=16,"Launcher Text must contain 1–16 bytes")
+    assert(options.Enabled==nil or type(options.Enabled)=="boolean","Launcher Enabled must be boolean")
+    local position=options.Position and normalizedPosition(options.Position) or self.LauncherPosition
+    self.LauncherText=text; self.LauncherPosition=position
+    if options.Enabled~=nil then self:SetLauncher(options.Enabled) end
+    self:_layoutFloating(); self:_scheduleSave(); return self
+end
+function Window:AddFloatingButton(options)
+    options=options or {}
+    assert(not self.Destroyed,"Window has been destroyed")
+    local control=options.Control
+    assert(control==nil or control._window==self and not control.Destroyed,"Floating Control must belong to this window")
+    assert(control or type(options.Callback)=="function","Floating button needs a Control or Callback")
+    if control then assert(control.Type=="Toggle" or control.Type=="Button" or control.Type=="Keybind","Floating supports Toggle, Button or Keybind") end
+    local id=options.Id or control and control.Id or HttpService:GenerateGUID(false)
+    assert(type(id)=="string" and #id>=1 and #id<=128 and not self._floatingButtons[id],"Invalid or duplicate floating Id")
+    local mode=options.Mode or control and (control.Type=="Toggle" and "Toggle" or control.Type=="Keybind" and control.Mode) or "Press"
+    assert(mode=="Press" or mode=="Toggle" or mode=="Hold","Invalid floating Mode")
+    assert(not control or control.Type~="Button" or mode=="Press","Button floating actions use Press mode")
+    assert(not control or control.Type~="Keybind" or mode==control.Mode,"Floating keybind Mode must match the keybind")
+    local position=normalizedPosition(options.Position or Vector2.new(.03,.65))
+    local floating={_window=self,_connections={},Id=id,Control=control,Text=tostring(options.Text or control and control.Title or "Action"),
+        Mode=mode,Position=position,_defaultPosition=position,MobileOnly=options.MobileOnly~=false,Visible=options.Visible~=false,
+        VisibleWithMenu=options.VisibleWithMenu==true,Destroyed=false}
+    assert(#floating.Text<=64,"Floating Text exceeds 64 bytes")
+    floating.Frame=frame(self,self.Root,{Name="Floating/"..id,Size=U2(64,78),BackgroundTransparency=1,ZIndex=50})
+    local handle=button(self,floating,floating.Frame,"::",{Size=UDim2.new(1,0,0,14),TextSize=11,ZIndex=51})
+    function floating:Activate(active)
+        if self.Destroyed or active~=false and (self._window._dialog or self._window._binding) then return end
+        local target=self.Control
+        if target and (target.Destroyed or active~=false and target.Disabled) then return end
+        if target then
+            if target.Type=="Toggle" then
+                if self.Mode=="Hold" then target:SetValue(active==true) else target:SetValue(not target:GetValue()) end
+            elseif target.Type=="Button" then target:Press()
+            else target:Trigger(active) end
+        else call(self._window,options.Callback,active,self) end
+        self._window:_syncFloating(target)
+    end
+    function floating:SetPosition(value)
+        self.Position=normalizedPosition(value); self._window._floatingPositions[self.Id]=self.Position
+        self._window:_layoutFloating(); self._window:_scheduleSave(); return self
+    end
+    function floating:Release()
+        if self._holdInput then self._holdInput=nil; self:Activate(false) end
+    end
+    function floating:Destroy()
+        if self.Destroyed then return end
+        self:Release(); self.Destroyed=true; cleanup(self)
+        if self._window._drag and self._window._drag.Owner==self then self._window:_endDrag() end
+        self._window._floatingButtons[self.Id]=nil
+        if self.Control and self.Control.FloatingButton==self then self.Control.FloatingButton=nil end
+        self.Frame:Destroy()
+    end
+    floating.Button=button(self,floating,floating.Frame,floating.Text,{Position=U2(0,14),Size=UDim2.new(1,0,1,-14),TextSize=12,
+        TextWrapped=true,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=51},function() if floating.Mode~="Hold" then floating:Activate(true) end end)
+    connect(floating,handle.InputBegan,function(input)
+        if not pointer(input) or self._dialog then return end
+        local start=point(input); local origin=floating.Frame.AbsolutePosition
+        self:_beginDrag(floating,input,function(current)
+            local view=self.Root.AbsoluteSize; local p=origin+(current-start)
+            floating.Position=Vector2.new(clamp(p.X/math.max(1,view.X),0,1),clamp(p.Y/math.max(1,view.Y),0,1))
+            self._floatingPositions[id]=floating.Position; self:_layoutFloating()
+        end,function() self:_scheduleSave() end)
+    end)
+    connect(floating,floating.Button.InputBegan,function(input)
+        if floating.Mode=="Hold" and pointer(input) and not self._dialog and not self._binding then floating._holdInput=input; floating:Activate(true) end
+    end)
+    connect(floating,floating.Button.InputEnded,function(input) if floating._holdInput==input then floating:Release() end end)
+    connect(floating,floating.Frame.Destroying,function() floating:Destroy() end)
+    self._floatingButtons[id]=floating; self:_layoutFloating()
+    return floating
+end
+function Control:AddFloatingButton(options)
+    assert(not self.Destroyed,"Control has been destroyed")
+    assert(options==nil or type(options)=="table","Floating options must be a table")
+    local passed={}
+    for key,value in pairs(options or {}) do if key~="Control" then passed[key]=value end end
+    if passed.Position~=nil then normalizedPosition(passed.Position) end
+    assert(passed.Text==nil or type(passed.Text)=="string" and #passed.Text<=64,"Invalid floating Text")
+    assert(passed.Mode==nil or passed.Mode=="Press" or passed.Mode=="Toggle" or passed.Mode=="Hold","Invalid floating Mode")
+    if self.FloatingButton then self.FloatingButton:Destroy() end
+    passed.Control=self
+    self.FloatingButton=self._window:AddFloatingButton(passed); return self.FloatingButton
+end
+
+function Window:Dialog(options)
+    options=options or {}
+    assert(type(options)=="table","Dialog expects options")
+    local title=tostring(options.Title or self:_text("about")); local content=tostring(options.Content or "")
+    assert(#title<=256 and #content<=8192,"Dialog text exceeds its limit")
+    local actions=options.Buttons or {{Text="OK"}}
+    assert(type(actions)=="table" and #actions>=1 and #actions<=3,"Dialog needs 1–3 buttons")
+    local buttons={}
+    for _,action in ipairs(actions) do
+        assert(type(action)=="table" and type(action.Text)=="string" and #action.Text>=1 and #action.Text<=64,"Invalid dialog button")
+        assert(action.Callback==nil or type(action.Callback)=="function","Dialog Callback must be a function")
+        buttons[#buttons+1]={Text=action.Text,Callback=action.Callback,Kind=action.Kind}
+    end
+    local default=options.DefaultButton or 1
+    assert(finite(default) and default%1==0 and default>=1 and default<=#buttons,"Invalid dialog default button")
+    assert(options.OnClose==nil or type(options.OnClose)=="function","OnClose must be a function")
+    if self.Destroyed then return nil end
+    if self._dialog then self._dialog:Close("replaced") end
+    self:Show(); self:_hideTooltip(); self:_hideSearchResults(); self:_endDrag()
+    if self._binding then local bind=self._binding; self._binding=nil; bind:_render() end
+    if self._openDropdown then self._openDropdown:SetOpen(false) end
+    self:_releaseBindings()
+    local focused=UserInputService:GetFocusedTextBox(); if focused then focused:ReleaseFocus() end
+    local dialog={_window=self,_connections={},Destroyed=false,Buttons={},DefaultButton=default}
+    dialog.Frame=ui(self,"TextButton",{Parent=self.Root,Name="Dialog",Size=UDim2.fromScale(1,1),Text="",AutoButtonColor=false,
+        BackgroundColor3=RGB(0,0,0),BackgroundTransparency=.45,Active=true,ZIndex=2000})
+    dialog.Panel=frame(self,dialog.Frame,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),BorderSizePixel=1,ZIndex=2001},"Background")
+    bevel(self,dialog.Panel,false)
+    local header=frame(self,dialog.Panel,{Position=U2(4,4),Size=UDim2.new(1,-8,0,30),ZIndex=2002},"Accent")
+    label(self,header,title,{Position=U2(9,0),Size=UDim2.new(1,-42,1,0),TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd},"AccentText")
+    dialog.Content=label(self,dialog.Panel,content,{Position=U2(14,46),Size=UDim2.new(1,-28,1,-103),TextWrapped=true,
+        TextTruncate=Enum.TextTruncate.AtEnd,TextYAlignment=Enum.TextYAlignment.Top,TextSize=13,ZIndex=2002})
+    function dialog:_layout()
+        if self.Destroyed then return end
+        local view=self._window.Root.AbsoluteSize; local width=math.max(120,math.min(480,view.X-16))
+        local ok,bounds=pcall(TextService.GetTextSize,TextService,self.Content.Text,13,self._window.Font,Vector2.new(width-28,100000))
+        local height=ok and bounds.Y+116 or 220
+        self.Panel.Size=U2(width,math.max(130,math.min(height,view.Y-16,420)))
+    end
+    function dialog:SetContent(text)
+        assert(type(text)=="string" and #text<=8192,"Dialog content exceeds its limit")
+        if not self.Destroyed then self.Content.Text=text; self:_layout() end
+        return self
+    end
+    function dialog:Close(reason,index)
+        if self.Destroyed then return end
+        self.Destroyed=true; self.Result=index; self.Reason=reason or "closed"
+        if self._window._dialog==self then self._window._dialog=nil end
+        cleanup(self); self.Frame:Destroy()
+        call(self._window,options.OnClose,self.Reason,index)
+    end
+    function dialog:Choose(index)
+        if self.Destroyed or not buttons[index] then return end
+        local callback=buttons[index].Callback
+        self:Close("button",index); call(self._window,callback,index)
+    end
+    button(self,dialog,header,"X",{Position=UDim2.new(1,-29,0,3),Size=U2(24,24),TextSize=11},function() dialog:Close("cancel") end)
+    for index,action in ipairs(buttons) do
+        local cell=button(self,dialog,dialog.Panel,action.Text,{Position=UDim2.new((index-1)/#buttons,14,1,-44),
+            Size=UDim2.new(1/#buttons,-28,0,30),ZIndex=2002,TextSize=12},function() dialog:Choose(index) end)
+        if action.Kind=="danger" then self:_bind(cell,{TextColor3="Danger"}) end
+        dialog.Buttons[index]=cell
+    end
+    connect(dialog,dialog.Frame.Activated,function(input)
+        if options.DismissOnOutside and input and not inside(dialog.Panel,point(input)) then dialog:Close("outside") end
+    end)
+    connect(dialog,self.Root:GetPropertyChangedSignal("AbsoluteSize"),function() dialog:_layout() end)
+    connect(dialog,dialog.Frame.Destroying,function() dialog:Close("destroyed") end)
+    self._dialog=dialog; dialog:_layout()
+    return dialog
+end
+function Window:Confirm(options)
+    options=options or {}
+    return self:Dialog({Title=options.Title,Content=options.Content,DefaultButton=1,
+        Buttons={{Text=options.CancelText or self:_text("cancel"),Callback=options.OnCancel},
+            {Text=options.ConfirmText or self:_text("confirm"),Kind=options.Kind,Callback=options.OnConfirm}},
+        OnClose=function(reason) if reason~="button" then call(self,options.OnCancel,reason) end end})
+end
+
 function Window:_profile(player)
     local fallback=label(self,self.Profile,"?",{ Position=U2(0,5),Size=U2(34,34),TextXAlignment=Enum.TextXAlignment.Center,TextSize=20 })
     local avatar=ui(self,"ImageLabel",{
@@ -1754,31 +2384,68 @@ function Window:_profile(player)
     end)
 end
 
+function Window:_releaseBindings()
+    self._touchToggles={}
+    for _,floating in pairs(self._floatingButtons) do floating:Release() end
+    for binding in pairs(self._keybinds) do if binding.Mode=="Hold" and binding.Active then binding:Trigger(false) end end
+end
 function Window:_inputBegan(input,processed)
     if self.Destroyed then return end
+    if self._dialog then
+        if input.UserInputType==Enum.UserInputType.Keyboard then
+            if input.KeyCode==Enum.KeyCode.Escape then self._dialog:Close("cancel")
+            elseif input.KeyCode==Enum.KeyCode.Return then self._dialog:Choose(self._dialog.DefaultButton) end
+        end
+        return
+    end
     if pointer(input) then
         if not self.TooltipFrame or not self.TooltipFrame.Visible or not inside(self.TooltipFrame,point(input)) then self:_hideTooltip() end
+        if self.SearchResults and self.SearchResults.Visible and not inside(self.SearchResults,point(input)) and not inside(self.Search,point(input)) then self:_hideSearchResults() end
     elseif input.UserInputType==Enum.UserInputType.Keyboard then self:_hideTooltip() end
     if self._binding then
-        if input.UserInputType~=Enum.UserInputType.Keyboard then return end
-        local binding=self._binding; self._binding=nil
-        if input.KeyCode~=Enum.KeyCode.Escape then
-            binding:SetValue(input.KeyCode==Enum.KeyCode.Backspace and Enum.KeyCode.Unknown or input.KeyCode)
-        end
+        local value=inputBinding(input); if not value then return end
+        local binding=self._binding
+        if value.EnumType==Enum.UserInputType and not binding.AllowMouse then return end
+        self._binding=nil
+        if value~=Enum.KeyCode.Escape then binding:SetValue(value==Enum.KeyCode.Backspace and Enum.KeyCode.Unknown or value) end
         binding:_render(); return
+    end
+    if UserInputService:GetFocusedTextBox()==self.Search and self.SearchResults and self.SearchResults.Visible then
+        if input.KeyCode==Enum.KeyCode.Up then self:_selectSearchResult((self._searchSelection or 1)-1); return
+        elseif input.KeyCode==Enum.KeyCode.Down then self:_selectSearchResult((self._searchSelection or 1)+1); return
+        elseif input.KeyCode==Enum.KeyCode.Escape then self.Search:ReleaseFocus(); self:_hideSearchResults(); return
+        elseif input.KeyCode==Enum.KeyCode.Return then
+            local match=self._searchMatches[self._searchSelection or 1]
+            if match then self:FocusControl(match.Control) end
+            return
+        end
     end
     if pointer(input) and self._openDropdown and not inside(self._openDropdown.Frame,point(input)) then self._openDropdown:SetOpen(false) end
     if processed or UserInputService:GetFocusedTextBox() then return end
-    if input.UserInputType==Enum.UserInputType.Keyboard then
-        if input.KeyCode==self.ToggleKey and self.ToggleKey~=Enum.KeyCode.Unknown then self:Toggle(); return end
-        for binding in pairs(self._keybinds) do
-            if not binding.CaptureOnly and binding.Value==input.KeyCode and binding.Value~=Enum.KeyCode.Unknown then binding:Trigger(true) end
-        end
+    local value=inputBinding(input)
+    if value==self.ToggleKey and value~=Enum.KeyCode.Unknown then self:Toggle(); return end
+    if self._settingsOpen then return end
+    if value and value~=Enum.KeyCode.Unknown then
+        for binding in pairs(self._keybinds) do if binding.Value==value then binding:Trigger(true) end end
     end
 end
 function Window:_inputEnded(input)
+    for control,touch in pairs(self._touchToggles) do
+        if touch.Input==input then
+            self._touchToggles[control]=nil
+            local position=point(input); local delta=position-touch.Position
+            if not control.Destroyed and not control.Disabled and not control._touchWasLongPress and not touch.Moved and not self._dialog and not self._binding
+                and self.Main.Visible and control.Frame.Visible and control._section._visible~=false and control._section._tab==self.ActiveTab
+                and inside(control.Frame,position) and delta.X*delta.X+delta.Y*delta.Y<=100 then control:SetValue(not control.Value) end
+        end
+    end
     if self._drag and (input==self._drag.Input or input.UserInputType==Enum.UserInputType.MouseButton1 and self._drag.Input.UserInputType==Enum.UserInputType.MouseButton1) then self:_endDrag() end
-    for binding in pairs(self._keybinds) do if binding.Mode=="Hold" and binding.Active and binding.Value==input.KeyCode then binding:Trigger(false) end end
+    for _,floating in pairs(self._floatingButtons) do
+        local held=floating._holdInput
+        if held and (held==input or held.UserInputType==Enum.UserInputType.MouseButton1 and input.UserInputType==held.UserInputType) then floating:Release() end
+    end
+    local value=inputBinding(input)
+    for binding in pairs(self._keybinds) do if binding.Mode=="Hold" and binding.Active and binding.Value==value then binding:Trigger(false) end end
 end
 
 local function mountGui(gui,explicitParent,player)
@@ -1846,13 +2513,20 @@ function Library:CreateWindow(options)
         Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,TooltipDelay=tooltipDelay,TooltipMaxWidth=tooltipWidth,
         ReducedMotion=options.ReducedMotion == true,Scanlines=options.Scanlines == true,
         NotificationsEnabled=options.Notifications~=false,LauncherEnabled=options.Launcher~=false,
+        ErrorNotifications=options.ErrorNotifications~=false,
         SettingsEnabled=options.Settings~=false,AutoSave=options.AutoSave,StorageMode="memory",
+        FloatSize=options.FloatSize or 64,FloatOpacity=options.FloatOpacity or 1,QuickActionsEnabled=options.QuickActions~=false,
+        LauncherText=options.LauncherText or "UI",LauncherPosition=normalizedPosition(options.LauncherPosition or Vector2.new(.025,.1)),
         _locale=translations[options.Locale or "pt-BR"] or translations["pt-BR"],
         _connections={},_skin=setmetatable({},{ __mode="k" }),_themeOverrides={},_rainbows={},_keybinds={},_destroyListeners={},
         _profiles={},_notifications={},_noticeCount=0,_nextId=0,_saveToken=0,_query="",
+        _floatingButtons={},_floatingPositions={},_touchToggles={},
         _requestedSize=size,Controls={},Flags={},Tabs={},Destroyed=false,
     },Window)
     if window.AutoSave~=nil then profileName(window.AutoSave) end
+    assert(finite(window.FloatSize) and window.FloatSize>=44 and window.FloatSize<=96,"FloatSize must be 44–96")
+    assert(finite(window.FloatOpacity) and window.FloatOpacity>=.2 and window.FloatOpacity<=1,"FloatOpacity must be 0.2–1")
+    assert(type(window.LauncherText)=="string" and #window.LauncherText>=1 and #window.LauncherText<=16,"LauncherText must contain 1–16 bytes")
     assert(options.FileStorage==nil or type(options.FileStorage)=="boolean","FileStorage must be a boolean")
     if options.Storage then window:SetStorage(options.Storage)
     elseif options.FileStorage~=false then
@@ -1861,7 +2535,8 @@ function Library:CreateWindow(options)
         if adapter then window:SetStorage(adapter) end
     end
     window._initial={ Theme=theme,ThemeColors=copy(self.Themes[theme]),Accent=window.Accent,Scale=userScale,ReducedMotion=window.ReducedMotion,
-        Scanlines=window.Scanlines,Notifications=window.NotificationsEnabled,Launcher=window.LauncherEnabled,ToggleKey=toggle }
+        Scanlines=window.Scanlines,Notifications=window.NotificationsEnabled,Launcher=window.LauncherEnabled,ToggleKey=toggle,
+        FloatSize=window.FloatSize,FloatOpacity=window.FloatOpacity,QuickActions=window.QuickActionsEnabled,LauncherText=window.LauncherText,LauncherPosition=window.LauncherPosition }
     window.Gui=ui(window,"ScreenGui",{
         Name=guiName,ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=options.DisplayOrder or 50,
         ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
@@ -1888,8 +2563,8 @@ function Library:CreateWindow(options)
     button(window,window,header,"[]",{ Position=UDim2.new(1,-66,0,4),Size=U2(27,26),TextSize=11 },function()
         window._maximized=not window._maximized; window:Minimize(false); window:_layout()
     end)
-    button(window,window,header,"X",{ Position=UDim2.new(1,-34,0,4),Size=U2(27,26) },function()
-        if options.DestroyOnClose==false then window:Hide() else window:Destroy() end
+    window.CloseButton=button(window,window,header,"X",{ Position=UDim2.new(1,-34,0,4),Size=U2(27,26) },function()
+        if options.DestroyOnClose==true then window:Destroy() else window:Hide() end
     end)
     window.SubtitleLabel=label(window,window.Main,window.Subtitle,{
         Position=U2(14,44),Size=UDim2.new(1,-28,0,22),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd,
@@ -1915,6 +2590,16 @@ function Library:CreateWindow(options)
         Position=UDim2.new(1,-24,1,-24),Size=U2(24,24),TextXAlignment=Enum.TextXAlignment.Right,Active=true,
     },"Muted")
     window.Launcher=button(window,window,window.Root,"UI",{ Position=U2(16,60),Size=U2(44,38),Visible=false,ZIndex=30 },function() window:Show() end)
+    local launcherHandle=button(window,window,window.Launcher,"::",{Position=U2(0,-14),Size=UDim2.new(1,0,0,14),TextSize=11,ZIndex=31})
+    connect(window,launcherHandle.InputBegan,function(input)
+        if not pointer(input) or window._dialog then return end
+        local start=point(input); local origin=window.Launcher.AbsolutePosition
+        window:_beginDrag(window,input,function(current)
+            local view=window.Root.AbsoluteSize; local position=origin+(current-start)
+            window.LauncherPosition=Vector2.new(clamp(position.X/math.max(1,view.X),0,1),clamp(position.Y/math.max(1,view.Y),0,1))
+            window:_layoutFloating()
+        end,function() window:_scheduleSave() end)
+    end)
     window.NotificationHost=frame(window,window.Root,{
         AnchorPoint=Vector2.new(1,1),Position=UDim2.new(1,-16,1,-16),Size=UDim2.new(0,math.min(340,math.max(220,window.Root.AbsoluteSize.X-32)),0,0),
         AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=80,
@@ -1942,9 +2627,22 @@ function Library:CreateWindow(options)
         end)
     end)
     connect(window,window.Search:GetPropertyChangedSignal("Text"),function() window:SetSearch(window.Search.Text) end)
+    connect(window,window.Search.Focused,function() window:_rebuildSearchResults() end)
+    connect(window,window.Search.FocusLost,function(enter)
+        local generation=window._searchGeneration
+        if enter and window.SearchResults and window.SearchResults.Visible then
+            local match=window._searchMatches[window._searchSelection or 1]
+            if match then window:FocusControl(match.Control) end
+        else task.delay(.15,function() if not window.Destroyed and window._searchGeneration==generation and UserInputService:GetFocusedTextBox()~=window.Search then window:_hideSearchResults() end end) end
+    end)
     connect(window,window.Root:GetPropertyChangedSignal("AbsoluteSize"),function() window:_layout() end)
     connect(window,UserInputService.InputBegan,function(input,processed) window:_inputBegan(input,processed) end)
     connect(window,UserInputService.InputChanged,function(input)
+        if input.UserInputType==Enum.UserInputType.Touch then
+            for _,touch in pairs(window._touchToggles) do if touch.Input==input then
+                local delta=point(input)-touch.Position; if delta.X*delta.X+delta.Y*delta.Y>100 then touch.Moved=true end
+            end end
+        end
         window:_updateTooltip(input)
         local drag=window._drag; if not drag then return end
         if drag.Input.UserInputType==Enum.UserInputType.Touch and input~=drag.Input then return end
@@ -1954,17 +2652,25 @@ function Library:CreateWindow(options)
     connect(window,UserInputService.WindowFocusReleased,function()
         window:_hideTooltip()
         window:_endDrag()
-        for binding in pairs(window._keybinds) do if binding.Mode=="Hold" and binding.Active then binding:Trigger(false) end end
+        if window._binding then local binding=window._binding; window._binding=nil; binding:_render() end
+        window:_releaseBindings(); window:_hideSearchResults()
     end)
     connect(window,window.Gui.Destroying,function() if not window.Destroyed then window:Destroy() end end)
     window:_layout(); window:_applyTheme()
+    if window.SettingsEnabled then window:_createSettings() end
     sharedWindows[window.Gui]=window
     return window
 end
 function Window:Destroy()
-    if self.Destroyed then return end
+    if self.Destroyed or self._closing then return end
+    self._closing=true
+    self:_releaseBindings()
     self.Destroyed=true; self._saveToken=self._saveToken+1
+    self._closing=false
     self:_hideTooltip()
+    if self._dialog then self._dialog:Close("destroyed") end
+    if self._searchOwner then cleanup(self._searchOwner) end
+    for _,floating in pairs(self._floatingButtons) do floating:Destroy() end
     sharedWindows[self.Gui]=nil
     self:_endDrag()
     if self._rgbConnection then self._rgbConnection:Disconnect(); self._rgbConnection=nil end

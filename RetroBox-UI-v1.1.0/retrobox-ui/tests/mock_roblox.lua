@@ -33,17 +33,16 @@ function task.wait(seconds) Mock.Time=Mock.Time+(seconds or .03) end
 function Mock.pump(advance)
     Mock.Time=Mock.Time+(advance or 0)
     local passes=0
-    repeat
-        local changed=false
-        for i=#Mock.Queue,1,-1 do
-            local item=Mock.Queue[i]
-            if item.Due<=Mock.Time then
-                table.remove(Mock.Queue,i); item.Fn(table.unpack(item.Args,1,item.Args.n)); changed=true
-            end
+    while true do
+        local nextIndex,nextDue
+        for index,item in ipairs(Mock.Queue) do
+            if item.Due<=Mock.Time and (not nextDue or item.Due<nextDue) then nextIndex=index; nextDue=item.Due end
         end
-        passes=passes+1; assert(passes<1000,"Runaway task queue")
-        if not changed then break end
-    until false
+        if not nextIndex then break end
+        local item=table.remove(Mock.Queue,nextIndex)
+        item.Fn(table.unpack(item.Args,1,item.Args.n))
+        passes=passes+1; assert(passes<10000,"Runaway task queue")
+    end
 end
 Enum=setmetatable({},{ __index=function(container,enumName)
     local enum=setmetatable({ Name=enumName },{

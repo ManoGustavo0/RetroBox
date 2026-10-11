@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 · 2026-10-11
+
+- Aba Configurações automática e engrenagem que a seleciona, com saves de nomes livres, lista persistente e confirmação de sobrescrita.
+- Índice de nomes para listar saves em outra execução sem exigir listfiles; enumeração opcional de arquivos antigos e Storage.List para adaptadores próprios.
+- Keybind com teclado e Mouse 1/2/3; seletor ao lado do toggle e valores preservados nos perfis.
+- Linhas de controles combinados, que se empilham em telas estreitas.
+- Atalhos flutuantes ligados a Toggle/Button/Keybind, com arraste separado da ação, Hold e aparência/posições salvas.
+- Busca com resultados navegáveis, seleção por setas/Enter e destaque do controle, sem executar sua função.
+- Diálogos/confirmacões retrô, estado de execução e feedback opcional de sucesso/erro em botões.
+- X passa a ocultar por padrão; DestroyOnClose=true mantém destruição. RightShift continua como padrão; botão de reabrir configurável e arrastável.
+- Holds e eventos antigos são encerrados antes de carregar/restaurar. Toque longo para ler ajuda não ativa o toggle.
+- 72 testes locais e seis exemplos passaram. Renderização e entradas na engine real seguem pendentes.
+
 ## 1.2.0 · 2026-10-11
 
 - Tooltip opcional em todos os controles, com texto simples ou título, atraso e largura próprios; `Tip` é um alias.

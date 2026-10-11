@@ -22,7 +22,7 @@ intro:AddLabel({
     Description = "Use a engrenagem junto ao seu avatar para trocar tema, escala e configurações.",
     Height = 78,
 })
-intro:AddButton({ Title = "Abrir personalização", Callback = function() window:ShowSettings(true) end })
+intro:AddButton({ Title = "Abrir configurações", Callback = function() window:ShowSettings(true) end })
 intro:AddButton({
     Title = "Salvar configuração",
     Callback = function()
@@ -38,6 +38,11 @@ intro:AddButton({
     end,
 })
 intro:AddButton({ Title = "Notificação", Callback = function() window:Notify("Esses botões executam callbacks do seu código.") end })
+intro:AddButton({ Title = "Janela de diálogo", Callback = function()
+    window:Confirm({ Title = "Confirmação retrô", Content = "Executar a ação de demonstração?", OnConfirm = function()
+        window:Notify({ Title = "Confirmado", Content = "O dev conecta sua função aqui.", Kind = "success" })
+    end })
+end })
 
 local circle = Instance.new("Frame")
 circle.Name = "DemoFOV"
@@ -62,6 +67,8 @@ fov:AddLabel({ Title = "O círculo é uma demonstração visual.", Description =
 fov:AddToggle({
     Id = "fov_visible", Title = "Mostrar círculo", Default = true, FireOnInit = true,
     Tooltip = "Exibe o círculo de demonstração. A visibilidade é alterada pelo callback deste controle.",
+    Keybind = { Default = Enum.KeyCode.F, Mode = "Toggle" },
+    Floating = { Text = "CÍRCULO", Position = Vector2.new(.04, .65) },
     Callback = function(value) circle.Visible = value end,
 })
 fov:AddSlider({
@@ -96,20 +103,20 @@ inputs:AddInput({
     Id = "notes", Title = "Anotações", Multiline = true, Default = "", Placeholder = "Digite algo...",
     Callback = function(value) log:Append("Texto: " .. value) end,
 })
-local hotkeys = components:CreateSection("Teclado")
+local hotkeys = components:CreateSection("Teclado e mouse")
 hotkeys:AddKeybind({
     Id = "action_key", Title = "Executar uma ação", Default = Enum.KeyCode.F, Mode = "Press",
-    Tooltip = "Clique no campo para escolher uma tecla. Escape cancela e Backspace remove o atalho.",
+    Tooltip = "Clique no campo e escolha uma tecla ou Mouse 1/2/3. Escape cancela e Backspace remove o atalho.",
     Callback = function(_, key) window:Notify({ Title = "Atalho", Content = "Tecla: " .. key.Name }) end,
 })
 hotkeys:AddKeybind({
-    Id = "hold_key", Title = "Segurar para ativar", Default = Enum.KeyCode.G, Mode = "Hold",
-    Callback = function(active) log:Append("Segurar G: " .. tostring(active)) end,
+    Id = "hold_key", Title = "Segurar para ativar", Default = Enum.UserInputType.MouseButton2, Mode = "Hold",
+    Callback = function(active) log:Append("Segurar o botão escolhido: " .. tostring(active)) end,
 })
 local status = components:CreateSection("Progresso e estado")
 local progress = status:AddProgress({ Title = "Progresso de exemplo", Default = 25 })
 status:AddButton({
-    Title = "Avançar 25%",
+    Title = "Avançar 25%", Feedback = true,
     Callback = function()
         local value = progress:GetValue() + 25
         progress:SetValue(value > 100 and 0 or value)
@@ -117,7 +124,12 @@ status:AddButton({
     end,
 })
 status:AddSeparator("Controles podem mudar depois de criados")
-status:AddButton({ Title = "Restaurar valores iniciais", Callback = function() window:Reset() end })
+status:AddButton({ Title = "Restaurar valores iniciais", Callback = function()
+    window:Confirm({ Title = "Restaurar?", Content = "Os valores atuais serão substituídos pelos padrões.", OnConfirm = function() window:Reset() end })
+end })
+local row = status:CreateRow()
+row:AddToggle({ Id = "row-option", Title = "Opção na mesma linha" })
+row:AddButton({ Title = "Ação ao lado", Feedback = true, Callback = function() log:Append("Ação da linha combinada.") end })
 
 log:Append("RetroBox UI " .. RetroBox.Version .. " carregada.")
 window:OnDestroy(function()
