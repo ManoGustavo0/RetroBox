@@ -1,5 +1,5 @@
--- Replace SEU_USUARIO and the repository/branch in the raw URL. Run in your executor.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/main/RetroBox.lua"))()
+-- Run in your executor. Update this raw URL if you move the published library.
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 local window = RetroBox:CreateWindow({
     Id = "storage-example",
     Title = "Configurações / Storage",

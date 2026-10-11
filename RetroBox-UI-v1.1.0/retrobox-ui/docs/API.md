@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.1.0
+# RetroBox UI API · 1.2.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -28,6 +28,8 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | `Theme` | `"Retro98"` | Nome registrado |
 | `Accent` | Cor do tema | Color3 ou HEX |
 | `Font` | `Enum.Font.Code` | Fonte dos componentes |
+| `TooltipDelay` | `0.4` | Atraso padrão do hover, de 0 a 3 segundos |
+| `TooltipMaxWidth` | `320` | Largura máxima padrão da dica, de 160 a 640 pixels |
 | `Size` | `Vector2.new(790, 570)` | Tamanho; mínimo lógico de 300×300 |
 | `Scale` | `1` | De 0.75 a 1.5, com ajuste automático à tela |
 | `ToggleKey` | `RightShift` | Enum.KeyCode; Unknown desativa |
@@ -94,7 +96,7 @@ Section aceita `SetTitle(text)`, `SetVisible(bool)` e `Destroy()`.
 
 ## Opções comuns
 
-`Id`, `Title`, `Description`, `Default`, `Callback`, `Visible` (true), `Disabled` (false), `Persist` e `FireOnInit` (false).
+`Id`, `Title`, `Description`, `Tooltip` (ou `Tip`), `Default`, `Callback`, `Visible` (true), `Disabled` (false), `Persist` e `FireOnInit` (false).
 
 IDs são únicos por janela. Use IDs explícitos para preservar configurações entre versões. O prefixo `__retrobox/` é reservado. IDs automáticos seguem a ordem de criação.
 
@@ -134,9 +136,43 @@ Keybind usa teclado: clicar no campo captura, Escape cancela, Backspace limpa. O
 - `SetValue(value, silent?)` valida e atualiza a GUI; callbacks só disparam se mudou.
 - `OnChanged(callback)` retorna listener com Connected e Disconnect().
 - `SetTitle`, `SetDescription`, `SetVisible` e `SetDisabled`.
+- `SetTooltip(value)` / `SetTip(value)`, `GetTooltip()`, `ShowTooltip()` e `HideTooltip()`.
 - `Destroy()` desconecta e libera seu ID.
 
 Um controle destruído não volta à janela; seu ID pode ser reutilizado.
+
+## Tooltip
+
+Todos os componentes de Section aceitam a opção `Tooltip`. Use uma string ou uma tabela:
+
+```lua
+local control = section:AddButton({
+    Title = "Executar",
+    Description = "Descrição fixa abaixo do título.",
+    Tooltip = {
+        Title = "O que esta função faz",
+        Text = "O desenvolvedor escreve a explicação aqui.\nTambém aceita quebras de linha.",
+        Delay = 0.4,
+        MaxWidth = 320,
+    },
+    Callback = function() print("Sua função") end,
+})
+```
+
+| Campo | Padrão | Limite / uso |
+| --- | --- | --- |
+| `Text` | Obrigatório na tabela | String com até 4096 bytes; texto simples |
+| `Title` | Título atual do controle | String opcional com até 256 bytes |
+| `Delay` | `window.TooltipDelay` | 0–3 segundos; atraso do hover |
+| `MaxWidth` | `window.TooltipMaxWidth` | 160–640 pixels; reduzido se a tela for menor |
+
+`Tip` é um alias da opção; `Tooltip` tem prioridade se ambos forem fornecidos. `nil`, `false` ou string vazia removem a dica. `GetTooltip()` retorna uma cópia da tabela normalizada ou nil; valores herdados da janela continuam omitidos nessa cópia.
+
+`SetTooltip(value)` atualiza o texto e as opções. `SetTip(value)` é um alias desse método. `ShowTooltip()` abre imediatamente junto ao controle visível; `HideTooltip()` fecha sua dica e cancela seu hover pendente. Esses métodos retornam o controle. Se a janela estiver oculta, minimizada ou o controle estiver numa aba oculta ou atrás do painel de configurações, a dica não abre.
+
+No mouse, passar sobre o controle inicia o atraso; sair cancela ou fecha. No toque, segurar o título ou a descrição abre a dica; ela continua aberta ao soltar e fecha ao tocar nela ou em outro lugar. Ler a dica não chama Callback nem altera o valor do componente. Controles Disabled também podem mostrar a explicação.
+
+O painel acompanha o tema e a fonte, quebra linhas e ajusta posição e dimensões aos limites da tela. Texto maior que a área disponível é truncado. A janela usa um único painel, criado quando necessário. Busca, troca de aba, arraste, perda de foco, ocultação e destruição encerram dicas pendentes ou abertas. As dicas não fazem parte de Flags ou dos perfis JSON.
 
 ## ColorPicker
 
@@ -210,6 +246,8 @@ Use `window:OnDestroy(callback)` para desconectar eventos criados pelo seu scrip
 
 - [Players / avatar](https://create.roblox.com/docs/reference/engine/classes/Players)
 - [GuiButton / Activated](https://create.roblox.com/docs/reference/engine/classes/GuiButton)
+- [GuiObject / MouseEnter, MouseLeave e TouchLongPress](https://create.roblox.com/docs/reference/engine/classes/GuiObject)
+- [TextService / GetTextSize](https://create.roblox.com/docs/reference/engine/classes/TextService)
 - [Color3](https://create.roblox.com/docs/reference/engine/datatypes/Color3)
 - [RunService](https://create.roblox.com/docs/reference/engine/classes/RunService)
 - [HttpService / JSON](https://create.roblox.com/docs/reference/engine/classes/HttpService)

@@ -10,10 +10,10 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 ## Load
 
-Replace the GitHub username, repository and branch:
+Use this repository's published source path. Adjust the URL if you host the library elsewhere:
 
 ```lua
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/YOUR_USERNAME/retrobox-ui/main/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 local window = RetroBox:CreateWindow({
     Id = "my-script",
     Title = "My script",
@@ -24,6 +24,7 @@ local window = RetroBox:CreateWindow({
 local section = window:CreateTab("Main"):CreateSection("Controls")
 section:AddToggle({
     Id = "enabled", Title = "Enable", Default = false,
+    Tooltip = "Explain what this feature does in your script.",
     Callback = function(value) print("Enabled:", value) end,
 })
 ```
@@ -37,9 +38,16 @@ The executor needs `loadstring` and `game:HttpGet`. [Loader.lua](Loader.lua) add
 - Six themes, custom palettes, accent colors, UI scale and optional CRT scanlines.
 - Tabs, sections, search, responsive columns and touch input.
 - Toggle, slider, button, input, single/multi dropdown, keybind, color picker, progress, console, label, separator and image.
+- Optional tooltips on every control: mouse hover or a long press on its title/description on touch devices.
 - HSV/RGB/HEX colors, opacity, and rainbow animation with configurable seconds per cycle.
 - Notifications, protected callbacks, state getters/setters, listeners and event cleanup.
 - JSON profiles, optional debounced AutoSave, automatic executor file storage and custom adapters.
+
+## Tooltips
+
+Pass `Tooltip = "Your explanation"` or `{Title = "Help", Text = "Your explanation", Delay = 0.4, MaxWidth = 320}` to a control. `Tip` is an alias. Hover opens the tip after 0.4 seconds by default. On touch devices, long-press the title or description, then tap the tip or elsewhere to dismiss it. Reading a tip does not run the control's callback.
+
+Use `control:SetTooltip(...)` to change it, `GetTooltip()` to read a copy, `ShowTooltip()` / `HideTooltip()` to open or close it, and `SetTooltip(nil)` to remove it. Tips follow the theme and fit within the viewport. See the [tooltip example](examples/tooltips.lua) and [API options](docs/API.md#tooltip).
 
 ## Executor integration
 
@@ -59,8 +67,8 @@ print(window.StorageMode) -- file, memory or custom
 
 ## Examples and testing
 
-[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), and [native executor smoke test](tests/executor-smoke.lua). Replace `SEU_USUARIO` in their URLs before running.
+[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use this repository's existing source path. Publish version 1.2.0 or later there before running the new tooltip example; update the URLs if you move the source.
 
-41 local logic tests passed. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+49 local logic tests passed. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

@@ -182,6 +182,7 @@ test("destroy stops RGB, external ownership hooks, and every engine event",funct
     assert(Mock.Connections==0,"Leaked connections: "..Mock.Connections)
     assert(cleaned)
 end)
+dofile("tests/tooltip.lua")(Mock,Library,test)
 test("gethui is preferred and explicit Parent overrides detection",function()
     local hidden=Instance.new("Folder")
     local core=Instance.new("CoreGui"); Mock.Services.CoreGui=core
@@ -330,19 +331,19 @@ test("diagnostic loader reports HTTP, compile and library errors",function()
         local ok,err=pcall(dofile,"Loader.lua"); assert(not ok and tostring(err):find("[RetroBox]",1,true))
     end
     game.HttpGet=function() local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close(); return source end
-    local library=dofile("Loader.lua"); assert(library.Version=="1.1.0" and type(library.CreateWindow)=="function")
+    local library=dofile("Loader.lua"); assert(library.Version==Library.Version and type(library.CreateWindow)=="function")
     loadstring=nil; game.HttpGet=nil
 end)
 test("all shipped examples use the public API and clean up",function()
     local loaded={}
     local requests=0
     game.HttpGet=function(_,url)
-        assert(url:match("^https://raw%.githubusercontent%.com/SEU_USUARIO/retrobox%-ui/main/RetroBox%.lua$"))
+        assert(url:match("^https://raw%.githubusercontent%.com/.+/RetroBox%.lua$"))
         requests=requests+1
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -351,7 +352,7 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==4 and #loaded==4)
+    assert(requests==5 and #loaded==5)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
             window:ShowSettings(true); window:ShowSettings(false)

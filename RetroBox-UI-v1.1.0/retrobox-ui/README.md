@@ -10,10 +10,10 @@ Library de GUI em Luau para desenvolvedores de scripts executados no cliente Rob
 
 ## Carregar no executor
 
-Publique o conteúdo da pasta `retrobox-ui` na raiz do seu repositório. Substitua `SEU_USUARIO`, `retrobox-ui` e `main` pelos valores do seu GitHub:
+A fonte deste repositório fica no caminho abaixo. Se publicar em outro lugar, ajuste usuário, repositório, branch e caminho. Veja [como publicar e atualizar](docs/GITHUB.md).
 
 ```lua
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/main/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 
 local window = RetroBox:CreateWindow({
     Id = "meu-script", -- estável: executar de novo substitui esta janela
@@ -30,6 +30,7 @@ local category = tab:CreateSection("Controles")
 category:AddToggle({
     Id = "recurso_ativo",
     Title = "Ativar recurso",
+    Tooltip = "Ativa o recurso do seu script. Escreva aqui a explicação para o usuário.",
     Default = false,
     Callback = function(enabled)
         -- Conecte aqui a função do seu script.
@@ -62,10 +63,34 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Bordas em relevo, fonte monoespaçada, cores de destaque e linhas CRT opcionais.
 - Abas, categorias, busca e colunas que se empilham em telas menores.
 - Toggle, Slider, Button, Input, Dropdown simples/múltiplo, Keybind, ColorPicker, Progress, Console, Label, Separator e Image.
+- Tooltip opcional em todos os controles: explicação ao passar o mouse ou segurar o título/descrição no celular.
 - HSV, campos R/G/B e HEX, opacidade e RGB animado com duração de ciclo configurável.
 - Notificações, callbacks protegidos, listeners e mudanças de valores por código.
 - JSON, perfis e salvamento automático opcional.
 - Limpeza de eventos ao destruir controles ou a janela; `OnDestroy` para limpar eventos do seu próprio script.
+
+## Dicas ao passar o mouse
+
+Cada controle aceita `Tooltip` com o texto que o desenvolvedor escrever. `Description` permanece visível abaixo do título; a dica só abre quando solicitada. Por padrão, aparece após 0.4 s com o mouse sobre o controle. No celular, segure o título ou a descrição e toque na dica ou em outro lugar para fechar.
+
+```lua
+local control = category:AddToggle({
+    Title = "Mostrar círculo",
+    Tooltip = {
+        Title = "Como funciona",
+        Text = "Mostra ou oculta o círculo criado pelo seu script.",
+        Delay = 0.4,
+        MaxWidth = 320,
+    },
+    Callback = function(enabled) print(enabled) end,
+})
+
+control:SetTooltip("Você pode mudar a explicação depois.")
+-- control:ShowTooltip() / control:HideTooltip()
+-- control:SetTooltip(nil) remove a dica.
+```
+
+`Tip` também é aceito como nome da opção. A dica acompanha o tema, quebra linhas e ajusta sua posição aos limites da tela. Ler uma dica não chama o callback do controle. Veja [tooltips.lua](examples/tooltips.lua) e [as opções completas](docs/API.md#tooltip).
 
 ## RGB conectado ao seu script
 
@@ -121,12 +146,13 @@ Use `Id`, IDs de controles e `ConfigFolder` estáveis para restaurar configuraç
 | [showcase.lua](examples/showcase.lua) | Todos os componentes e círculo de demonstração |
 | [custom-theme.lua](examples/custom-theme.lua) | Paleta própria |
 | [storage-adapter.lua](examples/storage-adapter.lua) | Arquivos, AutoSave e backend próprio |
+| [tooltips.lua](examples/tooltips.lua) | Dicas simples, personalizadas e alteradas por código |
 | [executor-smoke.lua](tests/executor-smoke.lua) | Conferência na engine pelo executor |
 
-Todos começam por uma URL com `SEU_USUARIO`. Substitua-a antes de executar. Para publicar, siga [GITHUB.md](docs/GITHUB.md).
+Loader e exemplos usam o raw deste repositório. Para carregar a atualização, `RetroBox.lua` nesse caminho precisa conter a versão 1.2.0 ou posterior. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
 
 ## Validação e licença
 
-41 testes locais passaram, incluindo carregamento simulado do código raw, os quatro exemplos, callbacks, cores, configurações, arquivos, permissões de GUI e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+49 testes locais passaram, incluindo carregamento simulado do código raw, os cinco exemplos, callbacks, cores, configurações, arquivos, permissões de GUI e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026

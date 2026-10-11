@@ -144,7 +144,7 @@ def release_zip():
     for file in sorted(ROOT.rglob("*.md")):
         for link in re.findall(r"\]\(([^)]+)\)", file.read_text()):
             if not link.startswith(("https://", "http://", "#")):
-                assert (file.parent / link).exists(), f"Broken link: {file.name}: {link}"
+                assert (file.parent / link.split("#", 1)[0]).exists(), f"Broken link: {file.name}: {link}"
     out = ROOT.parent / f"RetroBox-UI-v{VERSION}.zip"
     files = sorted(p for p in ROOT.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
