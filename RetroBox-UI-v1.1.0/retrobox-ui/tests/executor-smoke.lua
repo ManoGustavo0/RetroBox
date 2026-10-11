@@ -1,8 +1,8 @@
--- Native smoke test: replace the raw URL and run this file in your executor.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/main/RetroBox.lua"))()
+-- Native smoke test: run in your executor; update the raw URL if you move the library.
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 local window = RetroBox:CreateWindow({ Id = "executor-smoke", Title = "RetroBox / engine smoke", ReducedMotion = true })
 local section = window:CreateTab("Engine"):CreateSection("Todos os componentes")
-local toggle = section:AddToggle({ Id = "toggle", Default = false })
+local toggle = section:AddToggle({ Id = "toggle", Default = false, Tooltip = "Esta função ativa o recurso de exemplo." })
 local slider = section:AddSlider({ Id = "slider", Min = 0, Max = 10, Default = 5 })
 section:AddButton({ Title = "Button" })
 section:AddInput({ Id = "input", Default = "Executor" })
@@ -22,6 +22,10 @@ assert(slider:GetValue() == 7 and toggle:GetValue() == true)
 for _, name in ipairs(RetroBox:GetThemeNames()) do window:SetTheme(name); task.wait(.08) end
 picker:SetRainbow(true); task.wait(.15); picker:SetRainbow(false)
 assert(picker:GetColor() == Color3.fromRGB(51, 102, 153))
+toggle:ShowTooltip(); assert(window.TooltipFrame.Visible)
+toggle:SetTooltip("Dica atualizada."); assert(toggle:GetTooltip().Text == "Dica atualizada.")
+toggle:HideTooltip(); assert(not window.TooltipFrame.Visible)
+print("[RetroBox] Confira também o hover e o toque longo no título do toggle.")
 window:Notify({ Title = "Smoke passou", Content = "Agora confira arraste, toque, cores, menus e texto visualmente.", Kind = "success" })
 print("[RetroBox] Real-engine smoke passed. Inspect layout and input before shipping.")
 

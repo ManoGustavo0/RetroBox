@@ -1,5 +1,5 @@
--- Replace SEU_USUARIO and the repository/branch in the raw URL. Run in your executor.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/main/RetroBox.lua"))()
+-- Run in your executor. Update this raw URL if you move the published library.
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 
 local window = RetroBox:CreateWindow({
     Id = "my-script",
@@ -16,6 +16,7 @@ local category = tab:CreateSection("Controles")
 category:AddToggle({
     Id = "feature_enabled",
     Title = "Ativar recurso",
+    Tooltip = "Ativa ou desativa o recurso. O callback recebe true ou false.",
     Default = false,
     Callback = function(enabled)
         print("Recurso:", enabled)
@@ -25,6 +26,7 @@ category:AddToggle({
 category:AddSlider({
     Id = "intensity",
     Title = "Intensidade",
+    Tooltip = { Title = "Intensidade", Text = "Ajusta o valor enviado ao seu script, de 0 a 100.", Delay = .3 },
     Min = 0,
     Max = 100,
     Default = 50,

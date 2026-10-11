@@ -1,5 +1,5 @@
--- Replace SEU_USUARIO and the repository/branch in the raw URL. Run in your executor.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/main/RetroBox.lua"))()
+-- Run in your executor. Update this raw URL if you move the published library.
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 
 local window = RetroBox:CreateWindow({
     Id = "retrobox-showcase",
@@ -61,15 +61,18 @@ local fov = visual:CreateSection("Exemplo / Campo de visão")
 fov:AddLabel({ Title = "O círculo é uma demonstração visual.", Description = "Aperte RightShift para ocultar a janela e enxergar o círculo.", Height = 65 })
 fov:AddToggle({
     Id = "fov_visible", Title = "Mostrar círculo", Default = true, FireOnInit = true,
+    Tooltip = "Exibe o círculo de demonstração. A visibilidade é alterada pelo callback deste controle.",
     Callback = function(value) circle.Visible = value end,
 })
 fov:AddSlider({
     Id = "fov_size", Title = "Diâmetro do círculo", Min = 40, Max = 520, Step = 2, Default = 220, Suffix = " px",
+    Tooltip = "Muda o diâmetro do círculo em pixels. Você também pode digitar um valor no campo numérico.",
     Callback = function(value) circle.Size = UDim2.fromOffset(value, value) end,
 })
 local colors = visual:CreateSection({ Title = "Paleta / RGB", Side = "Right" })
 colors:AddColorPicker({
     Id = "fov_color", Title = "Cor do FOV", Description = "Cor fixa, HSV, HEX ou RGB animado.",
+    Tooltip = { Title = "Cor e RGB", Text = "Define a cor e a opacidade do contorno. Ative RGB para alternar as cores continuamente; a velocidade é medida em segundos por ciclo." },
     Default = { Color = Color3.fromRGB(50, 110, 170), Opacity = 1, Rainbow = false, Speed = 6 },
     FireOnInit = true, Expanded = true,
     Callback = function(color, opacity)
@@ -82,6 +85,7 @@ colors:AddColorPicker({
 local inputs = components:CreateSection("Seleção e texto")
 inputs:AddDropdown({
     Id = "preset", Title = "Seleção simples", Options = { "Equilibrado", "Leve", "Personalizado" },
+    Tooltip = "Selecione uma opção. O callback recebe o texto escolhido.",
     Default = "Equilibrado", Callback = function(value) log:Append("Preset: " .. tostring(value)) end,
 })
 inputs:AddDropdown({
@@ -95,6 +99,7 @@ inputs:AddInput({
 local hotkeys = components:CreateSection("Teclado")
 hotkeys:AddKeybind({
     Id = "action_key", Title = "Executar uma ação", Default = Enum.KeyCode.F, Mode = "Press",
+    Tooltip = "Clique no campo para escolher uma tecla. Escape cancela e Backspace remove o atalho.",
     Callback = function(_, key) window:Notify({ Title = "Atalho", Content = "Tecla: " .. key.Name }) end,
 })
 hotkeys:AddKeybind({

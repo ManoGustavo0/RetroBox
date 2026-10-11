@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 · 2026-10-11
+
+- Tooltip opcional em todos os controles, com texto simples ou título, atraso e largura próprios; `Tip` é um alias.
+- Dicas com visual do tema, quebra de linhas, posição limitada à tela e um painel compartilhado por janela.
+- Abertura por hover no mouse ou toque longo no título/descrição; ler a dica não chama callbacks.
+- SetTooltip/SetTip, GetTooltip, ShowTooltip e HideTooltip para controle por código.
+- Cancelamento ao mudar abas, buscar, abrir configurações, arrastar, ocultar ou destruir; limpeza de eventos e tarefas pendentes.
+- Exemplo de tooltips, API documentada e oito testes novos; 49 testes locais e cinco exemplos passaram.
+- Loader, documentação e exemplos apontam para o raw existente de ManoGustavo0/RetroBox.
+- Conferência visual e dos eventos na engine real permanece pendente.
+
 ## 1.1.0 · 2026-10-11
 
 - Fluxo principal por GitHub raw + loadstring para executores.

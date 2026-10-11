@@ -94,7 +94,7 @@ TweenInfo={new=function(time) return {Time=time} end}
 
 local instanceMethods={}
 local instanceMT={ __type="Instance" }
-local eventNames={Activated=true,InputBegan=true,InputChanged=true,InputEnded=true,Focused=true,FocusLost=true,Destroying=true}
+local eventNames={Activated=true,InputBegan=true,InputChanged=true,InputEnded=true,Focused=true,FocusLost=true,Destroying=true,MouseEnter=true,MouseLeave=true,TouchLongPress=true}
 function instanceMT.__index(self,key)
     if instanceMethods[key] then return instanceMethods[key] end
     if self._props[key]~=nil then return self._props[key] end
@@ -231,11 +231,16 @@ local playerGui=Instance.new("PlayerGui"); playerGui.Name="PlayerGui"; playerGui
 local services={
     Players={LocalPlayer=player,GetUserThumbnailAsync=function() return "rbxthumb://test-avatar",true end},
     UserInputService={InputBegan=signal(),InputChanged=signal(),InputEnded=signal(),WindowFocusReleased=signal(),
-        GetMouseLocation=function() return Vector2.new(50,50) end,GetFocusedTextBox=function() return Mock.Focused end},
+        GetMouseLocation=function() return Mock.MousePosition or Vector2.new(50,50) end,GetFocusedTextBox=function() return Mock.Focused end},
     RunService={Heartbeat=signal(),IsClient=function() return true end},
     HttpService={JSONEncode=function(_,value) return jsonEncode(value) end,JSONDecode=function(_,value) return jsonDecode(value) end,
         GenerateGUID=function() return "test-"..tostring(math.random(1,1000000)) end},
     TweenService={Create=function(_,object,_,properties) return {Play=function() for k,v in pairs(properties) do object[k]=v end end} end},
+    TextService={GetTextSize=function(_,text,size,_,bounds)
+        local lines=0
+        for line in (text.."\n"):gmatch("(.-)\n") do lines=lines+math.max(1,math.ceil(#line*size*.6/bounds.X)) end
+        return Vector2.new(bounds.X,lines*(size+2))
+    end},
 }
 game={GetService=function(_,name) return assert(services[name],"Unknown service: "..name) end}
 workspace={CurrentCamera={ViewportSize=Mock.Viewport}}

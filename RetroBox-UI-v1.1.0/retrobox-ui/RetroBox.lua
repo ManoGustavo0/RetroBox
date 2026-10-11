@@ -1,4 +1,4 @@
--- RetroBox UI 1.1.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.2.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -7,8 +7,9 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.1.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.2.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -257,8 +258,150 @@ local function list(window, parent, gap, horizontal)
         SortOrder=Enum.SortOrder.LayoutOrder })
 end
 
+local function tooltipValue(value)
+    if value==nil or value==false or value=="" then return nil end
+    if type(value)=="string" then value={Text=value} end
+    assert(type(value)=="table" and type(value.Text)=="string","Tooltip must be text or a table with Text")
+    assert(#value.Text<=4096,"Tooltip text must contain at most 4096 bytes")
+    assert(value.Title==nil or type(value.Title)=="string" and #value.Title<=256,"Tooltip Title must be text with at most 256 bytes")
+    assert(value.Delay==nil or finite(value.Delay) and value.Delay>=0 and value.Delay<=3,"Tooltip Delay must be 0–3 seconds")
+    assert(value.MaxWidth==nil or finite(value.MaxWidth) and value.MaxWidth>=160 and value.MaxWidth<=640,"Tooltip MaxWidth must be 160–640")
+    if #value.Text==0 then return nil end
+    return {Text=value.Text,Title=value.Title,Delay=value.Delay,MaxWidth=value.MaxWidth}
+end
+function Window:_hideTooltip()
+    self._tooltipToken=(self._tooltipToken or 0)+1
+    self._pendingTooltip=nil; self._tooltipOwner=nil; self._tooltipAnchor=nil; self._tooltipMode=nil
+    if self.TooltipFrame then self.TooltipFrame.Visible=false end
+end
+function Window:_tooltipEligible(control,position)
+    if self.Destroyed or control.Destroyed or not control.Tooltip or not self.Main.Visible or self.Minimized or self._drag or self._binding then return false end
+    if self._settingsOpen and not control._internal then return false end
+    if self._openDropdown and self._openDropdown~=control then return false end
+    if position and not inside(control.Frame,position) then return false end
+    local parent=control.Frame
+    while parent and parent~=self.Gui do
+        if parent:IsA("GuiObject") then
+            if parent.Visible==false then return false end
+            if position and (parent:IsA("ScrollingFrame") or parent.ClipsDescendants==true) and not inside(parent,position) then return false end
+        end
+        parent=parent.Parent
+    end
+    return parent==self.Gui
+end
+function Window:_createTooltip()
+    if self.TooltipFrame then return end
+    self.TooltipFrame=ui(self,"TextButton",{
+        Parent=self.Root,Name="Tooltip",Size=U2(320,80),Visible=false,ZIndex=1000,Active=true,ClipsDescendants=true,
+        BorderSizePixel=1,Text="",AutoButtonColor=false,Selectable=false,
+    },{BackgroundColor3="Surface",BorderColor3="Border"})
+    connect(self,self.TooltipFrame.Activated,function() self:_hideTooltip() end)
+    bevel(self,self.TooltipFrame,false)
+    self._tooltipTitle=label(self,self.TooltipFrame,"",{
+        Position=U2(12,9),Size=UDim2.new(1,-24,0,20),ZIndex=1001,TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd,
+    },"Accent")
+    self._tooltipBody=label(self,self.TooltipFrame,"",{
+        Position=U2(12,34),Size=UDim2.new(1,-24,1,-44),ZIndex=1001,TextSize=13,
+        TextWrapped=true,TextTruncate=Enum.TextTruncate.AtEnd,TextYAlignment=Enum.TextYAlignment.Top,
+    })
+end
+function Window:_positionTooltip(anchor)
+    local size=self.TooltipFrame.AbsoluteSize; local view=self.Root.AbsoluteSize
+    local cursor=anchor-self.Root.AbsolutePosition
+    local x,y=cursor.X+16,cursor.Y+18
+    if x+size.X>view.X-8 then x=cursor.X-size.X-14 end
+    if y+size.Y>view.Y-8 then y=cursor.Y-size.Y-14 end
+    self.TooltipFrame.Position=U2(clamp(x,8,math.max(8,view.X-size.X-8)),clamp(y,8,math.max(8,view.Y-size.Y-8)))
+end
+function Window:_showTooltip(control,anchor,mode)
+    local checkPoint
+    if mode~="manual" then checkPoint=anchor end
+    if not self:_tooltipEligible(control,checkPoint) then self:_hideTooltip(); return false end
+    local view=self.Root.AbsoluteSize
+    if view.X<64 or view.Y<80 then self:_hideTooltip(); return false end
+    self:_createTooltip()
+    self._tooltipToken=(self._tooltipToken or 0)+1; self._pendingTooltip=nil
+    self._tooltipOwner=control; self._tooltipAnchor=anchor; self._tooltipMode=mode
+    local tip=control.Tooltip
+    local width=math.min(tip.MaxWidth or self.TooltipMaxWidth,view.X-16)
+    local textSize=clamp(math.floor(13*self.UserScale+.5),10,20)
+    local ok,bounds=pcall(TextService.GetTextSize,TextService,tip.Text,textSize,self.Font,Vector2.new(width-24,100000))
+    local bodyHeight=ok and typeof(bounds)=="Vector2" and finite(bounds.Y) and bounds.Y+4 or math.ceil(#tip.Text*textSize*.6/(width-24))*(textSize+2)
+    local headerHeight=textSize+6
+    local height=math.min(math.max(bodyHeight,textSize+4)+headerHeight+28,view.Y-16,420)
+    self.TooltipFrame.Size=U2(width,height)
+    self._tooltipTitle.Text="[?] "..(tip.Title or control.Title)
+    self._tooltipTitle.TextSize=textSize; self._tooltipTitle.Size=UDim2.new(1,-24,0,headerHeight)
+    self._tooltipBody.Text=tip.Text; self._tooltipBody.TextSize=textSize
+    self._tooltipBody.Position=U2(12,12+headerHeight)
+    self._tooltipBody.Size=UDim2.new(1,-24,0,math.max(0,height-headerHeight-24))
+    self:_positionTooltip(anchor); self.TooltipFrame.Visible=true
+    return true
+end
+function Window:_queueTooltip(control,anchor)
+    if not self:_tooltipEligible(control,anchor) then return end
+    self:_hideTooltip()
+    self._pendingTooltip=control; self._tooltipAnchor=anchor; self._tooltipMode="hover"
+    local token=self._tooltipToken
+    task.delay(control.Tooltip.Delay or self.TooltipDelay,function()
+        if not self.Destroyed and self._tooltipToken==token and self._pendingTooltip==control then
+            self:_showTooltip(control,self._tooltipAnchor,"hover")
+        end
+    end)
+end
+function Window:_updateTooltip(input)
+    local owner=self._tooltipOwner or self._pendingTooltip
+    if not owner then return end
+    if not self:_tooltipEligible(owner) then self:_hideTooltip(); return end
+    if input.UserInputType==Enum.UserInputType.MouseMovement and self._tooltipMode=="hover" then
+        local anchor=point(input)
+        if not self:_tooltipEligible(owner,anchor) then self:_hideTooltip(); return end
+        self._tooltipAnchor=anchor
+        if self._tooltipOwner then self:_positionTooltip(anchor) end
+    end
+end
+function Control:_connectTooltip()
+    if self._tooltipConnected then return end
+    self._tooltipConnected=true
+    self.TitleLabel.Active=true; self.DescriptionLabel.Active=true
+    connect(self,self.Frame.MouseEnter,function(x,y)
+        if self.Tooltip then self._window:_queueTooltip(self,Vector2.new(x,y)) end
+    end)
+    connect(self,self.Frame.MouseLeave,function()
+        local window=self._window
+        if window._tooltipMode=="hover" and (window._tooltipOwner==self or window._pendingTooltip==self) then window:_hideTooltip() end
+    end)
+    local function touch(positions,state)
+        if state==Enum.UserInputState.Begin and positions[1] and self.Tooltip then self._window:_showTooltip(self,positions[1],"touch") end
+    end
+    connect(self,self.TitleLabel.TouchLongPress,touch)
+    connect(self,self.DescriptionLabel.TouchLongPress,touch)
+end
+function Control:SetTooltip(value)
+    assert(not self.Destroyed,"This control has been destroyed")
+    self.Tooltip=tooltipValue(value)
+    if self.Tooltip then self:_connectTooltip() end
+    local window=self._window
+    if window._tooltipOwner==self then
+        if self.Tooltip then window:_showTooltip(self,window._tooltipAnchor,window._tooltipMode) else window:_hideTooltip() end
+    elseif window._pendingTooltip==self then
+        if self.Tooltip then window:_queueTooltip(self,window._tooltipAnchor) else window:_hideTooltip() end
+    end
+    return self
+end
+Control.SetTip=Control.SetTooltip
+function Control:GetTooltip() return copy(self.Tooltip) end
+function Control:ShowTooltip()
+    self._window:_showTooltip(self,self.Frame.AbsolutePosition+Vector2.new(12,12),"manual"); return self
+end
+function Control:HideTooltip()
+    if self._window._tooltipOwner==self or self._window._pendingTooltip==self then self._window:_hideTooltip() end
+    return self
+end
+
 function Window:_beginDrag(owner, input, update, finish)
     if not pointer(input) or owner.Disabled then return end
+    self:_hideTooltip()
     self:_endDrag()
     self._drag = { Owner=owner, Input=input, Update=update, Finish=finish }
     update(point(input))
@@ -362,6 +505,7 @@ function Control:Destroy()
     if self.Destroyed then return end
     if self.Type == "Keybind" and self.Mode == "Hold" and self.Active then self:Trigger(false) end
     self.Destroyed = true
+    self:HideTooltip()
     cleanup(self)
     if self._window._drag and self._window._drag.Owner == self then self._window:_endDrag() end
     if self._window._binding == self then self._window._binding = nil end
@@ -382,8 +526,11 @@ local function base(section, kind, options, height)
     options = options or {}
     assert(not section.Destroyed and not section._window.Destroyed, "Section has been destroyed")
     local window = section._window
+    local tip=options.Tooltip
+    if tip==nil then tip=options.Tip end
+    local tooltip=tooltipValue(tip)
     local self = setmetatable({ Type=kind, Title=tostring(options.Title or kind), Description=tostring(options.Description or ""),
-        _window=window, _section=section, _connections={}, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
+        Tooltip=tooltip,_window=window, _section=section, _connections={}, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
     window:_register(self, options)
     section._count = section._count + 1
     self.Frame = frame(window, section.Content, {
@@ -395,6 +542,7 @@ local function base(section, kind, options, height)
         Position=U2(0,22), Size=UDim2.new(1,0,0,18), TextSize=12, TextTruncate=Enum.TextTruncate.AtEnd,
         Visible=#self.Description > 0,
     }, "Muted")
+    if tooltip then self:_connectTooltip() end
     table.insert(section.Controls, self)
     connect(self, self.Frame.Destroying, function() if not self.Destroyed then self:Destroy() end end)
     return self
@@ -1053,6 +1201,7 @@ function Window:Show()
 end
 function Window:Hide()
     if self.Destroyed then return self end
+    self:_hideTooltip()
     self:ShowSettings(false); self:_endDrag()
     if self._binding then local binding=self._binding; self._binding=nil; binding:_render() end
     self.Main.Visible=false; self.Launcher.Visible=self.LauncherEnabled
@@ -1063,6 +1212,7 @@ function Window:Hide()
 end
 function Window:Toggle() if self.Main.Visible then return self:Hide() else return self:Show() end end
 function Window:Minimize(value)
+    self:_hideTooltip()
     self.Minimized=value == nil and not self.Minimized or value == true
     if self.Minimized then self:ShowSettings(false) end
     self:_layout(); return self
@@ -1071,6 +1221,7 @@ function Window:Center()
     self._position=nil; self:_layout(); return self
 end
 function Window:SetSearch(query)
+    self:_hideTooltip()
     self._query=tostring(query or ""):lower()
     for _,tab in ipairs(self.Tabs) do
         if not tab.Hidden then
@@ -1102,6 +1253,7 @@ function Tab:Select()
     assert(not self.Destroyed,"Tab has been destroyed")
     if self.Hidden then return self end
     local window=self._window
+    window:_hideTooltip()
     window.ActiveTab=self
     if window._openDropdown then window._openDropdown:SetOpen(false) end
     for _,tab in ipairs(window.Tabs) do if not tab.Hidden then tab.Frame.Visible=tab==self end; tab:_renderSelection() end
@@ -1389,6 +1541,7 @@ end
 
 function Window:_layout()
     if self.Destroyed or not self.Main then return end
+    self:_hideTooltip()
     local view=self.Root.AbsoluteSize
     if view.X<=0 or view.Y<=0 then view=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720) end
     self.Mobile=view.X<640*self.UserScale
@@ -1508,6 +1661,7 @@ function Window:_createSettings()
 end
 function Window:ShowSettings(value)
     if self.Destroyed or not self.SettingsEnabled then return self end
+    self:_hideTooltip()
     if value==nil then value=not self._settingsOpen end
     if value then
         self:Show(); if self.Minimized then self:Minimize(false) end
@@ -1602,6 +1756,9 @@ end
 
 function Window:_inputBegan(input,processed)
     if self.Destroyed then return end
+    if pointer(input) then
+        if not self.TooltipFrame or not self.TooltipFrame.Visible or not inside(self.TooltipFrame,point(input)) then self:_hideTooltip() end
+    elseif input.UserInputType==Enum.UserInputType.Keyboard then self:_hideTooltip() end
     if self._binding then
         if input.UserInputType~=Enum.UserInputType.Keyboard then return end
         local binding=self._binding; self._binding=nil
@@ -1674,13 +1831,19 @@ function Library:CreateWindow(options)
     assert(typeof(font)=="EnumItem" and font.EnumType==Enum.Font,"Font must be an Enum.Font")
     local maxBytes=options.MaxConfigBytes or 262144
     assert(finite(maxBytes) and maxBytes>=1024 and maxBytes<=1048576,"MaxConfigBytes must be 1024–1048576")
+    local tooltipDelay=options.TooltipDelay
+    if tooltipDelay==nil then tooltipDelay=.4 end
+    local tooltipWidth=options.TooltipMaxWidth
+    if tooltipWidth==nil then tooltipWidth=320 end
+    assert(finite(tooltipDelay) and tooltipDelay>=0 and tooltipDelay<=3,"TooltipDelay must be 0–3 seconds")
+    assert(finite(tooltipWidth) and tooltipWidth>=160 and tooltipWidth<=640,"TooltipMaxWidth must be 160–640")
     local id=options.Id or HttpService:GenerateGUID(false)
     assert(type(id)=="string" and #id>0,"Window Id must be a nonempty string")
     local guiName="RetroBox_"..id
     local window=setmetatable({
         Id=id,Title=tostring(options.Title or "RetroBox UI"),Subtitle=tostring(options.Subtitle or "A little old-school. A lot configurable."),
         Theme=theme,Accent=options.Accent and parseColor(options.Accent) or nil,Palette=copy(self.Themes[theme]),
-        Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,
+        Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,TooltipDelay=tooltipDelay,TooltipMaxWidth=tooltipWidth,
         ReducedMotion=options.ReducedMotion == true,Scanlines=options.Scanlines == true,
         NotificationsEnabled=options.Notifications~=false,LauncherEnabled=options.Launcher~=false,
         SettingsEnabled=options.Settings~=false,AutoSave=options.AutoSave,StorageMode="memory",
@@ -1782,12 +1945,14 @@ function Library:CreateWindow(options)
     connect(window,window.Root:GetPropertyChangedSignal("AbsoluteSize"),function() window:_layout() end)
     connect(window,UserInputService.InputBegan,function(input,processed) window:_inputBegan(input,processed) end)
     connect(window,UserInputService.InputChanged,function(input)
+        window:_updateTooltip(input)
         local drag=window._drag; if not drag then return end
         if drag.Input.UserInputType==Enum.UserInputType.Touch and input~=drag.Input then return end
         if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then drag.Update(point(input)) end
     end)
     connect(window,UserInputService.InputEnded,function(input) window:_inputEnded(input) end)
     connect(window,UserInputService.WindowFocusReleased,function()
+        window:_hideTooltip()
         window:_endDrag()
         for binding in pairs(window._keybinds) do if binding.Mode=="Hold" and binding.Active then binding:Trigger(false) end end
     end)
@@ -1799,6 +1964,7 @@ end
 function Window:Destroy()
     if self.Destroyed then return end
     self.Destroyed=true; self._saveToken=self._saveToken+1
+    self:_hideTooltip()
     sharedWindows[self.Gui]=nil
     self:_endDrag()
     if self._rgbConnection then self._rgbConnection:Disconnect(); self._rgbConnection=nil end
