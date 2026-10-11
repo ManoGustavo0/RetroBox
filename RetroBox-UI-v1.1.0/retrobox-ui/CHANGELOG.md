@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 · 2026-10-11
+
+- Identidade visual em pixel art: símbolo de caixa, detalhes estáticos e 46 ícones embutidos que acompanham as paletas.
+- Icon por nome em janela, abas, categorias, controles, notificações e diálogos; SetIcon em janela/aba/categoria/controle e SetTitle em abas.
+- Ícones padrão na busca, engrenagem, ações da janela, checkbox/dropdown, notificações e diálogos. Textos/emojis e IDs de imagens continuam aceitos; SetIcon(nil/false) remove.
+- GetIconNames, GetIcon e RegisterIcon para consultar o catálogo e registrar desenhos próprios; validação antes da alteração e atualização dos desenhos montados.
+- PixelIcons e PixelDecorations em Aparência, com API, persistência em saves e Reset. Saves anteriores sem esses campos continuam aceitos; ícones explícitos do dev permanecem visíveis.
+- Renderização por Frames agrupados horizontalmente, sem assets remotos para o catálogo, loops de animação ou eventos por pixel. Limpeza ao trocar desenhos e destruir a GUI.
+- Catálogo PNG, 46 SVGs para design, novo símbolo, conceito atualizado, guia de ícones e exemplo navegável. Dez testes novos; 82 testes locais e sete exemplos passaram. Conferência em executor real permanece pendente.
+
 ## 1.3.0 · 2026-10-11
 
 - Aba Configurações automática e engrenagem que a seleciona, com saves de nomes livres, lista persistente e confirmação de sobrescrita.

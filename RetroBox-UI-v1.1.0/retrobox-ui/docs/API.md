@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.3.0
+# RetroBox UI API · 1.4.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -10,6 +10,8 @@ Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Texto
 | `CreateWindow(options)` | Cria a janela no cliente |
 | `RegisterTheme(name, colors)` | Registra paleta; campos omitidos herdam Retro98 |
 | `GetThemeNames()` | Nomes de temas em ordem alfabética |
+| `GetIconNames()` / `GetIcon(name)` | Nomes de ícones ordenados / cópia das linhas ou nil |
+| `RegisterIcon(name, rows)` | Registra pixel art própria e atualiza desenhos montados |
 | `GetCapabilities()` | Booleans: GetHui, ReadFile, WriteFile, MakeFolder, IsFile, IsFolder, ListFiles, FileStorage |
 | `CreateFileStorage(folder?)` | Adaptador de arquivos; retorna tabela ou nil, reason se faltam funções |
 | `DestroyAll()` | Destrói janelas desta instância |
@@ -24,7 +26,8 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | --- | --- | --- |
 | `Id` | GUID | Recriar o mesmo ID substitui a janela anterior da library |
 | `Title` / `Subtitle` | Apresentação RetroBox | Identidade |
-| `Icon` | Nenhum | String de imagem Roblox no título |
+| `Icon` | `"retrobox"` automático | Nome de ícone, asset ID, texto curto/emoji; false remove |
+| `PixelIcons` / `PixelDecorations` | `true` | Ícones automáticos e detalhes estáticos; também aparecem em Aparência |
 | `Theme` | `"Retro98"` | Nome registrado |
 | `Accent` | Cor do tema | Color3 ou HEX |
 | `Font` | `Enum.Font.Code` | Fonte dos componentes |
@@ -60,6 +63,7 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 | --- | --- |
 | `CreateTab(titleOrOptions)` | Opções: Title, Icon, Columns (1 ou 2) |
 | `SetTitle` / `SetSubtitle` / `SetIcon` | Identidade |
+| `SetPixelIcons(bool)` / `SetPixelDecorations(bool)` | Ícones padrão / enfeites; preferências salvas |
 | `SetTheme(name, keepAccent?)` | Troca tema e, por padrão, limpa destaque próprio |
 | `SetAccent(color)` | Color3/HEX; nil restaura cor do tema |
 | `SetScale(number)` | 0.75 a 1.5 |
@@ -90,7 +94,19 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 
 Use `window:Metodo(...)`. `window.Flags` pode ser consultado; escrever diretamente nessa tabela não atualiza componentes. Use SetFlag.
 
-Notify aceita Title, Content, Kind (success/error/normal), Duration (0.1–30 s). Há no máximo quatro notificações.
+Notify aceita Title, Content, Kind (success/error/normal), Icon e Duration (0.1–30 s). Há no máximo quatro notificações. O ícone automático acompanha Kind; Icon=false remove.
+
+## Ícones em pixel art
+
+Há 46 ícones padrão embutidos, com grade de 12×12 e cores da paleta. `Icon = "folder"` escolhe um nome; `Icon = "pixel:folder"` exige que ele exista. IDs numéricos positivos, imagens rbxassetid:// e texto curto/emoji também são aceitos. `Icon=false` remove na criação; `SetIcon(nil/false)` remove depois. Se omitido na criação, o ícone automático é retrobox na janela, grid nas abas, settings na aba Configurações e folder nas categorias. Controles não têm ícone de título automático.
+
+Window, Tab, Section e Control oferecem `SetIcon(value)`. Tab também oferece `SetTitle(text)`. Notify, Dialog e Confirm aceitam Icon; ícones de notificações padrão são info/success/error, e Confirm com Kind=danger usa warning. Eles acompanham PixelIcons quando não foram escolhidos explicitamente.
+
+`Library:GetIconNames()` retorna nomes ordenados. `GetIcon(name)` retorna uma cópia do array de linhas ou nil. `RegisterIcon(name, rows)` aceita nome de 1–48 bytes começando com letra minúscula, seguido de letras minúsculas, números, `_` ou `-`; array com 4–16 linhas, largura igual de 4–16 colunas e pelo menos um pixel visível. Caracteres: `.` transparente, `#` cor contextual, `a` Accent, `h` Highlight, `s` Shadow, `m` Muted, `g` Success e `r` Danger. A validação é atômica. Registrar novamente um nome atualiza os desenhos montados dessa instância.
+
+`PixelIcons` e `PixelDecorations` são preferências exportadas com Appearance e restauradas por ImportConfig/Reset. Os setters correspondentes exigem boolean. Desativar PixelIcons oculta desenhos automáticos, mantendo os explicitamente escolhidos pelo dev; desativar PixelDecorations oculta os enfeites estáticos. Saves antigos sem esses campos preservam as preferências atuais. Ícones escolhidos por código e padrões registrados não são flags/saves; registre-os no script.
+
+Os pixels usam Frames agrupados em linhas da mesma cor. Não há downloads extras para o catálogo, animação nem sinais por pixel; cada ícone montado mantém uma conexão de ciclo de vida. A grade é inteira antes da UIScale. Veja [ICONS.md](ICONS.md), [o catálogo](pixel-icons.png) e [icons.lua](../examples/icons.lua).
 
 ## Tab e Section
 
@@ -113,6 +129,8 @@ row:AddButton({ Title = "Executar", Feedback = true, Callback = function() retur
 Uma Row aceita os mesmos constructors de Section. Os controles usam colunas de larguras iguais e a altura do mais alto. Abaixo de StackAt, ou com mais de três controles, a linha se empilha. Gap aceita 0–32; StackAt, 200–1000. `row:SetVisible` e `row:Destroy` controlam a linha. IDs, valores, busca, callbacks e perfis continuam registrados na janela. Rows não podem ser aninhadas.
 
 ## Opções comuns
+
+Todos os constructors de Section aceitam `Icon`, opcional junto ao título. `SetIcon` pode trocar ou remover o desenho sem alterar o valor nem executar o callback. A captura embutida ao lado de um toggle usa o ícone do toggle.
 
 `Id`, `Title`, `Description`, `Tooltip` (ou `Tip`), `Default`, `Callback`, `Visible` (true), `Disabled` (false), `Persist` e `FireOnInit` (false). Toggle, Button e Keybind também aceitam `Floating = true` ou opções de atalho flutuante.
 

@@ -8,6 +8,18 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 *Illustrative concept, not an in-game screenshot. The library renders native Roblox GUI objects.*
 
+## Pixel art identity
+
+46 built-in 12×12 icons draw directly with native GUI rectangles and follow the theme. Use `Icon = "home"`, `"folder"`, `"palette"`, `"settings"` or another name on windows, tabs, categories and controls. Notifications and dialogs also accept Icon. Call `SetIcon(name)` to change it and `SetIcon(nil)` to remove it. Asset IDs and legacy emoji/text remain supported.
+
+`GetIconNames()` lists the catalog, `GetIcon(name)` returns a copy of its pixel rows and `RegisterIcon(name, rows)` registers a custom pattern. The pattern supports 4–16 rows and columns; see the [icon guide](docs/ICONS.md) for names, theme characters and validation.
+
+Default icons appear in the title, tabs/categories, search, settings, window actions, checkboxes/dropdowns and status dialogs. Appearance settings expose `PixelIcons` and `PixelDecorations`, both true by default. These preferences are saved and reset; disabling defaults preserves icons explicitly chosen by the developer. Existing saves without the new fields remain compatible.
+
+![RetroBox pixel icon catalog](docs/pixel-icons.png)
+
+[icons.lua](examples/icons.lua) demonstrates the catalog, selection, custom pixel art and notification/dialog integration. The [SVG exports](assets/pixel-icons) are for design/documentation; runtime icons are embedded in RetroBox.lua.
+
 ## Load
 
 Use this repository's published source path. Adjust the URL if you host the library elsewhere:
@@ -90,8 +102,8 @@ print(window.StorageMode) -- file, memory or custom
 
 ## Examples and testing
 
-[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use this repository's existing source path. Publish version 1.3.0 or later there before running the updated examples; update the URLs if you move the source.
+[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use this repository's existing source path. Publish version 1.4.0 or later there before running the updated examples; update the URLs if you move the source.
 
-72 local logic tests passed. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+82 local logic tests passed. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

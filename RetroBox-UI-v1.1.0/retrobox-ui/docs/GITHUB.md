@@ -10,7 +10,7 @@ local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mano
 
 Para atualizar, substitua os arquivos dentro de `RetroBox-UI-v1.1.0/retrobox-ui` pelo conteúdo da pasta `retrobox-ui` do novo ZIP, ou mescle a pull request da atualização. O nome antigo da pasta pode continuar: a versão da library é `Library.Version`, dentro do arquivo. Manter esse caminho preserva o raw usado pelos scripts.
 
-Tooltip requer a fonte 1.2.0 ou posterior. Configurações/lista de saves, mouse, linhas, diálogos, pesquisa navegável e atalhos flutuantes requerem a fonte 1.3.0 ou posterior publicada nesse caminho. Loader e exemplos deste pacote já usam essa URL. Carregue `RetroBox.lua` para obter a API; `examples/showcase.lua` monta uma demonstração pronta.
+Tooltip requer a fonte 1.2.0 ou posterior. Configurações/lista de saves, mouse, linhas, diálogos, pesquisa navegável e atalhos flutuantes requerem a fonte 1.3.0 ou posterior publicada nesse caminho. A identidade em pixel art e os ícones por nome requerem a fonte 1.4.0 ou posterior. Loader e exemplos deste pacote já usam essa URL. Carregue `RetroBox.lua` para obter a API; `examples/showcase.lua` monta uma demonstração pronta.
 
 ## Publicar em outro repositório
 
@@ -32,10 +32,10 @@ O ZIP completo também pode ser anexado a uma release. Carregue `RetroBox.lua` q
 
 ## Fixar uma versão
 
-Uma URL com `main` acompanha as atualizações dessa branch. Para fixar a library, troque `main` pelo hash completo de um commit que você testou ou por uma tag criada no seu repositório, por exemplo `v1.3.0`. A tag só funciona depois de existir no GitHub.
+Uma URL com `main` acompanha as atualizações dessa branch. Para fixar a library, troque `main` pelo hash completo de um commit que você testou ou por uma tag criada no seu repositório, por exemplo `v1.4.0`. A tag só funciona depois de existir no GitHub.
 
 ```text
-https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/v1.3.0/RetroBox.lua
+https://raw.githubusercontent.com/SEU_USUARIO/retrobox-ui/v1.4.0/RetroBox.lua
 ```
 
 ## Se o carregamento falhar
