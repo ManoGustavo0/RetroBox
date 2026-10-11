@@ -1,4 +1,4 @@
--- RetroBox UI 1.3.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.4.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.3.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.4.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -186,11 +186,110 @@ Library.Themes.Monokai = palette({
     {108,113,91},{18,20,16},{166,226,46},{31,39,20},{166,226,46},{249,139,151},
 })
 
+-- BEGIN PIXEL ICONS
+local iconPatterns = {
+    ["retrobox"] = "............/.....#....../...#####..../.hh##a###hh./.#ahhaahha#./.#ahhhhaaa#./.#ahhahaaa#./.#aahahaaa#./.##aaahaaa#./...##aha###./....##h##.../......#.....",
+    ["home"] = "............/.....#....../....###...../...#####..../..########../.##########./..#h######../..#h#..###../..###..###../..###..###../..###..###../............",
+    ["folder"] = "............/............/.#####....../.##########./.#hhhhhhhh#./.#aaaaaaaa#./.#aaaaaaaa#./.#aaaaaaaa#./.#aaaaaaaa#./.##########./............/............",
+    ["grid"] = "............/.###.###.###/.###.###.###/.###.###.###/............/.###.###.###/.###.###.###/.###.###.###/............/.###.###.###/.###.###.###/.###.###.###",
+    ["code"] = "............/............/......a...../...#..a.#.../..#..a...#../.#...a....#./..#..a...#../...#.a..#.../....a......./....a......./............/............",
+    ["terminal"] = "............/............/.##########./.#........#./.#.a......#./.#..a.....#./.#.a......#./.#....###.#./.#........#./.##########./............/............",
+    ["eye"] = "............/............/...######.../..##....##../.##..aa..##./##...aa...##/.##..aa..##./..##....##../...######.../............/............/............",
+    ["target"] = ".....##...../.....##...../....####..../...#.##.#.../..#......#../####.aa.####/####.aa.####/..#......#../...#.##.#.../....####..../.....##...../.....##.....",
+    ["mouse"] = "............/...######.../...#.#aa#.../...#.#aa#.../...#.#aa#.../...######.../...#....#.../...#....#.../...#....#.../...#....#.../...######.../............",
+    ["keyboard"] = "............/............/............/############/#.#.#.#.#..#/#..........#/#.#.#.#.#..#/#..........#/#..aaaaaa..#/############/............/............",
+    ["palette"] = "............/...######.../..########../..#aa##hh##./.##aa##hh##./.##########./..#gg######./..#gg###..../..###r##..../....####..../.....#....../............",
+    ["save"] = "............/.##hhhah##../.##hhhah###./.##hhhah###./.##hhhhh###./.##########./.##......##./.##.aaaa.##./.##......##./.##......##./.##########./............",
+    ["load"] = "......#...../......#...../......#...../.########.../.##########./.#aaaa#aaa#./.#aaaaaaaa#./.#aaaaaaaa#./.#aaaaaaaa#./.#aaaaaaaa#./.##########./............",
+    ["user"] = "............/....####..../...######.../...######.../....####..../............/...######.../..#aaaaaa#../..########../.##########./.##########./............",
+    ["search"] = "............/...###....../..#...#...../.#.hh..#..../.#.hh..#..../.#.....#..../..#...#...../...###..#.../.......###../........###./.........###/..........#.",
+    ["settings"] = "....####..../....####..../..########../..########../####....####/####.aa.####/####.aa.####/####....####/..########../..########../....####..../....####....",
+    ["info"] = "....####..../..##....##../.#...aa...#./.#...aa...#./#..........#/#....##....#/#....##....#/#....##....#/.#..####..#./.#........#./..##....##../....####....",
+    ["success"] = "....####..../..##....##../.#........#./.#.....g..#./#.....ggg..#/#...g.gg...#/#..gggg....#/#...ggg....#/.#...g....#./.#........#./..##....##../....####....",
+    ["warning"] = ".....#....../.....##...../....###...../....#.##..../...##r.#..../...#.r.##.../..##.r..##../..#......#../.##..r...##./.#........#./############/............",
+    ["error"] = "....####..../..##....##../.#........#./.#.r....r.#./#...r..r...#/#....rr....#/#....rr....#/#...r..r...#/.#.r....r.#./.#........#./..##....##../....####....",
+    ["close"] = "............/.........#../...#....###./..###..###../...######.../....####..../....####..../...######.../..###..###../...#....###./.........#../............",
+    ["minimize"] = "............/............/............/............/............/............/............/............/..########../..########../............/............",
+    ["maximize"] = "............/.##########./.##########./.##########./.#........#./.#........#./.#........#./.#........#./.#........#./.#........#./.##########./............",
+    ["restore"] = "............/....#######./....#.....#./....#.....#./.#######..#./.#######..#./.#.....#..#./.#.....####./.#.....#..../.#.....#..../.#######..../............",
+    ["chevron-down"] = "............/............/............/............/...#...#..../..###.###.../...#####..../....###...../.....#....../............/............/............",
+    ["chevron-right"] = "............/............/.....#....../....###...../.....###..../......###.../.....###..../....###...../.....#....../............/............/............",
+    ["check"] = "............/............/.........#../........###./.......###../..#...###.../.###.###..../..#####...../...###....../....#......./............/............",
+    ["reset"] = ".#........../.###......../.########.../.####....#../.##.......#./.#........#./..........#./..........#./.#........#./..#......#../...######.../............",
+    ["refresh"] = ".......#..../.......##.../..#########./..#....#####/..#....###../.......#..../....#......./..###....#../#####....#../.#########../...##......./....#.......",
+    ["copy"] = "............/.#######..../.#.....#..../.#.....#..../.#..#######./.#..#.....#./.#..#.....#./.#..#.....#./.####.....#./....#.....#./....#######./............",
+    ["download"] = ".....##...../.....##...../.....##...../.....##...../..########../...######.../....####..../....###...../.#...#....#./.#........#./.##########./............",
+    ["upload"] = ".....#....../....###...../....####..../...######.../..########../.....##...../.....##...../.....##...../.#...##...#./.#........#./.##########./............",
+    ["link"] = "....###...../...#...#..../..#.....#.../.#.....a..../.#....aaa.../.#...aaa..../....aaa...#./...aaa....#./..aaa.....#./...a.....#../....#...#.../.....###....",
+    ["star"] = ".....#....../.....#....../.....##...../....###...../#####aa#####/.####aa####./.####aa###../..#######.../..#######.../..###.###.../.##.....##../.#.......#..",
+    ["heart"] = "............/.####..####./.#hh#.#####./############/############/############/.##########./..########../...######.../...#####..../....###...../.....#......",
+    ["bolt"] = "......###.../.....####.../.....###..../....####..../...########./...#######../..#######.../.....###..../.....###..../....###...../....##....../....#.......",
+    ["shield"] = ".....#....../...#####..../#####.#####./##.......##./##.....a.##./##.a..a..##./##..a.a..##./##...a...##./.###...###../.####.####../..#######.../.....#......",
+    ["gamepad"] = "............/............/............/..########../.##h#######./##hhh###a###/###h#####a##/###h########/############/####....####/..#......#../............",
+    ["mobile"] = "...######.../...######.../...#....#.../...#....#.../...#....#.../...#....#.../...#....#.../...#....#.../...#....#.../...######.../...##hh##.../...######...",
+    ["volume"] = "............/......#...../.....##...../....###.#.../.######..#../.######..#../.######..#../.######..#../....###.#.../.....##...../......#...../............",
+    ["notification"] = ".....##...../.....##...../...######.../...######.../..########../..########../..########../..########../.##########./............/.....aa...../............",
+    ["lock"] = "...######.../...#....#.../...#....#.../...#....#.../...#....#.../.##########./.##########./.####hh####./.####hh####./.##########./.##########./............",
+    ["unlock"] = "...######.../...#....#.../...#....#.../...#......../...#......../.##########./.##########./.####hh####./.####hh####./.##########./.##########./............",
+    ["globe"] = "....####..../..###..###../.##########./.#.#....#.#./#..#....#..#/############/#..#....#..#/#..#....#..#/.#.#....#.#./.##########./..###..###../....####....",
+    ["sliders"] = "..#...#...#./..#...#...#./..#...#..aaa/.aaa..#..aaa/.aaa..#..aaa/.aaa..#...#./..#...#...#./..#..aaa..#./..#..aaa..#./..#..aaa..#./..#...#...#./..#...#...#.",
+    ["spark"] = ".....#....../.....#....../.....#....../....###...../....###...../############/....###...../....###...../....###...../.....#....../.....#....../.....#......",
+}
+-- END PIXEL ICONS
+
+local iconRoles = { ["#"]="Text", a="Accent", h="Highlight", s="Shadow", m="Muted", g="Success", r="Danger" }
+local function iconRows(pattern)
+    local rows={}; for row in pattern:gmatch("[^/]+") do rows[#rows+1]=row end
+    return rows
+end
+function Library:GetIconNames()
+    local result={}; for name in pairs(iconPatterns) do result[#result+1]=name end
+    table.sort(result); return result
+end
+function Library:GetIcon(name)
+    local pattern=iconPatterns[name]
+    return pattern and iconRows(pattern) or nil
+end
+function Library:RegisterIcon(name,rows)
+    assert(type(name)=="string" and #name>=1 and #name<=48 and name:match("^[a-z][a-z0-9_-]*$"),"Icon name must be 1–48 lowercase letters, digits, underscores or hyphens")
+    assert(type(rows)=="table" and #rows>=4 and #rows<=16,"Icon must have 4–16 rows")
+    local width=type(rows[1])=="string" and #rows[1] or 0
+    assert(width>=4 and width<=16,"Icon rows must have 4–16 columns")
+    local visible=false
+    for _,row in ipairs(rows) do
+        assert(type(row)=="string" and #row==width and not row:find("[^%.#ahsmgr]"),"Icon rows must be equal width and use . # a h s m g r")
+        if row:find("[^%.]") then visible=true end
+    end
+    assert(visible,"Icon needs at least one visible pixel")
+    iconPatterns[name]=table.concat(rows,"/")
+    for window in pairs(self.Windows) do
+        for handle in pairs(window._icons or {}) do if handle.Name==name then handle:Set(handle.Spec) end end
+    end
+    return self
+end
+local function resolveIcon(value)
+    if value==nil or value==false or value=="" then return "none" end
+    if type(value)=="number" then
+        assert(finite(value) and value>0 and value%1==0,"Icon asset ID must be a positive integer")
+        return "asset","rbxassetid://"..string.format("%.0f",value)
+    end
+    assert(type(value)=="string" and #value<=1024,"Icon must be a name, asset ID, short text or false")
+    if value:sub(1,6)=="pixel:" then
+        local name=value:sub(7); assert(iconPatterns[name],"Unknown pixel icon: "..name)
+        return "pixel",name
+    end
+    if iconPatterns[value] then return "pixel",value end
+    if value:match("^rbxassetid://%d+$") or value:match("^https?://") or value:match("^rbxasset://") then return "asset",value end
+    assert(#value<=64,"Legacy icon text must contain at most 64 bytes")
+    return "text",value
+end
+
 local translations = {
     ["pt-BR"] = {
         search="Pesquisar funções...", settings="Configurações", theme="Tema", accent="Cor de destaque",
         scale="Escala da interface", motion="Reduzir animações", lines="Linhas CRT", launcher="Botão de reabrir",
         notices="Notificações", appearance="Aparência", accessibility="Interface e acessibilidade",
+        pixelIcons="Ícones padrão em pixel art",pixelDecorations="Detalhes em pixel art",
         shortcut="Atalho da janela", configs="Configurações", profile="Nome da configuração", save="Salvar",
         load="Carregar", export="Exportar JSON", import="Importar JSON", reset="Restaurar padrões",
         ready="Pronto", fixed="Cor fixa", rainbow="RGB animado", cycle="s/ciclo", opacity="Opacidade",
@@ -204,6 +303,7 @@ local translations = {
         search="Search features...", settings="Settings", theme="Theme", accent="Accent color",
         scale="Interface scale", motion="Reduce animations", lines="CRT scanlines", launcher="Reopen button",
         notices="Notifications", appearance="Appearance", accessibility="Interface and accessibility",
+        pixelIcons="Default pixel art icons",pixelDecorations="Pixel art details",
         shortcut="Window shortcut", configs="Configurations", profile="Configuration name", save="Save",
         load="Load", export="Export JSON", import="Import JSON", reset="Restore defaults",
         ready="Ready", fixed="Fixed color", rainbow="Animated RGB", cycle="s/cycle", opacity="Opacity",
@@ -285,13 +385,95 @@ local function textbox(window, parent, text, props)
         Size=UDim2.new(1,0,0,32), RichText=false }
     for k, v in pairs(props or {}) do properties[k] = v end
     local object = ui(window, "TextBox", properties, { BackgroundColor3="Inset", TextColor3="Text", BorderColor3="Border", PlaceholderColor3="Muted" })
-    ui(window, "UIPadding", { Parent=object, PaddingLeft=UDim.new(0,8), PaddingRight=UDim.new(0,8) })
+    ui(window, "UIPadding", { Name="TextPadding",Parent=object, PaddingLeft=UDim.new(0,8), PaddingRight=UDim.new(0,8) })
     return object
 end
 local function list(window, parent, gap, horizontal)
     return ui(window, "UIListLayout", { Parent=parent, Padding=UDim.new(0,gap or 8),
         FillDirection=horizontal and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical,
         SortOrder=Enum.SortOrder.LayoutOrder })
+end
+
+-- Icons are static GUI rectangles, merged into horizontal runs. Only mounted
+-- icons allocate instances; there are no per-pixel signals or render loops.
+local function iconSlot(window,parent,value,defaultName,size,position,role,onLayout)
+    resolveIcon(value)
+    local handle={_window=window,_connections={},Nodes={},Foreground={},Spec=value,Default=defaultName,Role=role or "Text",Size=size,Opacity=0}
+    handle.Frame=frame(window,parent,{Name="PixelIcon",Position=position,Size=U2(size,size),BackgroundTransparency=1,
+        Active=false,ZIndex=parent.ZIndex+1})
+    window._icons[handle]=true
+    function handle:SetOpacity(opacity)
+        self.Opacity=opacity
+        for _,node in ipairs(self.Nodes) do
+            if node:IsA("ImageLabel") then node.ImageTransparency=opacity
+            elseif node:IsA("TextLabel") then node.TextTransparency=opacity
+            else node.BackgroundTransparency=opacity end
+        end
+    end
+    function handle:SetRole(nextRole)
+        self.Role=nextRole
+        for _,node in ipairs(self.Foreground) do
+            window:_bind(node,{[node:IsA("TextLabel") and "TextColor3" or "BackgroundColor3"]=nextRole})
+        end
+    end
+    function handle:Set(spec)
+        local effective=spec
+        if effective==nil and self.Default and window.PixelIcons then effective=self.Default end
+        local kind,name=resolveIcon(effective)
+        local pattern=kind=="pixel" and iconPatterns[name] or nil
+        self.Spec=spec
+        if kind~="none" and (self.Kind~=kind or self.Name~=name or self.Pattern~=pattern) then
+            for _,node in ipairs(self.Nodes) do window._skin[node]=nil; node:Destroy() end
+            self.Nodes={}; self.Foreground={}
+            if kind=="pixel" then
+                local rows=iconRows(pattern); local width=#rows[1]; local height=#rows
+                local step=math.max(1,math.floor(self.Size/math.max(width,height)))
+                local ox=math.floor((self.Size-width*step)/2); local oy=math.floor((self.Size-height*step)/2)
+                for y,row in ipairs(rows) do
+                    local x=1
+                    while x<=width do
+                        local char=row:sub(x,x); local last=x
+                        while last<width and row:sub(last+1,last+1)==char do last=last+1 end
+                        if char~="." then
+                            local node=frame(window,self.Frame,{Name="PixelRun",Position=U2(ox+(x-1)*step,oy+(y-1)*step),
+                                Size=U2((last-x+1)*step,step),ZIndex=self.Frame.ZIndex+1},char=="#" and self.Role or iconRoles[char])
+                            self.Nodes[#self.Nodes+1]=node
+                            if char=="#" then self.Foreground[#self.Foreground+1]=node end
+                        end
+                        x=last+1
+                    end
+                end
+            elseif kind=="asset" then
+                self.Nodes[1]=ui(window,"ImageLabel",{Parent=self.Frame,Name="AssetIcon",Size=UDim2.fromScale(1,1),Image=name,
+                    BackgroundTransparency=1,BorderSizePixel=0,ScaleType=Enum.ScaleType.Fit,ResampleMode=Enum.ResamplerMode.Pixelated,
+                    ZIndex=self.Frame.ZIndex+1})
+            else
+                self.Nodes[1]=label(window,self.Frame,name,{Name="TextIcon",Size=UDim2.fromScale(1,1),TextSize=math.min(18,size),
+                    TextXAlignment=Enum.TextXAlignment.Center,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=self.Frame.ZIndex+1},self.Role)
+                self.Foreground[1]=self.Nodes[1]
+            end
+            self:SetOpacity(self.Opacity)
+            self.Kind=kind; self.Name=name; self.Pattern=pattern
+        end
+        self.Frame.Visible=kind~="none"
+        self.Frame:SetAttribute("RetroBoxIcon",kind~="none" and name or nil)
+        if onLayout then onLayout(self.Frame.Visible) end
+        return self
+    end
+    function handle:Destroy()
+        if self.Destroyed then return end
+        self.Destroyed=true; cleanup(self); window._icons[self]=nil
+        for _,node in ipairs(self.Nodes) do window._skin[node]=nil end
+        self.Nodes={}; self.Foreground={}; self.Frame:Destroy()
+    end
+    connect(handle,handle.Frame.Destroying,function() handle:Destroy() end)
+    handle:Set(value)
+    return handle
+end
+local function pixelButton(window,owner,parent,caption,name,props,pressed)
+    local object=button(window,owner,parent,caption,props,pressed)
+    iconSlot(window,object,nil,name,16,UDim2.new(.5,-8,.5,-8),"Text",function(visible) object.Text=visible and "" or caption end)
+    return object
 end
 
 local function tooltipValue(value)
@@ -533,6 +715,7 @@ function Control:SetDisabled(disabled)
     if disabled == true and self._window._binding == self then self._window._binding = nil end
     self.Disabled = disabled == true
     self.TitleLabel.TextTransparency = self.Disabled and .5 or 0
+    if self._titleIcon then self._titleIcon:SetOpacity(self.Disabled and .5 or 0) end
     if self._render then self:_render() end
     if self.Keybind then self.Keybind:SetDisabled(self.Disabled) end
     if self._window._syncFloating then self._window:_syncFloating(self) end
@@ -548,6 +731,23 @@ end
 function Control:SetTitle(text)
     self.Title = tostring(text); self.TitleLabel.Text = self.Title
     self._window:SetSearch(self._window._query)
+    return self
+end
+function Control:SetIcon(value)
+    local kind=resolveIcon(value)
+    assert(not self.Destroyed,"This control has been destroyed")
+    if not self._titleIcon and kind=="none" then return self end
+    if not self._titleIcon then
+        self._titleIcon=iconSlot(self._window,self.Frame,value,nil,16,U2(0,2),"Text",function(visible)
+            local inset=visible and 22 or 0; local delta=inset-(self._iconInset or 0)
+            local position,size=self.TitleLabel.Position,self.TitleLabel.Size
+            self.TitleLabel.Position=UDim2.new(position.X.Scale,position.X.Offset+delta,position.Y.Scale,position.Y.Offset)
+            self.TitleLabel.Size=UDim2.new(size.X.Scale,size.X.Offset-delta,size.Y.Scale,size.Y.Offset)
+            self._iconInset=inset
+        end)
+        self.Icon=self._titleIcon.Frame
+    else self._titleIcon:Set(value) end
+    self._titleIcon:SetOpacity(self.Disabled and .5 or 0)
     return self
 end
 function Control:SetDescription(text)
@@ -594,6 +794,7 @@ local function base(section, kind, options, height)
     options = options or {}
     assert(not section.Destroyed and not section._window.Destroyed, "Section has been destroyed")
     local window = section._window
+    resolveIcon(options.Icon)
     assert(options.Floating==nil or type(options.Floating)=="boolean" or type(options.Floating)=="table","Floating must be a boolean or options table")
     assert(not options.Floating or kind=="Toggle" or kind=="Button" or kind=="Keybind","Floating supports Toggle, Button or Keybind")
     local tip=options.Tooltip
@@ -634,6 +835,7 @@ local function init(control, options, default)
     control._default = control:GetValue()
     control._hasDefault = true
     control:SetDisabled(control.Disabled)
+    control:SetIcon(options.Icon)
     if options.FireOnInit then local epoch=control._callbackEpoch; task.defer(function() if not control.Destroyed and control._callbackEpoch==epoch then control:_emit() end end) end
     if options.Floating then control:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return control
@@ -650,9 +852,16 @@ function Section:AddToggle(options)
     end)
     function self:_normalize(value) assert(type(value) == "boolean", "Toggle value must be boolean"); return value end
     function self:_render()
-        box.Text = self.Value and "X" or ""
+        box.Text = self.Value and (self._window.PixelIcons and "" or "X") or ""
         box.TextColor3 = self._window.Palette[self.Value and "Accent" or "Text"]
         box.Active = not self.Disabled; box.TextTransparency = self.Disabled and .5 or 0
+        if self.Value and self._window.PixelIcons and not self._checkIcon then
+            self._checkIcon=iconSlot(self._window,box,"check",nil,16,U2(7,6),"Accent")
+        end
+        if self._checkIcon then
+            self._checkIcon:Set(self.Value and self._window.PixelIcons and "check" or false)
+            self._checkIcon:SetOpacity(self.Disabled and .5 or 0)
+        end
     end
     connect(self, self.Frame.InputBegan, function(input)
         if pointer(input) and not self.Disabled and not self._window._binding and not self._window._dialog and not inside(box, point(input))
@@ -680,8 +889,9 @@ function Section:AddToggle(options)
         self.Keybind=binding; binding._inlineParent=self; binding._target=self
         binding.Frame.Parent=self.Frame; binding.Frame.Position=UDim2.new(1,-150,0,0); binding.Frame.Size=U2(112,30)
         binding.TitleLabel.Visible=false; binding.DescriptionLabel.Visible=false
+        if binding._titleIcon then binding._titleIcon.Frame.Visible=false end
         binding.Button.Position=U2(0,0); binding.Button.Size=U2(112,28)
-        self.TitleLabel.Size=UDim2.new(1,-162,0,23); self.DescriptionLabel.Size=UDim2.new(1,-162,0,18)
+        self.TitleLabel.Size=UDim2.new(1,-162-(self._iconInset or 0),0,23); self.DescriptionLabel.Size=UDim2.new(1,-162,0,18)
         self:SetDisabled(self.Disabled)
         if self._section._isRow then self._section:_layout() end
     end
@@ -767,6 +977,7 @@ function Section:AddButton(options)
     end
     self.Button = action
     self:SetDisabled(self.Disabled)
+    self:SetIcon(options.Icon)
     if options.Floating then self:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return self
 end
@@ -842,7 +1053,8 @@ function Section:AddDropdown(options)
         Position=U2(0,44),Size=UDim2.new(1,0,0,30),TextXAlignment=Enum.TextXAlignment.Left,
     },function() self:SetOpen(not self.Open) end)
     ui(self._window,"UIPadding",{ Parent=header,PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,24) })
-    label(self._window,header,"v",{ Position=UDim2.new(1,-24,0,0),Size=U2(20,30),TextXAlignment=Enum.TextXAlignment.Center })
+    local arrow=label(self._window,header,"v",{ Position=UDim2.new(1,-24,0,0),Size=U2(20,30),TextXAlignment=Enum.TextXAlignment.Center })
+    iconSlot(self._window,arrow,nil,"chevron-down",12,UDim2.new(.5,-6,.5,-6),"Text",function(visible) arrow.Text=visible and "" or "v" end)
     local panel = frame(self._window,self.Frame,{ Position=U2(0,79),Size=UDim2.new(1,0,0,184),Visible=false },"Inset")
     bevel(self._window,panel,true)
     local search = textbox(self._window,panel,"",{ Position=U2(6,6),Size=UDim2.new(1,-12,0,28),PlaceholderText=self._window:_text("search"),Visible=options.Searchable ~= false })
@@ -1308,12 +1520,26 @@ end
 function Window:SetTitle(value)
     self.Title=tostring(value); self.TitleLabel.Text=self.Title; return self
 end
-function Window:SetIcon(asset)
-    self.Icon.Image=tostring(asset or "")
-    self.Icon.Visible=#self.Icon.Image>0
-    self.TitleLabel.Position=U2(self.Icon.Visible and 36 or 10,0)
-    self.TitleLabel.Size=UDim2.new(1,self.Icon.Visible and -148 or -120,1,0)
+function Window:SetIcon(value)
+    assert(not self.Destroyed,"Window has been destroyed")
+    if value==nil then value=false end
+    self._titleIcon:Set(value)
     return self
+end
+function Window:SetPixelIcons(value)
+    assert(type(value)=="boolean","PixelIcons must be a boolean")
+    self.PixelIcons=value
+    for handle in pairs(self._icons) do if handle.Default and handle.Spec==nil then handle:Set(nil) end end
+    for _,control in pairs(self.Controls) do if control.Type=="Toggle" and control._render and not control.Destroyed then control:_render() end end
+    self:_syncSettings(); self:_scheduleSave(); return self
+end
+function Window:SetPixelDecorations(value)
+    assert(type(value)=="boolean","PixelDecorations must be a boolean")
+    self.PixelDecorations=value
+    if self.PixelMotif then self.PixelMotif.Visible=value and not self.Minimized end
+    if self.PixelSeal then self.PixelSeal.Visible=value and not self.Mobile and (not self._logicalSize or self._logicalSize.X>=620) end
+    if self.SubtitleLabel then self.SubtitleLabel.Size=UDim2.new(1,value and -94 or -28,0,22) end
+    self:_syncSettings(); self:_scheduleSave(); return self
 end
 function Window:SetSubtitle(value)
     self.Subtitle=tostring(value); self.SubtitleLabel.Text=self.Subtitle; return self
@@ -1467,6 +1693,19 @@ function Tab:_renderSelection()
     local active=self._window.ActiveTab==self
     self.Button.BackgroundColor3=self._window.Palette[active and "Accent" or "Surface"]
     self.Button.TextColor3=self._window.Palette[active and "AccentText" or "Text"]
+    if self.Label then self.Label.TextColor3=self.Button.TextColor3 end
+    if self._titleIcon then self._titleIcon:SetRole(active and "AccentText" or "Text") end
+end
+function Tab:SetIcon(value)
+    assert(not self.Destroyed,"Tab has been destroyed")
+    if value==nil then value=false end
+    self._titleIcon:Set(value); self:_renderSelection(); return self
+end
+function Tab:SetTitle(value)
+    assert(not self.Destroyed,"Tab has been destroyed")
+    self.Title=tostring(value); self.Label.Text=self.Title
+    if self._window.ActiveTab==self then self._window.Status.Text=self.Title.."  |  v"..Library.Version end
+    self._window:SetSearch(self._window._query); return self
 end
 function Tab:Select()
     assert(not self.Destroyed,"Tab has been destroyed")
@@ -1498,6 +1737,7 @@ function Window:CreateTab(options)
     options=options or {}
     assert(not self.Destroyed,"Window has been destroyed")
     assert(options.Columns==nil or options.Columns==1 or options.Columns==2,"Columns must be 1 or 2")
+    resolveIcon(options.Icon)
     local selfTab=setmetatable({ Title=tostring(options.Title or "Tab"),Columns=options.Columns or 1,Hidden=options.Hidden==true,
         _internal=options.Internal==true,_window=self,_connections={},Sections={},_sectionCount=0 },Tab)
     selfTab.Frame=ui(self,"ScrollingFrame",{
@@ -1510,11 +1750,16 @@ function Window:CreateTab(options)
     selfTab.Left=frame(self,selfTab.Container,{ LayoutOrder=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1 })
     selfTab.Right=frame(self,selfTab.Container,{ LayoutOrder=2,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=selfTab.Columns==2 })
     list(self,selfTab.Left,14); list(self,selfTab.Right,14)
-    selfTab.Button=button(self,selfTab,self.Nav,(options.Icon and tostring(options.Icon).."  " or "")..selfTab.Title,{
+    selfTab.Button=button(self,selfTab,self.Nav,"",{
         LayoutOrder=#self.Tabs+1,Size=U2(158,34),TextXAlignment=Enum.TextXAlignment.Left,TextSize=13,Visible=not selfTab.Hidden,
         TextTruncate=Enum.TextTruncate.AtEnd,
     },function() selfTab:Select() end)
-    ui(self,"UIPadding",{ Parent=selfTab.Button,PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,6) })
+    selfTab.Label=label(self,selfTab.Button,selfTab.Title,{Size=UDim2.new(1,-14,1,0),Position=U2(8,0),TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd})
+    selfTab._titleIcon=iconSlot(self,selfTab.Button,options.Icon,selfTab._internal and "settings" or "grid",24,U2(4,5),"Text",function(visible)
+        selfTab.Label.Position=U2(visible and 34 or 8,0)
+        selfTab.Label.Size=UDim2.new(1,visible and -40 or -14,1,0)
+    end)
+    selfTab.Icon=selfTab._titleIcon.Frame
     table.insert(self.Tabs,selfTab)
     connect(selfTab,selfTab.Frame:GetPropertyChangedSignal("AbsoluteSize"),function() selfTab:_layout() end)
     connect(selfTab,selfTab.Frame.Destroying,function() if not selfTab.Destroyed then selfTab:Destroy() end end)
@@ -1526,6 +1771,7 @@ function Tab:CreateSection(options)
     if type(options)=="string" then options={ Title=options } end
     options=options or {}
     assert(not self.Destroyed,"Tab has been destroyed")
+    resolveIcon(options.Icon)
     self._sectionCount=self._sectionCount+1
     local section=setmetatable({ Title=tostring(options.Title or "Section"),_window=self._window,_tab=self,_connections={},Controls={},_count=0,_visible=options.Visible~=false },Section)
     if options.Side=="Right" then self.Columns=2 end
@@ -1536,7 +1782,13 @@ function Tab:CreateSection(options)
     self._window:_bind(section.Frame,{ BackgroundColor3="Surface",BorderColor3="Border" })
     local padding=ui(self._window,"UIPadding",{ Parent=section.Frame,PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12),PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,12) })
     list(self._window,section.Frame,8)
-    section.Header=label(self._window,section.Frame,section.Title:upper(),{ LayoutOrder=1,Size=UDim2.new(1,0,0,21),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd },"Muted")
+    section.HeaderRow=frame(self._window,section.Frame,{LayoutOrder=1,Size=UDim2.new(1,0,0,24),BackgroundTransparency=1})
+    section.Header=label(self._window,section.HeaderRow,section.Title:upper(),{Size=UDim2.new(1,0,1,0),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd},"Muted")
+    section._titleIcon=iconSlot(self._window,section.HeaderRow,options.Icon,"folder",18,U2(0,3),"Muted",function(visible)
+        section.Header.Position=U2(visible and 24 or 0,0)
+        section.Header.Size=UDim2.new(1,visible and -24 or 0,1,0)
+    end)
+    section.Icon=section._titleIcon.Frame
     section.Content=frame(self._window,section.Frame,{ LayoutOrder=2,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1 })
     list(self._window,section.Content,10)
     table.insert(self.Sections,section)
@@ -1592,6 +1844,11 @@ function Row:SetVisible(value)
     self._visible=value~=false; self.Frame.Visible=self._visible; self._window:SetSearch(self._window._query); return self
 end
 function Section:SetTitle(value) self.Title=tostring(value); self.Header.Text=self.Title:upper(); return self end
+function Section:SetIcon(value)
+    assert(not self.Destroyed and not self._isRow,"SetIcon requires a live Section")
+    if value==nil then value=false end
+    self._titleIcon:Set(value); return self
+end
 function Section:SetVisible(value) self._visible=value~=false; self._window:SetSearch(self._window._query); return self end
 function Section:Destroy()
     if self.Destroyed then return end
@@ -1636,7 +1893,8 @@ function Window:ExportConfig(asTable)
         Library="RetroBox UI",Schema=1,Version=Library.Version,Flags=flags,
         Appearance={ Theme=self.Theme,ThemeColors=colors,Accent=self.Accent and hex(self.Accent) or nil,
             Scale=self.UserScale,ReducedMotion=self.ReducedMotion,Scanlines=self.Scanlines,
-            Notifications=self.NotificationsEnabled,Launcher=self.LauncherEnabled,ToggleKey=self.ToggleKey.Name },
+            Notifications=self.NotificationsEnabled,Launcher=self.LauncherEnabled,ToggleKey=self.ToggleKey.Name,
+            PixelIcons=self.PixelIcons,PixelDecorations=self.PixelDecorations },
     }
     result.Appearance.Floating={Enabled=self.QuickActionsEnabled,Size=self.FloatSize,Opacity=self.FloatOpacity,Positions={}}
     for id,position in pairs(self._floatingPositions) do result.Appearance.Floating.Positions[id]={X=position.X,Y=position.Y} end
@@ -1666,6 +1924,7 @@ function Window:ImportConfig(source,options)
         assert(type(look)=="table","Appearance must be a table")
         local appearance={ Theme=self.Theme,Scale=self.UserScale,
             ReducedMotion=look.ReducedMotion,Scanlines=look.Scanlines,Notifications=look.Notifications,Launcher=look.Launcher,
+            PixelIcons=look.PixelIcons,PixelDecorations=look.PixelDecorations,
             ToggleKey=self.ToggleKey }
         if look.Theme~=nil then appearance.Theme=look.Theme end
         if look.Scale~=nil then appearance.Scale=look.Scale end
@@ -1673,7 +1932,7 @@ function Window:ImportConfig(source,options)
         if config.Appearance==nil then appearance.Accent=self.Accent end
         assert(type(appearance.Theme)=="string" and #appearance.Theme>0,"Invalid theme name")
         assert(finite(appearance.Scale) and appearance.Scale>=.75 and appearance.Scale<=1.5,"Invalid interface scale")
-        for _,key in ipairs({"ReducedMotion","Scanlines","Notifications","Launcher"}) do
+        for _,key in ipairs({"ReducedMotion","Scanlines","Notifications","Launcher","PixelIcons","PixelDecorations"}) do
             assert(appearance[key]==nil or type(appearance[key])=="boolean","Invalid appearance field: "..key)
         end
         if look.Accent~=nil then appearance.Accent=parseColor(look.Accent) end
@@ -1724,6 +1983,8 @@ function Window:ImportConfig(source,options)
     if look.Scanlines~=nil then self.Scanlines=look.Scanlines end
     if look.Notifications~=nil then self.NotificationsEnabled=look.Notifications end
     if look.Launcher~=nil then self.LauncherEnabled=look.Launcher end
+    if look.PixelIcons~=nil then self.PixelIcons=look.PixelIcons end
+    if look.PixelDecorations~=nil then self.PixelDecorations=look.PixelDecorations end
     if look.LauncherText then self.LauncherText=look.LauncherText end
     if look.LauncherPosition then self.LauncherPosition=look.LauncherPosition end
     if look.Floating then
@@ -1733,6 +1994,7 @@ function Window:ImportConfig(source,options)
     for id,record in pairs(prepared.Changes) do self.Controls[id]:SetValue(record.Value,true) end
     self:_applyTheme(); self:_layout()
     self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
+    self:SetPixelIcons(self.PixelIcons); self:SetPixelDecorations(self.PixelDecorations)
     if not options.Silent then for id in pairs(prepared.Changes) do
         local control=self.Controls[id]; if control and not self.Destroyed then control:_emit() end
     end end
@@ -1915,11 +2177,13 @@ function Window:Reset(silent)
     self._themeOverrides[self._initial.Theme]=copy(self._initial.ThemeColors)
     self.ReducedMotion=self._initial.ReducedMotion; self.Scanlines=self._initial.Scanlines
     self.NotificationsEnabled=self._initial.Notifications; self.LauncherEnabled=self._initial.Launcher
+    self.PixelIcons=self._initial.PixelIcons; self.PixelDecorations=self._initial.PixelDecorations
     self.ToggleKey=self._initial.ToggleKey
     self.FloatSize=self._initial.FloatSize; self.FloatOpacity=self._initial.FloatOpacity; self.QuickActionsEnabled=self._initial.QuickActions
     self.LauncherText=self._initial.LauncherText; self.LauncherPosition=self._initial.LauncherPosition; self._floatingPositions={}
     for _,floating in pairs(self._floatingButtons) do floating.Position=floating._defaultPosition end
     self:_applyTheme(); self:_layout(); self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
+    self:SetPixelIcons(self.PixelIcons); self:SetPixelDecorations(self.PixelDecorations)
     if not silent then for _,control in pairs(self.Controls) do if control.Persist then control:_emit() end end end
     self._importing=false; self:_scheduleSave(); return self
 end
@@ -1956,6 +2220,12 @@ function Window:_layout()
         self.PageHost.Position=U2(184,114); self.PageHost.Size=UDim2.new(1,-198,1,-178)
     end
     self.Status.Visible=not self.Mobile; self.ResizeGrip.Visible=not self.Mobile and not self._maximized
+    if self._searchIcon then
+        local p=self.Search.Position
+        self._searchIcon.Frame.Position=UDim2.new(p.X.Scale,p.X.Offset+7,p.Y.Scale,p.Y.Offset+7)
+    end
+    if self.PixelMotif then self.PixelMotif.Visible=self.PixelDecorations and not self.Minimized end
+    if self.PixelSeal then self.PixelSeal.Visible=self.PixelDecorations and not self.Mobile and width>=620 end
     for _,tab in ipairs(self.Tabs) do
         tab.Button.Size=self.Mobile and U2(136,34) or UDim2.new(1,-6,0,34)
         tab:_layout()
@@ -1979,6 +2249,8 @@ function Window:_syncSettings()
     controls.Scale:SetValue(self.UserScale,true)
     controls.Motion:SetValue(self.ReducedMotion,true)
     controls.Scanlines:SetValue(self.Scanlines,true)
+    controls.PixelIcons:SetValue(self.PixelIcons,true)
+    controls.PixelDecorations:SetValue(self.PixelDecorations,true)
     controls.Notifications:SetValue(self.NotificationsEnabled,true)
     controls.Launcher:SetValue(self.LauncherEnabled,true)
     controls.Shortcut:SetValue(self.ToggleKey,true)
@@ -2003,7 +2275,7 @@ function Window:_refreshProfiles()
 end
 function Window:_createSettings()
     if self._settingsTab then return end
-    local tab=self:CreateTab({Title=self:_text("settings"),Icon="⚙",Internal=true})
+    local tab=self:CreateTab({Title=self:_text("settings"),Internal=true})
     tab._settingsConfig=true; tab.Button.LayoutOrder=100000
     self._settingsTab=tab
     local function opts(id,title,extra)
@@ -2052,6 +2324,8 @@ function Window:_createSettings()
     end}))
     local look=tab:CreateSection(self:_text("appearance"))
     controls.Theme=look:AddDropdown(opts("theme",self:_text("theme"),{Options=self:GetThemeNames(),Default=self.Theme,Callback=function(value) self:SetTheme(value) end}))
+    controls.PixelIcons=look:AddToggle(opts("pixel-icons",self:_text("pixelIcons"),{Default=self.PixelIcons,Callback=function(v) self:SetPixelIcons(v) end}))
+    controls.PixelDecorations=look:AddToggle(opts("pixel-decorations",self:_text("pixelDecorations"),{Default=self.PixelDecorations,Callback=function(v) self:SetPixelDecorations(v) end}))
     controls.Accent=look:AddColorPicker(opts("accent",self:_text("accent"),{Default=self.Palette.Accent,AllowRainbow=false,AllowOpacity=false,Callback=function(color) self:SetAccent(color) end}))
     local access=tab:CreateSection(self:_text("accessibility"))
     controls.Scale=access:AddSlider(opts("scale",self:_text("scale"),{Min=.75,Max=1.5,Step=.05,Default=self.UserScale,Suffix="x",Callback=function(value) self:SetScale(value) end}))
@@ -2092,6 +2366,7 @@ function Window:Notify(options)
     if type(options)=="string" then options={ Content=options } end
     options=options or {}
     if self.Destroyed or not self.NotificationsEnabled then return nil end
+    resolveIcon(options.Icon)
     local duration=options.Duration or 4
     assert(finite(duration),"Notification Duration must be finite")
     duration=clamp(duration,.1,30)
@@ -2104,9 +2379,14 @@ function Window:Notify(options)
     self:_bind(notification.Frame,{ BackgroundColor3="Surface",BorderColor3="Border" }); bevel(self,notification.Frame,false)
     local role=options.Kind=="error" and "Danger" or options.Kind=="success" and "Success" or "Accent"
     frame(self,notification.Frame,{ Position=U2(0,0),Size=UDim2.new(0,4,1,0) },role)
-    label(self,notification.Frame,options.Title or self:_text("about"),{
+    local title=label(self,notification.Frame,options.Title or self:_text("about"),{
         Position=U2(12,8),Size=UDim2.new(1,-48,0,22),TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd,
     })
+    local defaultIcon=options.Kind=="error" and "error" or options.Kind=="success" and "success" or "info"
+    notification._titleIcon=iconSlot(self,notification.Frame,options.Icon,defaultIcon,16,U2(12,11),"Text",function(visible)
+        title.Position=U2(visible and 34 or 12,8); title.Size=UDim2.new(1,visible and -70 or -48,0,22)
+    end)
+    notification.Icon=notification._titleIcon.Frame
     label(self,notification.Frame,options.Content or "",{
         Position=U2(12,32),Size=UDim2.new(1,-24,0,42),TextSize=12,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,
     },"Muted")
@@ -2117,7 +2397,7 @@ function Window:Notify(options)
         local index=table.find(self._window._notifications,self)
         if index then table.remove(self._window._notifications,index) end
     end
-    button(self,notification,notification.Frame,"X",{ Position=UDim2.new(1,-32,0,8),Size=U2(22,22),TextSize=12 },function() notification:Destroy() end)
+    pixelButton(self,notification,notification.Frame,"X","close",{ Position=UDim2.new(1,-32,0,8),Size=U2(22,22),TextSize=12 },function() notification:Destroy() end)
     table.insert(self._notifications,notification)
     if not self.ReducedMotion then
         notification.Frame.BackgroundTransparency=.4
@@ -2270,6 +2550,7 @@ end
 function Window:Dialog(options)
     options=options or {}
     assert(type(options)=="table","Dialog expects options")
+    resolveIcon(options.Icon)
     local title=tostring(options.Title or self:_text("about")); local content=tostring(options.Content or "")
     assert(#title<=256 and #content<=8192,"Dialog text exceeds its limit")
     local actions=options.Buttons or {{Text="OK"}}
@@ -2296,7 +2577,11 @@ function Window:Dialog(options)
     dialog.Panel=frame(self,dialog.Frame,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),BorderSizePixel=1,ZIndex=2001},"Background")
     bevel(self,dialog.Panel,false)
     local header=frame(self,dialog.Panel,{Position=U2(4,4),Size=UDim2.new(1,-8,0,30),ZIndex=2002},"Accent")
-    label(self,header,title,{Position=U2(9,0),Size=UDim2.new(1,-42,1,0),TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd},"AccentText")
+    local heading=label(self,header,title,{Position=U2(9,0),Size=UDim2.new(1,-42,1,0),TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd},"AccentText")
+    dialog._titleIcon=iconSlot(self,header,options.Icon,options.Kind=="danger" and "warning" or "info",16,U2(7,7),"AccentText",function(visible)
+        heading.Position=U2(visible and 29 or 9,0); heading.Size=UDim2.new(1,visible and -62 or -42,1,0)
+    end)
+    dialog.Icon=dialog._titleIcon.Frame
     dialog.Content=label(self,dialog.Panel,content,{Position=U2(14,46),Size=UDim2.new(1,-28,1,-103),TextWrapped=true,
         TextTruncate=Enum.TextTruncate.AtEnd,TextYAlignment=Enum.TextYAlignment.Top,TextSize=13,ZIndex=2002})
     function dialog:_layout()
@@ -2323,7 +2608,7 @@ function Window:Dialog(options)
         local callback=buttons[index].Callback
         self:Close("button",index); call(self._window,callback,index)
     end
-    button(self,dialog,header,"X",{Position=UDim2.new(1,-29,0,3),Size=U2(24,24),TextSize=11},function() dialog:Close("cancel") end)
+    pixelButton(self,dialog,header,"X","close",{Position=UDim2.new(1,-29,0,3),Size=U2(24,24),TextSize=11},function() dialog:Close("cancel") end)
     for index,action in ipairs(buttons) do
         local cell=button(self,dialog,dialog.Panel,action.Text,{Position=UDim2.new((index-1)/#buttons,14,1,-44),
             Size=UDim2.new(1/#buttons,-28,0,30),ZIndex=2002,TextSize=12},function() dialog:Choose(index) end)
@@ -2340,7 +2625,7 @@ function Window:Dialog(options)
 end
 function Window:Confirm(options)
     options=options or {}
-    return self:Dialog({Title=options.Title,Content=options.Content,DefaultButton=1,
+    return self:Dialog({Title=options.Title,Content=options.Content,Icon=options.Icon,Kind=options.Kind,DefaultButton=1,
         Buttons={{Text=options.CancelText or self:_text("cancel"),Callback=options.OnCancel},
             {Text=options.ConfirmText or self:_text("confirm"),Kind=options.Kind,Callback=options.OnConfirm}},
         OnClose=function(reason) if reason~="button" then call(self,options.OnCancel,reason) end end})
@@ -2484,6 +2769,9 @@ local function mountGui(gui,explicitParent,player)
 end
 function Library:CreateWindow(options)
     options=options or {}
+    resolveIcon(options.Icon)
+    assert(options.PixelIcons==nil or type(options.PixelIcons)=="boolean","PixelIcons must be a boolean")
+    assert(options.PixelDecorations==nil or type(options.PixelDecorations)=="boolean","PixelDecorations must be a boolean")
     assert(RunService:IsClient(),"CreateWindow must run on the Roblox client")
     local player=Players.LocalPlayer
     if options.Parent~=nil then assert(typeof(options.Parent)=="Instance","Parent must be a Roblox Instance") end
@@ -2512,13 +2800,14 @@ function Library:CreateWindow(options)
         Theme=theme,Accent=options.Accent and parseColor(options.Accent) or nil,Palette=copy(self.Themes[theme]),
         Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,TooltipDelay=tooltipDelay,TooltipMaxWidth=tooltipWidth,
         ReducedMotion=options.ReducedMotion == true,Scanlines=options.Scanlines == true,
+        PixelIcons=options.PixelIcons~=false,PixelDecorations=options.PixelDecorations~=false,
         NotificationsEnabled=options.Notifications~=false,LauncherEnabled=options.Launcher~=false,
         ErrorNotifications=options.ErrorNotifications~=false,
         SettingsEnabled=options.Settings~=false,AutoSave=options.AutoSave,StorageMode="memory",
         FloatSize=options.FloatSize or 64,FloatOpacity=options.FloatOpacity or 1,QuickActionsEnabled=options.QuickActions~=false,
         LauncherText=options.LauncherText or "UI",LauncherPosition=normalizedPosition(options.LauncherPosition or Vector2.new(.025,.1)),
         _locale=translations[options.Locale or "pt-BR"] or translations["pt-BR"],
-        _connections={},_skin=setmetatable({},{ __mode="k" }),_themeOverrides={},_rainbows={},_keybinds={},_destroyListeners={},
+        _connections={},_skin=setmetatable({},{ __mode="k" }),_icons={},_themeOverrides={},_rainbows={},_keybinds={},_destroyListeners={},
         _profiles={},_notifications={},_noticeCount=0,_nextId=0,_saveToken=0,_query="",
         _floatingButtons={},_floatingPositions={},_touchToggles={},
         _requestedSize=size,Controls={},Flags={},Tabs={},Destroyed=false,
@@ -2535,7 +2824,8 @@ function Library:CreateWindow(options)
         if adapter then window:SetStorage(adapter) end
     end
     window._initial={ Theme=theme,ThemeColors=copy(self.Themes[theme]),Accent=window.Accent,Scale=userScale,ReducedMotion=window.ReducedMotion,
-        Scanlines=window.Scanlines,Notifications=window.NotificationsEnabled,Launcher=window.LauncherEnabled,ToggleKey=toggle,
+        Scanlines=window.Scanlines,PixelIcons=window.PixelIcons,PixelDecorations=window.PixelDecorations,
+        Notifications=window.NotificationsEnabled,Launcher=window.LauncherEnabled,ToggleKey=toggle,
         FloatSize=window.FloatSize,FloatOpacity=window.FloatOpacity,QuickActions=window.QuickActionsEnabled,LauncherText=window.LauncherText,LauncherPosition=window.LauncherPosition }
     window.Gui=ui(window,"ScreenGui",{
         Name=guiName,ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=options.DisplayOrder or 50,
@@ -2557,32 +2847,45 @@ function Library:CreateWindow(options)
     window.TitleLabel=label(window,header,window.Title,{
         Position=U2(10,0),Size=UDim2.new(1,-120,1,0),TextSize=15,TextTruncate=Enum.TextTruncate.AtEnd,
     },"AccentText")
-    window.Icon=ui(window,"ImageLabel",{ Parent=header,Position=U2(6,5),Size=U2(24,24),BackgroundTransparency=1,Image="",Visible=false })
-    window:SetIcon(options.Icon)
-    button(window,window,header,"_",{ Position=UDim2.new(1,-98,0,4),Size=U2(27,26) },function() window:Minimize() end)
-    button(window,window,header,"[]",{ Position=UDim2.new(1,-66,0,4),Size=U2(27,26),TextSize=11 },function()
+    window._titleIcon=iconSlot(window,header,options.Icon,"retrobox",24,U2(6,5),"AccentText",function(visible)
+        window.TitleLabel.Position=U2(visible and 36 or 10,0)
+        window.TitleLabel.Size=UDim2.new(1,visible and -148 or -120,1,0)
+    end)
+    window.Icon=window._titleIcon.Frame
+    window.MinimizeButton=pixelButton(window,window,header,"_","minimize",{ Position=UDim2.new(1,-98,0,4),Size=U2(27,26) },function() window:Minimize() end)
+    window.MaximizeButton=pixelButton(window,window,header,"[]","maximize",{ Position=UDim2.new(1,-66,0,4),Size=U2(27,26),TextSize=11 },function()
         window._maximized=not window._maximized; window:Minimize(false); window:_layout()
     end)
-    window.CloseButton=button(window,window,header,"X",{ Position=UDim2.new(1,-34,0,4),Size=U2(27,26) },function()
+    window.CloseButton=pixelButton(window,window,header,"X","close",{ Position=UDim2.new(1,-34,0,4),Size=U2(27,26) },function()
         if options.DestroyOnClose==true then window:Destroy() else window:Hide() end
     end)
     window.SubtitleLabel=label(window,window.Main,window.Subtitle,{
         Position=U2(14,44),Size=UDim2.new(1,-28,0,22),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd,
     },"Muted")
+    window.PixelMotif=frame(window,window.Main,{Name="PixelMotif",Position=UDim2.new(1,-72,0,49),Size=U2(54,12),BackgroundTransparency=1})
+    for index,name in ipairs({"spark","retrobox","spark"}) do
+        iconSlot(window,window.PixelMotif,name,nil,12,U2((index-1)*18,0),"Muted")
+    end
     window.Nav=ui(window,"ScrollingFrame",{
         Parent=window.Main,BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
         CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,
     },{ ScrollBarImageColor3="Border" })
     window.NavLayout=list(window,window.Nav,8,false)
     window.Search=textbox(window,window.Main,"",{ PlaceholderText=window:_text("search"),TextSize=12 })
+    local searchPadding=window.Search:FindFirstChild("TextPadding")
+    window._searchIcon=iconSlot(window,window.Main,nil,"search",16,U2(0,0),"Muted",function(visible) searchPadding.PaddingLeft=UDim.new(0,visible and 30 or 8) end)
     window.PageHost=frame(window,window.Main,{ BackgroundTransparency=1 })
     window.Footer=frame(window,window.Main,{ Position=UDim2.new(0,10,1,-56),Size=UDim2.new(1,-20,0,48),BackgroundTransparency=1 })
     frame(window,window.Footer,{ Size=UDim2.new(1,0,0,1) },"Border")
     window.Profile=frame(window,window.Footer,{ Position=U2(2,1),Size=U2(182,46),BackgroundTransparency=1,Visible=options.ShowProfile~=false })
     window:_profile(player)
-    window.SettingsButton=button(window,window,window.Footer,"⚙",{
+    window.SettingsButton=pixelButton(window,window,window.Footer,"⚙","settings",{
         Position=U2(190,10),Size=U2(32,32),Font=Enum.Font.SourceSans,TextSize=24,Visible=window.SettingsEnabled,
     },function() window:ShowSettings() end)
+    window.PixelSeal=frame(window,window.Footer,{Name="PixelSeal",Position=U2(234,18),Size=U2(36,12),BackgroundTransparency=1})
+    for y=0,1 do for x=0,5 do
+        frame(window,window.PixelSeal,{Position=U2(x*6,y*6),Size=U2(4,4)},(x+y)%2==0 and "Accent" or "Muted")
+    end end
     window.Status=label(window,window.Footer,window:_text("ready").."  |  v"..self.Version,{
         Position=UDim2.new(1,-244,0,10),Size=U2(214,30),TextXAlignment=Enum.TextXAlignment.Right,TextSize=11,TextTruncate=Enum.TextTruncate.AtEnd,
     },"Muted")
@@ -2656,6 +2959,7 @@ function Library:CreateWindow(options)
         window:_releaseBindings(); window:_hideSearchResults()
     end)
     connect(window,window.Gui.Destroying,function() if not window.Destroyed then window:Destroy() end end)
+    window:SetPixelDecorations(window.PixelDecorations)
     window:_layout(); window:_applyTheme()
     if window.SettingsEnabled then window:_createSettings() end
     sharedWindows[window.Gui]=window
@@ -2679,6 +2983,8 @@ function Window:Destroy()
     for _,tab in ipairs(self.Tabs) do table.insert(tabs,tab) end
     for _,tab in ipairs(tabs) do tab:Destroy() end
     while #self._notifications>0 do self._notifications[1]:Destroy() end
+    local icons={}; for handle in pairs(self._icons) do icons[#icons+1]=handle end
+    for _,handle in ipairs(icons) do handle:Destroy() end
     self.Controls={}; self.Flags={}; self._keybinds={}; self._rainbows={}; self._skin={}
     self.Gui:Destroy()
     Library.Windows[self]=nil

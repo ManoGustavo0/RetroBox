@@ -10,10 +10,10 @@ local window = RetroBox:CreateWindow({
     Size = Vector2.new(790, 570),
     DestroyOnClose = false,
 })
-local home = window:CreateTab({ Title = "Início", Icon = ">" })
-local visual = window:CreateTab({ Title = "Visual", Icon = "*", Columns = 2 })
-local components = window:CreateTab({ Title = "Componentes", Icon = "+" })
-local logs = window:CreateTab({ Title = "Eventos", Icon = "#" })
+local home = window:CreateTab({ Title = "Início", Icon = "home" })
+local visual = window:CreateTab({ Title = "Visual", Icon = "palette", Columns = 2 })
+local components = window:CreateTab({ Title = "Componentes", Icon = "grid" })
+local logs = window:CreateTab({ Title = "Eventos", Icon = "terminal" })
 local log = logs:CreateSection("Saída"):AddConsole({ Title = "Console", Height = 250, MaxLines = 120 })
 
 local intro = home:CreateSection("Seu script, com outra cara")
@@ -62,7 +62,7 @@ outline.Thickness = 2
 outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 outline.Parent = circle
 
-local fov = visual:CreateSection("Exemplo / Campo de visão")
+local fov = visual:CreateSection({ Title = "Exemplo / Campo de visão", Icon = "target" })
 fov:AddLabel({ Title = "O círculo é uma demonstração visual.", Description = "Aperte RightShift para ocultar a janela e enxergar o círculo.", Height = 65 })
 fov:AddToggle({
     Id = "fov_visible", Title = "Mostrar círculo", Default = true, FireOnInit = true,
@@ -76,7 +76,7 @@ fov:AddSlider({
     Tooltip = "Muda o diâmetro do círculo em pixels. Você também pode digitar um valor no campo numérico.",
     Callback = function(value) circle.Size = UDim2.fromOffset(value, value) end,
 })
-local colors = visual:CreateSection({ Title = "Paleta / RGB", Side = "Right" })
+local colors = visual:CreateSection({ Title = "Paleta / RGB", Icon = "palette", Side = "Right" })
 colors:AddColorPicker({
     Id = "fov_color", Title = "Cor do FOV", Description = "Cor fixa, HSV, HEX ou RGB animado.",
     Tooltip = { Title = "Cor e RGB", Text = "Define a cor e a opacidade do contorno. Ative RGB para alternar as cores continuamente; a velocidade é medida em segundos por ciclo." },

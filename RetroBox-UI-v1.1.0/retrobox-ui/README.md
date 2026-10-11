@@ -24,7 +24,7 @@ local window = RetroBox:CreateWindow({
     ToggleKey = Enum.KeyCode.RightShift,
 })
 
-local tab = window:CreateTab({ Title = "Principal", Icon = "+" })
+local tab = window:CreateTab({ Title = "Principal", Icon = "home" })
 local category = tab:CreateSection("Controles")
 
 category:AddToggle({
@@ -60,6 +60,7 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Janela arrastável, redimensionável, minimizável e maximizável, com título, descrição, ícone e atalho.
 - Avatar e nomes no canto inferior esquerdo; engrenagem de personalização ao lado.
 - Seis temas: **Retro98, Terminal, GameBoy, Paper, Midnight e Monokai**, além de temas próprios.
+- Identidade em pixel art: 46 ícones embutidos, símbolo de caixa próprio, detalhes discretos e desenhos que acompanham os temas.
 - Bordas em relevo, fonte monoespaçada, cores de destaque e linhas CRT opcionais.
 - Abas, categorias, busca e colunas que se empilham em telas menores.
 - Aba Configurações automática, com lista de saves nomeados, salvar/carregar e confirmação antes de sobrescrever.
@@ -73,6 +74,30 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Atalhos flutuantes para toque, com arraste, tamanho/opacidade e posições salvas.
 - JSON, perfis e salvamento automático opcional.
 - Limpeza de eventos ao destruir controles ou a janela; `OnDestroy` para limpar eventos do seu próprio script.
+
+## Ícones em pixel art
+
+Use o nome do ícone em títulos, abas, categorias ou controles. O catálogo já está no arquivo Lua: os ícones padrão não precisam de imagens externas nem de novos downloads.
+
+```lua
+local window = RetroBox:CreateWindow({ Title = "Meu script", Icon = "retrobox" })
+local tab = window:CreateTab({ Title = "Visual", Icon = "eye" })
+local section = tab:CreateSection({ Title = "Cores", Icon = "palette" })
+local control = section:AddToggle({
+    Id = "visual", Title = "Mostrar recurso", Icon = "bolt",
+    Callback = function(enabled) print(enabled) end,
+})
+control:SetIcon("target")
+print(table.concat(RetroBox:GetIconNames(), ", "))
+```
+
+Há ícones padrão no título, nas abas sem ícone definido, nas categorias, na busca, na engrenagem, nas ações da janela, em dropdowns/checkboxes e em notificações/diálogos. Controles aceitam ícone opcional junto ao título. `Icon = false` remove um ícone na criação; `SetIcon(nil)` ou `SetIcon(false)` o remove depois. Emojis/textos antigos e imagens `rbxassetid://` continuam aceitos.
+
+Em Configurações → Aparência, o jogador pode desativar os ícones padrão ou os detalhes em pixel art. Essas preferências acompanham o save; ícones explicitamente escolhidos pelo dev permanecem visíveis. Também existe `PixelIcons = false`, `PixelDecorations = false`, `window:SetPixelIcons(bool)` e `window:SetPixelDecorations(bool)`.
+
+![Catálogo de ícones RetroBox](docs/pixel-icons.png)
+
+Veja [o guia de ícones](docs/ICONS.md), [a API](docs/API.md#ícones-em-pixel-art) e [icons.lua](examples/icons.lua), que permite navegar pelo catálogo e demonstra um desenho personalizado.
 
 ## Dicas ao passar o mouse
 
@@ -191,12 +216,13 @@ A aba Configurações permite digitar o nome do save, salvar e depois selecioná
 | [storage-adapter.lua](examples/storage-adapter.lua) | Arquivos, AutoSave e backend próprio |
 | [tooltips.lua](examples/tooltips.lua) | Dicas simples, personalizadas e alteradas por código |
 | [workflows.lua](examples/workflows.lua) | Saves, keybind combinado, atalhos, pesquisa, feedback e diálogos |
+| [icons.lua](examples/icons.lua) | Catálogo, troca de ícones, temas e registro de pixel art própria |
 | [executor-smoke.lua](tests/executor-smoke.lua) | Conferência na engine pelo executor |
 
-Loader e exemplos usam o raw deste repositório. Para carregar a atualização, `RetroBox.lua` nesse caminho precisa conter a versão 1.3.0 ou posterior. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
+Loader e exemplos usam o raw deste repositório. Para carregar a atualização, `RetroBox.lua` nesse caminho precisa conter a versão 1.4.0 ou posterior. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
 
 ## Validação e licença
 
-72 testes locais passaram, incluindo carregamento simulado do código raw, os seis exemplos, callbacks, saves entre execuções, entrada de mouse/teclado/toque, diálogos, busca, atalhos, cores, arquivos e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+82 testes locais passaram, incluindo carregamento simulado do código raw, os sete exemplos, callbacks, saves entre execuções, entrada de mouse/teclado/toque, diálogos, busca, atalhos, cores, arquivos e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026

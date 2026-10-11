@@ -1,8 +1,10 @@
--- Native smoke test: run in your executor; update the raw URL if you move the library.
+-- Native smoke test: publish RetroBox 1.4.0+, then run in your executor.
 local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 local window = RetroBox:CreateWindow({ Id = "executor-smoke", Title = "RetroBox / engine smoke", ReducedMotion = true, ConfigFolder = "RetroBox/EngineSmoke" })
-local section = window:CreateTab("Engine"):CreateSection("Todos os componentes")
-local toggle = section:AddToggle({ Id = "toggle", Default = false, Tooltip = "Esta função ativa o recurso de exemplo.",
+assert(type(RetroBox.GetIconNames)=="function", "Publish RetroBox 1.4.0+ before this smoke test")
+local section = window:CreateTab({Title="Engine",Icon="gamepad"}):CreateSection({Title="Todos os componentes",Icon="grid"})
+assert(window.Icon:GetAttribute("RetroBoxIcon")=="retrobox")
+local toggle = section:AddToggle({ Id = "toggle", Icon = "bolt", Default = false, Tooltip = "Esta função ativa o recurso de exemplo.",
     Keybind = Enum.UserInputType.MouseButton2, Floating = { Text = "TEST", MobileOnly = false } })
 local slider = section:AddSlider({ Id = "slider", Min = 0, Max = 10, Default = 5 })
 section:AddButton({ Title = "Button" })
@@ -30,6 +32,10 @@ assert(window:FocusControl(slider))
 -- Inspect X manually; Activated is a native signal, not a callable function.
 window:Hide(); assert(toggle.FloatingButton.Frame.Visible and window.Launcher.Visible); window:Show()
 for _, name in ipairs(RetroBox:GetThemeNames()) do window:SetTheme(name); task.wait(.08) end
+toggle:SetIcon("target"); assert(toggle.Icon:GetAttribute("RetroBoxIcon")=="target")
+window:SetPixelIcons(false); assert(not window.Icon.Visible and toggle.Icon.Visible)
+window:SetPixelDecorations(false); assert(not window.PixelMotif.Visible)
+window:SetPixelIcons(true); window:SetPixelDecorations(true)
 picker:SetRainbow(true); task.wait(.15); picker:SetRainbow(false)
 assert(picker:GetColor() == Color3.fromRGB(51, 102, 153))
 toggle:ShowTooltip(); assert(window.TooltipFrame.Visible)

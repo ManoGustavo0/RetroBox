@@ -328,6 +328,7 @@ test("autosave debounces changes into the latest file state",function()
     clearFiles(); assert(Mock.Connections==0)
 end)
 dofile("tests/workflows.lua")(Mock,Library,test)
+dofile("tests/icons.lua")(Mock,Library,test)
 test("diagnostic loader reports HTTP, compile and library errors",function()
     loadstring=load
     for _,response in ipairs({function() error("HTTP failed") end,function() return "local" end,function() return "return {}" end,function() return "" end}) do
@@ -347,7 +348,7 @@ test("all shipped examples use the public API and clean up",function()
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -356,7 +357,7 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==6 and #loaded==6)
+    assert(requests==7 and #loaded==7)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
             window:ShowSettings(true); window:ShowSettings(false)
