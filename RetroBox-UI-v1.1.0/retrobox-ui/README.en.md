@@ -2,7 +2,7 @@
 
 A standalone Luau GUI library for scripts running through Roblox client executors. Load the raw GitHub source, create components, and connect callbacks to your script.
 
-[Português](README.md) · [API](docs/API.md) · [GitHub publishing](docs/GITHUB.md) · [Validation](docs/VALIDATION.md)
+[Português](README.md) · [API](docs/API.md) · [Runtime integration](docs/INTEGRATION.md) · [GitHub publishing](docs/GITHUB.md) · [Validation](docs/VALIDATION.md)
 
 ![RetroBox visual concept](docs/visual-concept.png)
 
@@ -65,6 +65,12 @@ Version 1.5 adds live stat cards and Line/Bar/Progress/Sparkline charts, bounded
 
 Hiding/minimizing preserves work by default. Destroy cleans managed resources; long-running callbacks must cooperate with cancellation. See [the runtime guide](docs/RUNTIME.md) and [dashboard.lua](examples/dashboard.lua) for simulated data and a complete integration.
 
+Version 1.6 adds event-driven `AwaitAction` / `handle:Await` / `ctx:AwaitAction`, optional timeout and independent wait/action cancellation. Periodic tasks accept Group/Policy and reuse the action exclusion manager, with one pending iteration and an interval measured after completion. `Task.Status`, `GetStatus` and `Subscribe` expose requested/effective phases, deadlines, results and errors; `toggle:BindTask(job)` synchronizes activation and external stops.
+
+CreateWindow accepts a script-specific ConfigVersion and sequential Migrations, applied to a copy before validating or changing any controls. UnknownFlags supports Ignore/Preserve/Reject. See [INTEGRATION.md](docs/INTEGRATION.md) and [runtime-integration.lua](examples/runtime-integration.lua) for contracts and simulated collection/selling.
+
+Window dragging directly follows mouse/touch deltas. The UI launcher is draggable by its body or :: handle, with click suppression after movement. Hide/show and minimize/restore preserve tabs, Settings and scroll; the body immediately hides all content, including the search icon, while minimized. Editable fields share 12 px horizontal padding.
+
 ## Tooltips
 
 Pass `Tooltip = "Your explanation"` or `{Title = "Help", Text = "Your explanation", Delay = 0.4, MaxWidth = 320}` to a control. `Tip` is an alias. Hover opens the tip after 0.4 seconds by default. On touch devices, long-press the title or description, then tap the tip or elsewhere to dismiss it. Reading a tip does not run the control's callback.
@@ -94,7 +100,7 @@ The default GUI mount order is `gethui()` → `CoreGui` → `PlayerGui`, with pe
 
 File profiles are enabled automatically when `readfile`, `writefile` and `makefolder` are present. `isfile` and `isfolder` are optional. `ConfigFolder` is relative to the executor workspace; folders are created only when saving. Without the required file functions, profiles remain in session memory. Use `FileStorage=false` for memory only, or supply `Storage.Save/Load` to override the automatic adapter.
 
-Keep stable window and control IDs and a stable config folder. Create all controls before calling `window:LoadConfig("default")`. AutoSave does not automatically load. Loading calls callbacks unless `{Silent=true}` is supplied. With silent loading, synchronize your script through `GetFlag`.
+Keep stable window and control IDs and a stable config folder. Create controls, tasks, bindings and migrations before calling `window:LoadConfig("default")`. AutoSave does not automatically load. Loading calls callbacks unless `{Silent=true}` is supplied. Silent loading preserves observers and bindings: a toggle with BindTask can start its task after the whole batch applies. Profiles contain configuration rather than running workers or task status.
 
 The built-in Settings tab lists named saves and restores values, key/mouse assignments, colors, appearance and floating positions. A profile index preserves the list between executions without requiring listfiles. Optional listfiles discovers older saves; custom adapters can supply `List()`. Memory-only saves last while the window remains open. Loading a profile replays callbacks after applying values; keybind assignment does not execute its action.
 
@@ -108,8 +114,8 @@ print(window.StorageMode) -- file, memory or custom
 
 ## Examples and testing
 
-[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use this repository's existing source path. Publish version 1.5.0 or later there before running the dashboard; update the URLs if you move the source.
+[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), [runtime integration](examples/runtime-integration.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use the existing source path. Dashboard/integration require version 1.6.0 there; use the PR commit before merge or adjust URLs if you move the source.
 
-120 local logic tests passed, including eight examples and yielding workers/delayed tween doubles. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+151 local logic tests passed, including nine examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

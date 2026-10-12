@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.5.0
+# RetroBox UI API · 1.6.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -45,7 +45,7 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | `ErrorNotifications` | `true` | Avisos de erros em callbacks; respeita Notifications |
 | `ReducedMotion` / `Scanlines` | `false` | Reduzir animações e linhas CRT estáticas |
 | `Animations` | `{Enabled=true, Speed=1, Intensity="Normal"}` | Speed .25–4; Intensity Normal/Subtle/Off; preferência salva |
-| `SmoothDragging` / `DragResponsiveness` | `true` / `24` | Suavização do arraste; resposta 8–80; preferências salvas |
+| `SmoothDragging` / `DragResponsiveness` | `false` / `24` | Reposicionamento gerenciado, como Center; resposta 8–80; gesto manual direto |
 | `Debug` / `CallbackExecutor` | `false` / nil | Traceback/estado nos diagnósticos e adaptador síncrono de callbacks |
 | `DestroyOnClose` | `false` | X oculta e permite reabrir; true destrói |
 | `LauncherText` / `LauncherPosition` | `"UI"` / `Vector2.new(.025,.1)` | Texto de 1–16 bytes e posição relativa à tela (0–1) |
@@ -57,6 +57,9 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | `ConfigFolder` | `RetroBox/script-<Id codificado>` | Caminho relativo ao workspace do executor, até 180 bytes |
 | `AutoSave` | Desativado | Nome de perfil; debounce de 0.8 s |
 | `MaxConfigBytes` | `262144` | Limite; de 1024 a 1048576 bytes |
+| `ConfigVersion` | `1` | Esquema do script, independente da library; inteiro 1–65535 |
+| `Migrations` | `{}` | Mapa [versão de origem]=fn(profile, from, to); passos sequenciais |
+| `UnknownFlags` | `"Ignore"` | Ignore/Preserve/Reject para IDs desconhecidos no load |
 
 O perfil mostra a pessoa que abriu o script. A personalização é da interface; não muda a identidade da conta Roblox.
 
@@ -89,6 +92,7 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 | `CreateScope(options?)` / `Manage(resource, method?, key?)` | Recursos ligados à janela |
 | `CreateTask(options)` / `StartTask(id)` / `StopTask(id, reason?)` | Tarefas periódicas sem sobreposição |
 | `RunAction(options)` / `StopAll(reason?)` | Ações canceláveis e parada das tarefas/ações gerenciadas |
+| `AwaitAction(handle, options?)` | Espera por evento; retorna ok, resultado/motivo, status |
 | `CreateState(value, options?)` / `Computed(sources, calculate)` / `Condition(rule)` | Estados, valores derivados e condições |
 | `SetAnimations(options)` / `GetAnimations()` | Configuração e cópia das preferências |
 | `SetDragOptions({Smooth?, Responsiveness?})` | Preferências de arraste |
@@ -101,6 +105,7 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 | `GetConfigNames()` | Perfis da sessão + Storage.List; retorna array, err opcional |
 | `SetStorage(adapter)` | Tabela com Save e Load |
 | `Reset(silent?)` | Padrões de controles persistentes e janela |
+| `SetConfigVersion(version)` / `RegisterMigration(fromVersion, callback)` | Versionamento e conversão de perfis do script |
 | `Notify(options)` | Notificação ou nil |
 | `Dialog(options)` / `Confirm(options)` | Modal retrô; retorna handle ou nil se destruída |
 | `OnDestroy(callback)` | Hook síncrono após limpeza; listener desconectável |
@@ -111,6 +116,8 @@ Use `window:Metodo(...)`. `window.Flags` pode ser consultado; escrever diretamen
 Notify aceita Title, Content, Kind (success/error/warning/loading/normal), Icon e Duration (0.1–30 s). Há no máximo quatro notificações. O ícone automático acompanha Kind; Icon=false remove. O handle oferece Destroy(immediate?). Loading é um estado visual com ícone estático, sem loop de animação.
 
 Veja [RUNTIME.md](RUNTIME.md) para todos os contratos novos: cards/gráficos, recursos, tarefas, ações, bindings, dependências, lotes, animações e diagnóstico. A API tradicional de callbacks continua disponível.
+
+[INTEGRATION.md](INTEGRATION.md) descreve a 1.6: AwaitAction/handle:Await/ctx:AwaitAction, Task.Status/GetStatus/Subscribe, Group/Policy de CreateTask, Toggle:BindTask e migrações. A interface mantém a última aba ao ocultar/reabrir e o launcher pode ser arrastado pelo próprio corpo.
 
 ## Ícones em pixel art
 
@@ -151,6 +158,8 @@ Todos os constructors de Section aceitam `Icon`, opcional junto ao título. `Set
 `Id`, `Title`, `Description`, `Tooltip` (ou `Tip`), `Default`, `Callback`, `Visible` (true), `Disabled` (false), `Persist` e `FireOnInit` (false). Toggle, Button e Keybind também aceitam `Floating = true` ou opções de atalho flutuante.
 
 Controles com valor também aceitam `State`, `TwoWay` e `FireOnState`; `DependsOn` declara Visible/Enabled. `BindState`, `DependsOn`, `CreateScope`, `Manage` e `CreateTask` pertencem a Control. Veja [o contrato de bindings e recursos](RUNTIME.md).
+
+Toggle oferece `BindTask(job, {Initial?, OnStop?, FireCallback?, StopOnUnbind?})`; retorna scope. Binding acompanha flags silenciosas e perfis após a aplicação coordenada. [Detalhes](INTEGRATION.md#toggle-e-tarefa).
 
 IDs são únicos por janela. Use IDs explícitos para preservar configurações entre versões. O prefixo `__retrobox/` é reservado. IDs automáticos seguem a ordem de criação.
 

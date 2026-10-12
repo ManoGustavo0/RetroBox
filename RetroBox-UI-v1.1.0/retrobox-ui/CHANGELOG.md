@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.0 · 2026-10-12
+
+- AwaitAction, handle:Await e ctx:AwaitAction por evento, com resultado original, falha, timeout, cancelamento separado da espera/ação e proteção contra corrida/deadlock. OnCancel e timers/observadores com limpeza; máximo 256 esperas por janela.
+- CreateTask aceita Group/Policy e usa os mesmos grupos de RunAction. Uma iteração por tarefa, intervalo após conclusão, fila cancelável e políticas Queue/Ignore/Reject/Replace sem outro mutex.
+- Task.Status somente leitura, GetStatus/Subscribe, solicitação/execução efetiva, fases, prazo monotônico, resultado/erro e motivo de parada. Remaining é calculado sem notificações por frame.
+- Toggle:BindTask opcional e bidirecional, sincronização de falhas/paradas/restarts, política de intenção após parada e limpeza ao desfazer a ligação.
+- ConfigVersion independente por script, RegisterMigration/SetConfigVersion e migrações sequenciais antes da validação/aplicação em lote. Originais preservados em falha; UnknownFlags Ignore/Preserve/Reject e dados desconhecidos limitados.
+- Launcher UI arrastável pelo corpo ou pela barra :: com mouse/toque, limiar de clique, posição persistente, clamp após resize e Reset.
+- Hide/Show e minimizar/restaurar preservam aba, Configurações e rolagem. Body estrutural oculta lupa e conteúdo imediatamente ao recolher, inclusive durante animação.
+- Arraste manual calcula o delta na posição local da âncora, sem misturar AbsolutePosition/inset. Não salta, não faz relayout por movimento nem deixa inércia. SmoothDragging continua aceito para reposicionamento gerenciado, padrão false.
+- Padding horizontal central de 12 px em campos editáveis/dropdowns, respeitando ícones/setas e alinhamentos próprios.
+- Guia de integração, exemplo com inventário/saldo simulados, dashboard e smoke atualizados. 151 testes locais e nove exemplos passaram; conferência visual/entrada no executor real permanece pendente.
+
 ## 1.5.0 · 2026-10-12
 
 - ColorPicker separa HEX à esquerda e amostra à direita, preservando título externo, flags, campos e RGB.

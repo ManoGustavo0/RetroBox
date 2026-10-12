@@ -1,6 +1,8 @@
-# Runtime e componentes dinâmicos · 1.5.0
+# Runtime e componentes dinâmicos · 1.6.0
 
 A RetroBox continua em um único `RetroBox.lua`, com blocos internos para recursos, estados, tarefas, animações e componentes de dados. Os exemplos usam apenas dados simulados; a library não implementa lógica de jogos. [dashboard.lua](../examples/dashboard.lua) reúne os recursos abaixo.
+
+Para esperas, tarefas dentro de grupos, status observável, BindTask e migrações, veja [INTEGRATION.md](INTEGRATION.md) e [runtime-integration.lua](../examples/runtime-integration.lua).
 
 ## Cards de estatísticas
 
@@ -92,7 +94,7 @@ job:Stop("paused")
 
 CreateTask também existe no Control. Opções: Id único (1–128 bytes), Interval .03–86400 s (padrão 1), Callback(ctx), Start=false, Immediate=true, Once=false e OnError=Stop/Continue. Aceita Scope explícito na Window e CancelOnHide; tarefas do controle também aceitam CancelOnDisable/CancelOnFalse. Máximo 128 tarefas por janela.
 
-Métodos: Start (ok, err), Stop/Cancel(reason?), IsRunning(), SetInterval(seconds), Destroy(). Window tem StartTask(id), StopTask(id, reason?) e StopAll. IsRunning inclui uma execução cancelada que ainda está retornando. O intervalo conta a partir do término do callback; frames atrasados não geram uma sequência de chamadas acumuladas.
+Métodos: Start (ok, err), Stop/Cancel(reason?), IsRunning(), SetInterval(seconds), Destroy(), GetStatus() e Subscribe(). Status é State somente leitura; Group/Policy opcionais integram RunAction. Window tem StartTask(id), StopTask(id, reason?) e StopAll. IsRunning inclui uma execução cancelada que ainda está retornando. O intervalo conta a partir do término do callback; frames atrasados não geram uma sequência de chamadas acumuladas.
 
 O scheduler usa uma única conexão RenderStepped preguiçosa por janela, compartilhada com arraste e redraws; ela sai quando não há trabalho. Não há sobreposição, mesmo se o callback der yield. Parar e reiniciar espera o worker anterior retornar. Políticas de limpeza continuam valendo após um restart.
 
@@ -163,7 +165,7 @@ ImportConfig/LoadConfig continuam usando Schema=1; os novos campos Appearance.An
 
 Transições cobrem janela, minimizar/restaurar, botões, checkbox, dropdown, slider, abas, ColorPicker, seções, notificações e diálogos; cards/gráficos animam quando Animated=true. Tweens por propriedade/canal são cancelados em conflitos e liberados ao concluir/destruir. Modais mantêm a barreira de interação até a saída; toasts encolhem para acomodar a lista. Hover não reconstrói pixel art.
 
-SmoothDragging=true e DragResponsiveness=24 (8–80) suavizam o alvo no scheduler, sem tween novo ou recálculo de layout por movimento. SetDragOptions({Smooth?, Responsiveness?}) ajusta isso; ReducedMotion torna o arraste direto. O offset da pegada é preservado, só o dedo que iniciou arrasta e perda de foco/soltar encerra a captura. A posição é limitada à área disponível. Resize continua recalculando layout para adaptar controles.
+O gesto manual da barra acompanha diretamente a diferença de entrada e a posição local da âncora, sem relayout, salto por inset ou inércia ao soltar. SmoothDragging=false é o padrão; a opção true e DragResponsiveness=24 (8–80) continuam aceitas para reposicionamentos gerenciados como Center. ReducedMotion evita essa interpolação. Só o dedo que iniciou arrasta; foco perdido/soltar encerra a captura. Resize continua recalculando layout para adaptar controles.
 
 `tab:CreateSection({Title="Opções",Collapsible=true,Collapsed=false})` habilita cabeçalho expansível. `SetCollapsed(bool, instant?)` e `IsCollapsed()` controlam a seção. FocusControl expande o destino antes de navegar, sem executar uma função. Estado de recolhimento é transitório. Preferências de animação/arraste aparecem em Configurações → Aparência e acompanham saves/Reset.
 
@@ -173,4 +175,4 @@ Debug=false não coleta traceback ou snapshots. SetDebug(true) acrescenta Traceb
 
 `CallbackExecutor=function(callback,args,context) return callback(table.unpack(args,1,args.n)) end` é um adaptador opcional para instrumentar o contexto. Pode dar yield em workers, mas precisa executar e devolver os resultados do callback dentro da chamada; não agende a execução separadamente. SetCallbackExecutor(nil) restaura a execução padrão. A proteção xpcall, erros e tokens continuam na library. Não há API de um executor específico obrigatória.
 
-GetRuntimeStats retorna Tasks, RunningTasks, Actions, Animations, QueuedVisuals, Resources (registros diretos da janela) e FrameConnection. As contagens descrevem o runtime gerenciado, não todas as conexões da engine. Veja [VALIDATION.md](VALIDATION.md) para resultados e limites dos testes.
+GetRuntimeStats retorna Tasks, RunningTasks, Actions, WaitingActions (esperas de conclusão), Animations, QueuedVisuals, Resources (registros diretos da janela) e FrameConnection. As contagens descrevem o runtime gerenciado, não todas as conexões da engine. Veja [VALIDATION.md](VALIDATION.md) para resultados e limites dos testes.

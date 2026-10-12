@@ -1,10 +1,10 @@
-# Validação · RetroBox UI 1.5.0
+# Validação · RetroBox UI 1.6.0
 
 ## Executado
 
 - Compilação sintática de todos os arquivos Lua pelo subconjunto compatível com Lua 5.4.
-- **120 testes de lógica** com sinais, instâncias e serviços simulados.
-- Carregamento dos oito exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; o dashboard também inicia sua simulação e conclui uma ação com progresso.
+- **151 testes de lógica** com sinais, instâncias e serviços simulados; os 120 testes anteriores continuam na suíte.
+- Carregamento dos nove exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; dashboard inicia simulação/conclui ação, e runtime-integration carrega um perfil antigo, sincroniza toggles e executa coleta/venda no grupo compartilhado.
 - Loader com respostas inválidas, falha de download e erro de compilação.
 - GUI por gethui/CoreGui/PlayerGui: preferência, fallback quando falta permissão, Parent explícito, falhas e limpeza ao executar de novo.
 - Arquivos: detecção parcial, fallback para memória, pastas criadas sob demanda, restauração em outra instância da library, JSON inválido, falha de escrita, nomes sem colisões, caminhos inválidos, funções opcionais e debounce do AutoSave.
@@ -15,6 +15,9 @@
 - 17 testes de runtime: correção HEX/amostra, scopes/chaves/limpeza, políticas opt-in e restart, cópia/ciclos de State, lotes/perfis coerentes, bindings bidirecionais silenciosos/normalização, All/Any/Not, callbacks antigos descartados, tarefas com yield sem sobreposição, Stop All, ações Replace/Queue/Reject/Ignore e histórico limitado, botões canceláveis e diagnóstico/adapter/Debug.
 - Nove testes de dashboard: formatos, cards/status/histórico, retenção/pool, barras negativas/zero, Progress/Sparkline, desenho coalescido, parâmetros inválidos sem registro parcial, linhas responsivas/resize e falhas de formatador isoladas.
 - 12 testes de animação: conflitos por propriedade, Hide/Show rápidos e cliques bloqueados, ReducedMotion, preferências/perfis/Reset, collapse/search, destruição durante saída de toasts, barreira modal, drag sem relayout, minimize reversível, limpeza de componentes animados, mouse/toque/offset/foco/janelas independentes e transições de componentes durante Hide/Show.
+- Cinco regressões de interação: mouse/toque com origem/inset não zero e escalas .75/1/1.5, sem salto/inércia; launcher pelo corpo, limiar/clique, dedos independentes, save/reset/resize; aba/Configurações/scroll preservados; Body/lupa/auxiliares durante recolhimento; padding central.
+- 16 testes de integração: Await/resultados/falhas/Throw, timeout separado/CancelAction, contexto cancelável, conclusão anterior/destruição/deadlock, múltiplas esperas/timers, grupos/fila/políticas, próximo prazo após conclusão, status sem emissões por frame, toggles/paradas/erros/restarts/KeepRequested, listeners e scheduler com task.spawn imediato.
+- Dez testes de migração: renomear/converter em sequência, cópia/original/arquivo preservados em falha, passos ausentes/versão futura/corrupção/Migrate=false, flags desconhecidas/transitórias, valores/aparência atômicos, dados sem código/ciclos, rejeição de yield, saves antigos, BindTask após lote e limites de versões/payload.
 - Verificação dos links locais da documentação, fontes dentro do ZIP e integridade CRC.
 
 ```bash
@@ -31,7 +34,7 @@ python3 tools/build_package.py
 
 ## Limites
 
-Os testes não renderizam texto, bordas, rolagem ou imagens, nem executam eventos reais de mouse/toque. A medição do TextService, HTTP e funções de arquivo do executor são simulados. Workers podem dar yield e tweens podem concluir depois; o double não interpola propriedades visualmente entre frames. O arraste é calculado pela library e testado em frames simulados. Eles verificam lógica/limpeza, mas não comprovam desempenho, fluidez ou compatibilidade com um executor específico.
+Os testes não renderizam texto, bordas, rolagem ou imagens, nem executam eventos reais de mouse/toque. A medição do TextService, HTTP e funções de arquivo do executor são simulados. Workers podem dar yield e tweens podem concluir depois; o double não interpola propriedades visualmente entre frames. A geometria opcional exercita AbsolutePosition/AbsoluteSize/UIScale/origem, sem reproduzir toda a engine. As esperas usam coroutines estacionadas/retomadas, com timers e task.spawn imediato ou enfileirado simulados. Isso verifica lógica/limpeza, mas não comprova desempenho, fluidez ou compatibilidade com um executor específico.
 
 O double de Destroying também testa entrega adiada após remover a ancestralidade, conforme o comportamento descrito em [Deferred engine events](https://create.roblox.com/docs/scripting/events/deferred). Isso verifica ownership de animações, sem reproduzir todos os eventos da engine.
 
@@ -39,7 +42,7 @@ O double de Destroying também testa entrega adiada após remover a ancestralida
 
 ## Conferir no executor
 
-1. Publique a fonte 1.5.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo ou use um commit fixado para testar uma PR.
+1. Publique a fonte 1.6.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo ou use um commit fixado para testar uma PR.
 2. Execute o showcase e confira perfil, temas, textos, rolagem, arraste, redimensionamento, minimizar/maximizar e RightShift.
 3. Confira HSV, R/G/B, HEX, opacidade, RGB e velocidade. O círculo do showcase é um exemplo de ligação por callback.
 4. Na aba Configurações, crie saves com nomes próprios, selecione/carregue e confira callbacks/valores. Confirme e cancele sobrescritas. Execute de novo com os mesmos IDs/ConfigFolder e confira a lista de saves e os arquivos restaurados.
@@ -53,5 +56,9 @@ O double de Destroying também testa entrega adiada após remover a ancestralida
 12. Inicie, cancele e reinicie Processar demonstração, inclusive ao ocultar/minimizar. Stop All deve cancelar as ações e tarefas gerenciadas. Um callback longo que ignora tokens não pode ser encerrado à força; confira cooperatividade no seu script.
 13. Salve e carregue animações/arraste. Teste ReducedMotion, velocidade/intensidade, arraste próximo a bordas, foco perdido, mouse e um segundo dedo. Abra/feche repetidamente dropdowns, ColorPicker, categorias e modais; o fechamento do modal não deve acionar controles atrás dele.
 14. Crie um erro intencional num callback com Debug=true, veja GetDiagnostics/OnError e depois destrua/reexecute com o mesmo Id. Confira o fim de tasks, observadores, conexões próprias gerenciadas, gráficos e animações.
+15. Execute `examples/runtime-integration.lua`: ligue coleta/venda, confira exclusão no grupo, fases/contagem regressiva e desligue enquanto aguarda. Stop All deve desligar toggles por BindTask. Teste erro intencional e restart, Queue/Ignore/Reject/Replace, Await com timeout e cancelamento só da espera ou também da ação.
+16. Carregue o perfil antigo do exemplo; confira renomeação da flag e conversão do intervalo antes do início da tarefa. Salve na versão atual e carregue novamente. Teste arquivo corrompido/passos ausentes e confirme que o original e os controles permanecem intactos.
+17. Oculte/reabra em Configurações e numa aba rolada; recolha/restaure e confira a lupa oculta durante toda a transição. Arraste o launcher pelo corpo e por ::, clique sem mover, troque resolução e salve/reset sua posição.
+18. Arraste a barra com mouse/toque em escalas .75/1/1.5, vários pontos iniciais e resoluções. Pressionar sem mover não deve deslocar; soltar não deve continuar movimento. Confira dropdowns/inputs/campos numéricos e texto com margem consistente.
 
 `docs/visual-concept.png` e `docs/dashboard-concept.png` são ilustrações geradas a partir da paleta; não são capturas de tela da GUI em execução.
