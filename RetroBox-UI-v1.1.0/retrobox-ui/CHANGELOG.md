@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.0 · 2026-10-12
+
+- ColorPicker separa HEX à esquerda e amostra à direita, preservando título externo, flags, campos e RGB.
+- Arraste suavizado por delta de frame sem relayout por movimento; offset de mouse/toque preservado, limites e preferência de resposta. Minimizar/restaurar preserva a posição do cabeçalho.
+- Scopes de recursos com limpeza única, reversa e protegida, ownership de janela/controle e políticas opt-in de Hide/Disable/False. Ocultar/minimizar mantém trabalho ativo por padrão.
+- Tarefas periódicas idempotentes, sem sobreposição mesmo com yield, reinício cooperativo, tratamento de erros e Stop All.
+- Ações canceláveis, progresso/status/resultado, grupos Ignore/Reject/Queue/Replace e integração com botões. Replace espera o worker anterior devolver o controle.
+- Estados observáveis e derivados, bindings bidirecionais e condições All/Any/Not com explicação de indisponibilidade. SetFlags valida o lote antes de aplicar e os observadores recebem todas as flags juntas; load/reset usam o mesmo agrupamento.
+- StatCard com valor/unidade/subtítulo/tendência/status/formatos e sparkline; gráficos Line/Bar/Progress/Sparkline nativos, história limitada, escala automática/manual, labels/grid/legenda e pooling/throttle de desenho.
+- Animador central cancela conflitos e limpa tweens; abertura/ocultação, componentes, seções recolhíveis, avisos e modais. ReducedMotion respeitado; preferências de animação/arraste salvas em Schema=1, com perfis antigos compatíveis.
+- Diagnósticos limitados a 64 erros, Debug com traceback/estado, avisos repetidos limitados, OnError e adaptador opcional de callbacks sem dependência de executor específico.
+- Guia de runtime, dashboard simulado, smoke ampliado, conceito visual atualizado e documentação. 120 testes de lógica e oito exemplos passaram; validação visual e de executor real permanece pendente.
+
 ## 1.4.0 · 2026-10-11
 
 - Identidade visual em pixel art: símbolo de caixa, detalhes estáticos e 46 ícones embutidos que acompanham as paletas.
