@@ -36,9 +36,30 @@ local function signal()
 end
 Mock.signal=signal
 task={}
-function task.spawn(fn,...) table.insert(Mock.Queue,{ Due=Mock.Time,Fn=fn,Args=table.pack(...) }) end
-task.defer=task.spawn
-function task.delay(seconds,fn,...) table.insert(Mock.Queue,{ Due=Mock.Time+seconds,Fn=fn,Args=table.pack(...) }) end
+function task.spawn(fn,...)
+    local thread=type(fn)=="thread" and fn or coroutine.create(fn)
+    if Mock.ImmediateSpawns then
+        local ok,delay=coroutine.resume(thread,...); assert(ok,delay)
+        if coroutine.status(thread)~="dead" and type(delay)=="number" then table.insert(Mock.Queue,{Due=Mock.Time+delay,Thread=thread,Args=table.pack()}) end
+        return thread
+    end
+    table.insert(Mock.Queue,{Due=Mock.Time,Thread=thread,Args=table.pack(...)})
+    return thread
+end
+function task.defer(fn,...)
+    local thread=type(fn)=="thread" and fn or coroutine.create(fn)
+    table.insert(Mock.Queue,{Due=Mock.Time,Thread=thread,Args=table.pack(...)})
+    return thread
+end
+function task.delay(seconds,fn,...)
+    local thread=type(fn)=="thread" and fn or coroutine.create(fn)
+    table.insert(Mock.Queue,{Due=Mock.Time+seconds,Thread=thread,Args=table.pack(...)})
+    return thread
+end
+function task.cancel(thread)
+    for i=#Mock.Queue,1,-1 do if Mock.Queue[i].Thread==thread then table.remove(Mock.Queue,i) end end
+    if coroutine.status(thread)=="suspended" then coroutine.close(thread) end
+end
 function task.wait(seconds)
     if Mock.YieldingTasks then local _,main=coroutine.running(); if not main then return coroutine.yield(seconds or .03) end end
     Mock.Time=Mock.Time+(seconds or .03)
@@ -53,12 +74,11 @@ function Mock.pump(advance)
         end
         if not nextIndex then break end
         local item=table.remove(Mock.Queue,nextIndex)
-        if Mock.YieldingTasks then
-            item.Thread=item.Thread or coroutine.create(item.Fn)
-            local ok,delay=coroutine.resume(item.Thread,table.unpack(item.Args,1,item.Args.n))
-            assert(ok,delay)
-            if coroutine.status(item.Thread)~="dead" then item.Due=Mock.Time+(delay or 0); item.Args=table.pack(); table.insert(Mock.Queue,item) end
-        else item.Fn(table.unpack(item.Args,1,item.Args.n)) end
+        local ok,delay=coroutine.resume(item.Thread,table.unpack(item.Args,1,item.Args.n))
+        assert(ok,delay)
+        if coroutine.status(item.Thread)~="dead" and type(delay)=="number" then
+            item.Due=Mock.Time+delay; item.Args=table.pack(); table.insert(Mock.Queue,item)
+        end -- A raw yield parks until task.defer(thread, ...) resumes it.
         passes=passes+1; assert(passes<10000,"Runaway task queue")
     end
 end
@@ -112,6 +132,14 @@ TweenInfo={new=function(time) return {Time=time} end}
 
 local instanceMethods={}
 local instanceMT={ __type="Instance" }
+local function uiScale(object)
+    local scale=1
+    while object do
+        for _,child in ipairs(object._children) do if child.ClassName=="UIScale" then scale=scale*(child._props.Scale or 1) end end
+        object=object._props.Parent
+    end
+    return scale
+end
 local eventNames={Activated=true,InputBegan=true,InputChanged=true,InputEnded=true,Focused=true,FocusLost=true,Destroying=true,MouseEnter=true,MouseLeave=true,TouchLongPress=true}
 function instanceMT.__index(self,key)
     if instanceMethods[key] then return instanceMethods[key] end
@@ -122,9 +150,21 @@ function instanceMT.__index(self,key)
         local size=self._props.Size or UDim2.fromOffset(100,100)
         local parent=self._props.Parent
         local ps=parent and parent.AbsoluteSize or Mock.Viewport
+        if Mock.Geometry then
+            local parentScale=uiScale(parent); local own=uiScale(self)/parentScale
+            return Vector2.new((size.X.Scale*ps.X+size.X.Offset*parentScale)*own,(size.Y.Scale*ps.Y+size.Y.Offset*parentScale)*own)
+        end
         return Vector2.new(size.X.Scale*ps.X+size.X.Offset,size.Y.Scale*ps.Y+size.Y.Offset)
     end
-    if key=="AbsolutePosition" then return Vector2.new(0,0) end
+    if key=="AbsolutePosition" then
+        if not Mock.Geometry then return Vector2.new(0,0) end
+        if self.ClassName=="ScreenGui" or self.ClassName=="PlayerGui" then return Mock.GuiOrigin or Vector2.new(0,0) end
+        local parent=self._props.Parent; local origin=parent and parent.AbsolutePosition or Vector2.new(0,0)
+        local size=parent and parent.AbsoluteSize or Mock.Viewport; local scale=uiScale(parent)
+        local position=self._props.Position or UDim2.new(); local anchor=self._props.AnchorPoint or Vector2.new(0,0)
+        return Vector2.new(origin.X+position.X.Scale*size.X+position.X.Offset*scale-anchor.X*self.AbsoluteSize.X,
+            origin.Y+position.Y.Scale*size.Y+position.Y.Offset*scale-anchor.Y*self.AbsoluteSize.Y)
+    end
     if key=="AbsoluteCanvasSize" then return self.AbsoluteSize end
     if key=="AbsoluteContentSize" then return Vector2.new(100,100) end
     if key=="Text" then return "" end

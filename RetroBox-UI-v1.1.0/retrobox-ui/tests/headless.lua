@@ -332,6 +332,9 @@ dofile("tests/icons.lua")(Mock,Library,test)
 dofile("tests/runtime.lua")(Mock,Library,test)
 dofile("tests/dashboard.lua")(Mock,Library,test)
 dofile("tests/animation.lua")(Mock,Library,test)
+dofile("tests/interaction.lua")(Mock,Library,test)
+dofile("tests/integration.lua")(Mock,Library,test)
+dofile("tests/migrations.lua")(Mock,Library,test)
 test("diagnostic loader reports HTTP, compile and library errors",function()
     loadstring=load
     for _,response in ipairs({function() error("HTTP failed") end,function() return "local" end,function() return "return {}" end,function() return "" end}) do
@@ -351,7 +354,7 @@ test("all shipped examples use the public API and clean up",function()
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -360,7 +363,7 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==8 and #loaded==8)
+    assert(requests==9 and #loaded==9)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
             if window.Id=="dashboard-demo" then
@@ -370,6 +373,14 @@ test("all shipped examples use the public API and clean up",function()
                 assert(window.Controls.process:Press()); Mock.pump()
                 assert(window.Controls.process:GetAction().Result.Processed==20 and window:GetFlag("progress")==100)
                 window:StopAll(); assert(not window.Tasks.simulation.Requested)
+            end
+            if window.Id=="runtime-integration-demo" then
+                assert(window.Controls["legacy-profile"]:Press()); Mock.pump()
+                assert(window:GetFlag("collector") and math.abs(window:GetFlag("sell-interval")-1.5)<1e-9 and window.Tasks.collect.Requested,
+                    "Migrated flags/binding: "..tostring(window:GetFlag("collector")).." / "..tostring(window:GetFlag("sell-interval")).." / "..tostring(window.Tasks.collect.Requested))
+                assert(window:SetFlags({collector=true,seller=true})); Mock.Services.RunService.RenderStepped:Fire(.1); Mock.pump()
+                assert(window:GetFlag("money")>1000 and window.Tasks.sell.LastResult.Sold==3)
+                window:StopAll(); assert(not window:GetFlag("collector") and not window:GetFlag("seller"))
             end
             window:ShowSettings(true); window:ShowSettings(false)
             assert(window:ImportConfig(window:ExportConfig(),{Silent=true}))

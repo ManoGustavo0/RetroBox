@@ -14,6 +14,8 @@ Tooltip requer a fonte 1.2.0 ou posterior. Configurações/lista de saves, mouse
 
 O runtime gerenciado, cards, gráficos, estados, dependências e animações configuráveis requerem 1.5.0. `examples/dashboard.lua` demonstra a integração com dados simulados. Uma atualização em PR só aparece no raw de main depois de mesclada; para testar antes, troque main pelo hash completo do commit da PR.
 
+AwaitAction, tarefas dentro de grupos, status observável, BindTask e migrações ConfigVersion requerem 1.6.0. Os exemplos dashboard e runtime-integration deste pacote requerem essa versão. O caminho histórico `RetroBox-UI-v1.1.0/retrobox-ui` continua igual; não renomeie essa pasta apenas para atualizar a versão.
+
 ## Publicar em outro repositório
 
 1. Extraia o ZIP e abra a pasta `retrobox-ui`.

@@ -2,7 +2,7 @@
 
 Library de GUI em Luau para desenvolvedores de scripts executados no cliente Roblox por executores. Um arquivo independente, carregado pelo link **raw do GitHub**, com visual retrô e API para conectar componentes às funções do seu script.
 
-[English](README.en.md) · [API completa](docs/API.md) · [Runtime 1.5](docs/RUNTIME.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
+[English](README.en.md) · [API completa](docs/API.md) · [Runtime](docs/RUNTIME.md) · [Integração 1.6](docs/INTEGRATION.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
 
 ![Conceito visual da RetroBox UI](docs/visual-concept.png)
 
@@ -76,8 +76,11 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Limpeza de eventos ao destruir controles ou a janela; `OnDestroy` para limpar eventos do seu próprio script.
 - Cards de estatísticas ao vivo e gráficos Line/Bar/Progress/Sparkline com histórico limitado, escala automática/manual e elementos reaproveitados.
 - Scopes de recursos, tarefas periódicas idempotentes, ações com progresso/cancelamento e grupos Reject/Ignore/Queue/Replace.
+- Esperas de ações por evento, timeout e cancelamento independente; tarefas periódicas nos mesmos grupos, status observável e vínculo Toggle↔Task.
+- ConfigVersion próprio do script e migrações sequenciais de perfis antes de validar/aplicar, com política para flags desconhecidas.
 - Estados observáveis, bindings, dependências All/Any/Not e `SetFlags` coordenado, com callbacks após aplicar todos os valores.
-- Animador central, movimento suave e preferências salvas; ReducedMotion elimina transições. Categorias podem ser recolhidas.
+- Arraste direto de mouse/toque, launcher movido pelo corpo ou pela barra :: e navegação preservada ao reabrir/recolher.
+- Animador central e preferências salvas; ReducedMotion elimina transições. Categorias podem ser recolhidas.
 - Debug opcional com histórico limitado, traceback/estado e adaptador genérico de callbacks.
 
 ## Componentes dinâmicos e tarefas
@@ -91,13 +94,18 @@ local job = window:CreateTask({Id="sample",Interval=.5,Callback=function(ctx)
     total:Update(function(value) return value+1 end)
     history:AddPoint(total:Get())
 end})
-job:Start()
+local enabled = category:AddToggle({Id="sampling",Title="Amostrar",Default=false})
+enabled:BindTask(job)
 -- job:Stop() / window:StopAll() / window:Destroy()
 ```
 
 Ocultar ou minimizar mantém as tarefas ativas por padrão. Destruir limpa os recursos gerenciados; operações longas precisam respeitar o cancelamento cooperativo. A aba Aparência controla animações e arraste. Cards, gráficos e tarefas são dados temporários; os perfis continuam salvando opções e preferências.
 
 Veja [o guia do runtime](docs/RUNTIME.md) e [dashboard.lua](examples/dashboard.lua) para a demonstração com todas as visualizações, bindings, botões canceláveis, lote de flags, avisos e Stop All.
+
+A 1.6 permite `Group="shared", Policy="Queue"` em CreateTask, reutilizando a exclusão de RunAction. Cada tarefa mantém uma única iteração pendente; o intervalo começa após o término. `job.Status`, `job:GetStatus()` e `job:Subscribe()` expõem fases, próxima execução, resultado/erro e motivo de parada. `toggle:BindTask(job)` sincroniza início, parada externa e falhas; o toggle representa a solicitação, enquanto Status mostra a execução efetiva.
+
+`window:AwaitAction(handle, options)`, `handle:Await(options)` e `ctx:AwaitAction(handle, options)` retornam sucesso, resultado/motivo e status, sem polling. Timeout e cancelamento encerram só a espera por padrão; `CancelAction=true` também solicita cancelamento da operação. Veja [INTEGRATION.md](docs/INTEGRATION.md) e [runtime-integration.lua](examples/runtime-integration.lua) para os contratos e a demonstração de coleta/venda simuladas.
 
 ![Conceito visual dos componentes dinâmicos](docs/dashboard-concept.png)
 
@@ -166,7 +174,7 @@ local feature = category:AddToggle({
 
 Clique no campo do atalho e pressione uma tecla ou botão do mouse. Escape cancela; Backspace remove. Hold ativa enquanto pressionado; Toggle alterna. `feature.Keybind` permite consultar ou mudar o binding por código. O botão flutuante aparece em dispositivos com toque quando o menu está oculto/minimizado; arraste pela barra `::` para reposicioná-lo.
 
-O X **oculta** a janela por padrão. **Shift direito** e o botão `UI` permitem reabrir. Em Configurações, o jogador pode trocar o atalho da janela, habilitar o botão de reabrir, mudar seu texto e ajustar tamanho/opacidade dos atalhos. `DestroyOnClose = true` mantém a opção de destruir pelo X.
+O X **oculta** a janela por padrão. **Shift direito** e o botão `UI` permitem reabrir na última aba, inclusive Configurações, preservando a rolagem. O launcher `UI` aceita arraste pelo corpo ou pela barra :: com mouse/toque; mover mais de 4 px impede a abertura acidental. Em Configurações, o jogador pode trocar o atalho da janela, habilitar o botão de reabrir, mudar seu texto e ajustar tamanho/opacidade dos atalhos. `DestroyOnClose = true` mantém a opção de destruir pelo X.
 
 ## Diálogos e feedback
 
@@ -230,7 +238,9 @@ Use `Id`, IDs de controles e `ConfigFolder` estáveis para restaurar configuraç
 
 A aba Configurações permite digitar o nome do save, salvar e depois selecioná-lo na lista para carregar. Um índice mantém os nomes disponíveis em outra execução quando há armazenamento em arquivo. O save inclui valores, atribuições de teclas/mouse, cores/RGB, tema, escala e aparência/posições dos atalhos. O jogador recebe aviso de sucesso ou erro. Saves em memória duram enquanto a janela estiver aberta.
 
-`LoadConfig` chama os callbacks por padrão. `{ Silent = true }` evita os callbacks; nesse caso, sincronize sua lógica por `GetFlag`. Valores inválidos são rejeitados antes de alterar a janela. `AutoSave` usa debounce de 0.8 s e **não carrega** o perfil automaticamente.
+`LoadConfig` chama os callbacks por padrão. `{ Silent = true }` evita callbacks/OnChanged tradicionais, mantendo estados e bindings. Portanto, um toggle com BindTask pode iniciar sua tarefa mesmo em load silencioso, depois de aplicar todas as flags. Valores inválidos são rejeitados antes de alterar a janela. `AutoSave` usa debounce de 0.8 s e **não carrega** o perfil automaticamente.
+
+Use `ConfigVersion=2` e `Migrations={[1]=function(profile) ... end}` em CreateWindow para converter perfis da versão 1 para 2. O esquema é do seu script; perfis antigos sem ConfigVersion são tratados como 1. Migrações editam uma cópia e devem ser síncronas, sem efeitos externos. Falha de conversão/validação mantém valores e arquivo original intactos. `UnknownFlags="Ignore"/"Preserve"/"Reject"` define o tratamento de IDs desconhecidos; o padrão é Ignore. [INTEGRATION.md](docs/INTEGRATION.md) explica o pipeline, limites e salvamento após migração.
 
 `FileStorage = false` seleciona memória da sessão. `Storage = { Save = ..., Load = ... }` tem prioridade sobre os arquivos e permite um backend próprio. Veja [o exemplo de configurações](examples/storage-adapter.lua).
 
@@ -246,12 +256,13 @@ A aba Configurações permite digitar o nome do save, salvar e depois selecioná
 | [workflows.lua](examples/workflows.lua) | Saves, keybind combinado, atalhos, pesquisa, feedback e diálogos |
 | [icons.lua](examples/icons.lua) | Catálogo, troca de ícones, temas e registro de pixel art própria |
 | [dashboard.lua](examples/dashboard.lua) | Dados simulados, cards/gráficos, estados, tarefas, dependências e ações canceláveis |
+| [runtime-integration.lua](examples/runtime-integration.lua) | Grupo compartilhado, Await, status, BindTask e migração de perfil com dados simulados |
 | [executor-smoke.lua](tests/executor-smoke.lua) | Conferência na engine pelo executor |
 
-Loader e exemplos usam o raw deste repositório. O dashboard novo requer `RetroBox.lua` 1.5.0 ou posterior nesse caminho; ícones requerem 1.4.0. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
+Loader e exemplos usam o raw deste repositório. Dashboard e integração requerem `RetroBox.lua` 1.6.0 ou posterior nesse caminho; ícones requerem 1.4.0. Uma PR só atualiza main após o merge; use o commit da PR para testar antes. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
 
 ## Validação e licença
 
-120 testes locais passaram, incluindo carregamento simulado do código raw, os oito exemplos, gráficos, tarefas com yield/cancelamento, lotes, bindings, animações interrompidas, saves e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+151 testes locais passaram, incluindo carregamento simulado do código raw, os nove exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026
