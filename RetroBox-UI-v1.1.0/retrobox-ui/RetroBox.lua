@@ -1,4 +1,4 @@
--- RetroBox UI 1.4.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.5.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.4.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.5.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -65,6 +65,7 @@ local function connect(owner, signal, callback)
     return connection
 end
 local function call(window, callback, ...)
+    if window._dispatch then return window:_dispatch(callback,{Phase="Callback"},...) end
     if type(callback) ~= "function" or window.Destroyed or window._suppressCallbacks then return end
     local args = table.pack(...)
     if window._closing or window._syncCallbacks then
@@ -290,13 +291,16 @@ local translations = {
         scale="Escala da interface", motion="Reduzir animações", lines="Linhas CRT", launcher="Botão de reabrir",
         notices="Notificações", appearance="Aparência", accessibility="Interface e acessibilidade",
         pixelIcons="Ícones padrão em pixel art",pixelDecorations="Detalhes em pixel art",
+        loading="Carregando...",unavailable="Indisponível",noData="Sem dados",
+        animations="Animações",animationSpeed="Velocidade das animações",animationIntensity="Intensidade",smoothDragging="Arrasto suave",
+        intensitySubtle="Discreta",intensityNormal="Normal",intensityOff="Desativada",
         shortcut="Atalho da janela", configs="Configurações", profile="Nome da configuração", save="Salvar",
         load="Carregar", export="Exportar JSON", import="Importar JSON", reset="Restaurar padrões",
         ready="Pronto", fixed="Cor fixa", rainbow="RGB animado", cycle="s/ciclo", opacity="Opacidade",
         choose="Selecionar...", empty="Sem resultados", capture="Pressione uma tecla ou um botão do mouse...", saved="Configuração salva",
         loaded="Configuração carregada", error="Não foi possível", close="Fechar", about="RetroBox UI",
         profiles="Saves disponíveis", refresh="Atualizar lista", overwrite="Sobrescrever save?", confirm="Confirmar", cancel="Cancelar",
-        running="Executando...", success="Concluído", quickActions="Atalhos flutuantes", floatSize="Tamanho dos atalhos", floatOpacity="Opacidade dos atalhos",
+        running="Executando...",queued="Na fila...",cancelling="Cancelando...", success="Concluído", quickActions="Atalhos flutuantes", floatSize="Tamanho dos atalhos", floatOpacity="Opacidade dos atalhos",
         launcherText="Texto do botão de reabrir", memoryProfiles="Saves disponíveis enquanto esta janela estiver aberta.", fileProfiles="Saves gravados podem ser carregados em outra execução.",
     },
     ["en-US"] = {
@@ -304,13 +308,16 @@ local translations = {
         scale="Interface scale", motion="Reduce animations", lines="CRT scanlines", launcher="Reopen button",
         notices="Notifications", appearance="Appearance", accessibility="Interface and accessibility",
         pixelIcons="Default pixel art icons",pixelDecorations="Pixel art details",
+        loading="Loading...",unavailable="Unavailable",noData="No data",
+        animations="Animations",animationSpeed="Animation speed",animationIntensity="Intensity",smoothDragging="Smooth dragging",
+        intensitySubtle="Subtle",intensityNormal="Normal",intensityOff="Off",
         shortcut="Window shortcut", configs="Configurations", profile="Configuration name", save="Save",
         load="Load", export="Export JSON", import="Import JSON", reset="Restore defaults",
         ready="Ready", fixed="Fixed color", rainbow="Animated RGB", cycle="s/cycle", opacity="Opacity",
         choose="Select...", empty="No results", capture="Press a key or mouse button...", saved="Configuration saved",
         loaded="Configuration loaded", error="Could not complete", close="Close", about="RetroBox UI",
         profiles="Available saves", refresh="Refresh list", overwrite="Overwrite save?", confirm="Confirm", cancel="Cancel",
-        running="Running...", success="Completed", quickActions="Floating shortcuts", floatSize="Shortcut size", floatOpacity="Shortcut opacity",
+        running="Running...",queued="Queued...",cancelling="Cancelling...", success="Completed", quickActions="Floating shortcuts", floatSize="Shortcut size", floatOpacity="Shortcut opacity",
         launcherText="Reopen button text", memoryProfiles="Saves available while this window remains open.", fileProfiles="Saved profiles can be loaded in another execution.",
     },
 }
@@ -372,9 +379,25 @@ local function button(window, owner, parent, text, props, pressed)
     for k, v in pairs(props or {}) do properties[k] = v end
     local object = ui(window, "TextButton", properties, { BackgroundColor3="Surface", TextColor3="Text" })
     bevel(window, object, false)
+    if window._animate then
+        local function tone(role)
+            if window.Destroyed or owner.Destroyed or owner.Disabled then return end
+            if owner.Sections and window.ActiveTab==owner then role="Accent" end
+            window:_animate(object,{BackgroundColor3=window.Palette[role]},.08,"button",owner)
+        end
+        connect(owner,object.MouseEnter,function() tone("Highlight") end)
+        connect(owner,object.MouseLeave,function() tone("Surface") end)
+        connect(owner,object.InputBegan,function(input) if pointer(input) then tone("Inset") end end)
+        connect(owner,object.InputEnded,function(input) if pointer(input) then tone("Surface") end end)
+    end
     if pressed then
         connect(owner, object.Activated, function(...)
-            if not window.Destroyed and not owner.Destroyed and not owner.Disabled then pressed(...) end
+            local blocked=false; local ancestor=object.Parent
+            while ancestor do if ancestor==window.Main and window._shown==false then blocked=true; break end; ancestor=ancestor.Parent end
+            local section=owner._section and (owner._section._parentSection or owner._section)
+            if section and (section._collapsed or not section._visible) then blocked=true end
+            if window._dialog and owner~=window._dialog then blocked=true end
+            if not window.Destroyed and not owner.Destroyed and not owner.Disabled and not blocked then pressed(...) end
         end)
     end
     return object
@@ -393,6 +416,772 @@ local function list(window, parent, gap, horizontal)
         FillDirection=horizontal and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical,
         SortOrder=Enum.SortOrder.LayoutOrder })
 end
+
+-- BEGIN MANAGED RUNTIME: resources, diagnostics and one lazy frame scheduler.
+do
+    local Scope={}; Scope.__index=Scope
+    local cancelSignal={}; Library._cancelSignal=cancelSignal
+    local function dispose(scope,record)
+        if not record or record.Cleaned then return end
+        record.Cleaned=true
+        local ok,err=pcall(function()
+            if type(record.Method)=="function" then record.Method(record.Resource)
+            elseif record.Method then record.Resource[record.Method](record.Resource)
+            else record.Resource() end
+        end)
+        if not ok then
+            if scope._window then scope._window:_diagnose({Phase="Cleanup",Operation="Resource"},err)
+            else warn("[RetroBox] Resource cleanup: "..tostring(err)) end
+        end
+    end
+    function Scope:Add(resource,method,key)
+        assert(resource~=nil,"Resource cannot be nil")
+        if method==nil and type(resource)~="function" then
+            if typeof(resource)=="Instance" then method="Destroy"
+            else
+                for _,candidate in ipairs({"Destroy","Disconnect","Cancel","Stop"}) do
+                    local ok,value=pcall(function() return resource[candidate] end)
+                    if ok and type(value)=="function" then method=candidate; break end
+                end
+            end
+        end
+        assert(type(resource)=="function" or type(method)=="function" or type(method)=="string","Resource needs a cleanup function or Destroy/Disconnect/Cancel/Stop method")
+        if type(method)=="string" then assert(type(resource[method])=="function","Unknown resource cleanup method") end
+        local record={Resource=resource,Method=method,Key=key}
+        if self.Destroyed or self._cleaning then dispose(self,record); return resource end
+        if getmetatable(resource)==Scope and resource._parent==self then
+            self:Remove(resource._parentKey or resource,true); resource._parentKey=key or resource
+            key=resource._parentKey; record.Key=key
+        end
+        if key~=nil and self._keys[key] then self:Remove(key) end
+        self._next=self._next+1; record.Order=self._next
+        self._records[record]=true; if key~=nil then self._keys[key]=record end
+        return resource
+    end
+    function Scope:Remove(key,keep)
+        local record=self._keys[key]
+        if not record then return nil end
+        self._keys[key]=nil; self._records[record]=nil
+        if not keep then dispose(self,record) end
+        return record.Resource
+    end
+    function Scope:Clean()
+        if self._cleaning then return self end
+        self._cleaning=true
+        local records={}; for record in pairs(self._records) do records[#records+1]=record end
+        table.sort(records,function(a,b) return a.Order>b.Order end)
+        self._records={}; self._keys={}
+        for _,record in ipairs(records) do dispose(self,record) end
+        self._cleaning=false; return self
+    end
+    function Scope:Destroy()
+        if self.Destroyed then return end
+        self.Destroyed=true; self:Clean()
+        if self._parent then self._parent:Remove(self._parentKey or self,true); self._parent=nil end
+    end
+    function Scope:Child(options)
+        options=options or {}; assert(type(options)=="table","Scope options must be a table")
+        local policy={}
+        for _,name in ipairs({"CancelOnHide","CancelOnDisable","CancelOnFalse"}) do
+            assert(options[name]==nil or type(options[name])=="boolean","Scope policy must be a boolean: "..name)
+            policy[name]=options[name]
+        end
+        local child=setmetatable({_window=self._window,_owner=self._owner,_parent=self,Options=policy,_records={},_keys={},_next=0},Scope)
+        self:Add(child,"Destroy",child); return child
+    end
+    function Scope:GetCount() local n=0; for _ in pairs(self._records) do n=n+1 end; return n end
+    function Library:CreateScope()
+        return setmetatable({_records={},_keys={},_next=0,Options={}},Scope)
+    end
+    function Window:CreateScope(options)
+        assert(not self.Destroyed,"Window has been destroyed")
+        return self._resources:Child(options)
+    end
+    function Window:Manage(resource,method,key) return self._resources:Add(resource,method,key) end
+    function Control:CreateScope(options)
+        assert(not self.Destroyed,"Control has been destroyed")
+        return self._resources:Child(options)
+    end
+    function Control:Manage(resource,method,key) return self._resources:Add(resource,method,key) end
+    function Window:_cleanPolicy(policy,owner)
+        local function visit(scope)
+            local children={}; for record in pairs(scope._records) do
+                if getmetatable(record.Resource)==Scope then children[#children+1]=record.Resource end
+            end
+            for _,child in ipairs(children) do
+                if child.Options[policy] and (not owner or child._owner==owner) then child:Clean() else visit(child) end
+            end
+        end
+        visit(self._resources)
+    end
+    function Window:SetDebug(enabled)
+        assert(type(enabled)=="boolean","Debug must be a boolean"); self.Debug=enabled; return self
+    end
+    function Window:SetCallbackExecutor(executor)
+        assert(executor==nil or type(executor)=="function","CallbackExecutor must be a function or nil")
+        self.CallbackExecutor=executor; return self
+    end
+    function Window:GetDiagnostics() return copy(self._diagnostics) end
+    function Window:OnError(callback)
+        assert(type(callback)=="function","OnError expects a function")
+        local listener={Connected=true,Callback=callback}; self._errorListeners[listener]=true
+        local owner=self
+        function listener:Disconnect() self.Connected=false; owner._errorListeners[self]=nil end
+        self._resources:Add(listener,"Disconnect"); return listener
+    end
+    function Window:_diagnose(context,message,traceback)
+        if message==cancelSignal then return end
+        context=context or {}
+        local record={Time=os.clock(),ControlId=context.ControlId,Operation=context.Operation,Phase=context.Phase or "Callback",
+            Message=tostring(message):sub(1,2048),Traceback=self.Debug and traceback and tostring(traceback):sub(1,8192) or nil}
+        if self.Debug and context.State~=nil then record.State=copy(context.State) end
+        if self.Debug and not record.State then
+            local control=context.ControlId and self.Controls[context.ControlId]
+            local action=context.Operation and self._actions[context.Operation]
+            local job=context.Operation and self.Tasks[context.Operation]
+            if control then record.State={Value=control:GetValue(),Disabled=control.Disabled,Busy=control._busy==true}
+            elseif action then record.State={Status=action._status.Status,Progress=action._status.Progress}
+            elseif job then record.State={Running=job.Requested,Iteration=job.Iterations} end
+        end
+        self._diagnostics[#self._diagnostics+1]=record
+        while #self._diagnostics>64 do table.remove(self._diagnostics,1) end
+        local key=record.Phase..":"..tostring(record.ControlId or record.Operation or ""):sub(1,128)
+        self._warningTimes=self._warningTimes or {}
+        local last=self._warningTimes[key]; local report=not last or record.Time-last>=2
+        if report then
+            local count=0; for _ in pairs(self._warningTimes) do count=count+1 end
+            if count>=64 then self._warningTimes={} end
+            self._warningTimes[key]=record.Time
+            warn("[RetroBox] "..record.Phase.." "..(record.ControlId or record.Operation or "")..": "..record.Message)
+        end
+        if not self._reportingError then
+            self._reportingError=true
+            for listener in pairs(self._errorListeners) do if listener.Connected then pcall(listener.Callback,copy(record)) end end
+            self._reportingError=false
+            if report and self.ErrorNotifications and not self.Destroyed and not self._closing and self.NotificationHost then
+                self:Notify({Title=self:_text("error"),Content=record.Message,Kind="error"})
+            end
+        end
+    end
+    function Window:_protected(callback,context,...)
+        if type(callback)~="function" then return true end
+        local args=table.pack(...); local trace
+        local result=table.pack(xpcall(function()
+            if self.CallbackExecutor then return self.CallbackExecutor(callback,args,copy(context or {})) end
+            return callback(table.unpack(args,1,args.n))
+        end,function(err)
+            if err~=cancelSignal and self.Debug and debug and debug.traceback then trace=debug.traceback(tostring(err),2) end
+            return err
+        end))
+        if not result[1] and result[2]~=cancelSignal then self:_diagnose(context,result[2],trace) end
+        return table.unpack(result,1,result.n)
+    end
+    function Window:_dispatch(callback,context,...)
+        if type(callback)~="function" or self.Destroyed or self._suppressCallbacks then return end
+        local args=table.pack(...)
+        if self._closing or self._syncCallbacks then return self:_protected(callback,context,table.unpack(args,1,args.n)) end
+        task.spawn(function()
+            if not self.Destroyed then self:_protected(callback,context,table.unpack(args,1,args.n)) end
+        end)
+    end
+    function Window:_hasRuntimeWork()
+        if self._dragRender or next(self._visualQueue) then return true end
+        for _,job in pairs(self.Tasks) do if job.Requested or job.InFlight then return true end end
+        return false
+    end
+    function Window:_refreshRuntime()
+        local active=not self.Destroyed and self:_hasRuntimeWork()
+        if active and not self._runtimeConnection then
+            self._runtimeConnection=RunService.RenderStepped:Connect(function(dt) self:_runtimeStep(dt) end)
+        elseif not active and self._runtimeConnection then self._runtimeConnection:Disconnect(); self._runtimeConnection=nil end
+    end
+    function Window:_clampCenter(center)
+        local view=self.Root.AbsoluteSize
+        local size=self._logicalSize or self._requestedSize
+        local scale=self._actualScale or self.UserScale
+        local halfX=size.X*scale/2; local halfY=(self.Minimized and 42 or size.Y)*scale/2
+        return Vector2.new(clamp(center.X,halfX+8,math.max(halfX+8,view.X-halfX-8)),clamp(center.Y,halfY+24,math.max(halfY+24,view.Y-halfY-8)))
+    end
+    function Window:_moveWindow(center)
+        self:_cancelTrack(self.Main,"window",false)
+        if self._shown~=false then self.Main.BackgroundTransparency=0 end
+        center=self:_clampCenter(center); self._position=center
+        if self.SmoothDragging and not self.ReducedMotion then
+            self._dragRender={Target=center}; self:_refreshRuntime()
+        else self._dragRender=nil; self.Main.Position=U2(center.X,center.Y); self:_refreshRuntime() end
+    end
+    function Window:_runtimeStep(dt)
+        if self.Destroyed then self:_refreshRuntime(); return end
+        dt=finite(dt) and clamp(dt,0,.1) or 1/60
+        if self._dragRender then
+            local target=self:_clampCenter(self._dragRender.Target)
+            local current=Vector2.new(self.Main.Position.X.Offset,self.Main.Position.Y.Offset)
+            local alpha=1-math.exp(-self.DragResponsiveness*dt)
+            local nextPosition=current+(target-current)*alpha
+            if math.abs(target.X-nextPosition.X)+math.abs(target.Y-nextPosition.Y)<.15 then nextPosition=target; self._dragRender=nil end
+            self.Main.Position=U2(nextPosition.X,nextPosition.Y)
+        end
+        if self._stepTasks then self:_stepTasks() end
+        local now=os.clock(); local ready={}
+        for control,job in pairs(self._visualQueue) do if control.Destroyed then self._visualQueue[control]=nil elseif now>=job.Due then ready[#ready+1]={control,job} end end
+        for _,item in ipairs(ready) do
+            self._visualQueue[item[1]]=nil
+            self:_protected(item[2].Render,{ControlId=item[1].Id,Phase="Render"})
+        end
+        self:_refreshRuntime()
+    end
+    function Window:_requestVisual(control,render,rate)
+        local now=os.clock(); local interval=1/(rate or 20)
+        if not control._lastDraw or now-control._lastDraw>=interval then control._lastDraw=now; self:_protected(render,{ControlId=control.Id,Phase="Render"})
+        else self._visualQueue[control]={Due=control._lastDraw+interval,Render=function() control._lastDraw=os.clock(); render() end}; self:_refreshRuntime() end
+    end
+    function Window:SetDragOptions(options)
+        assert(type(options)=="table","Drag options must be a table")
+        local enabled=options.Smooth; if enabled==nil then enabled=self.SmoothDragging end
+        local responsiveness=options.Responsiveness or self.DragResponsiveness
+        assert(type(enabled)=="boolean" and finite(responsiveness) and responsiveness>=8 and responsiveness<=80,"Drag Smooth must be boolean and Responsiveness 8–80")
+        self.SmoothDragging=enabled; self.DragResponsiveness=responsiveness
+        if not enabled and self._dragRender then local t=self:_clampCenter(self._dragRender.Target); self.Main.Position=U2(t.X,t.Y); self._dragRender=nil; self:_refreshRuntime() end
+        self:_scheduleSave(); return self
+    end
+    -- Observable values use one bounded dispatch queue. Batches coalesce events
+    -- so derived UI observes a complete set of flags, never a partial update.
+    local State={}; State.__index=State
+    local queue,pending,dispatching,batchDepth,afterBatch={},{},false,0,{}
+    local function cloneState(value,seen,depth)
+        if typeof(value)~="table" then return value end
+        seen=seen or {}; depth=depth or 0
+        assert(depth<16 and not seen[value],"State data must be acyclic and at most 16 levels deep")
+        seen[value]=true; local result={}; local count=0
+        for key,item in pairs(value) do
+            count=count+1; assert(count<=1024,"State table exceeds 1024 entries")
+            assert(type(key)=="number" or type(key)=="string","State keys must be strings or numbers")
+            result[key]=cloneState(item,seen,depth+1)
+        end
+        seen[value]=nil; return result
+    end
+    local function notifyState(state,listener,value)
+        if not listener.Connected or state.Destroyed then return end
+        if state._window then state._window:_protected(listener.Callback,{Phase="State",Operation=state.Name},cloneState(value))
+        else
+            local ok,err=pcall(listener.Callback,cloneState(value))
+            if not ok then warn("[RetroBox] State observer: "..tostring(err)) end
+        end
+    end
+    local function drainStates()
+        if dispatching or batchDepth>0 then return end
+        dispatching=true; local iterations=0
+        while #queue>0 do
+            iterations=iterations+1
+            if iterations>128 then
+                local offender=queue[1]; queue={}; pending={}
+                if offender._window then offender._window:_diagnose({Phase="State",Operation=offender.Name},"Reactive update cycle exceeded 128 changes")
+                else warn("[RetroBox] Reactive update cycle exceeded 128 changes") end
+                break
+            end
+            local state=table.remove(queue,1); pending[state]=nil
+            if not state.Destroyed then
+                local value=state:Get(); local listeners={}
+                for listener in pairs(state._listeners) do listeners[#listeners+1]=listener end
+                for _,listener in ipairs(listeners) do notifyState(state,listener,value) end
+            end
+        end
+        dispatching=false
+    end
+    function Library:Batch(callback)
+        assert(type(callback)=="function","Batch expects a function")
+        batchDepth=batchDepth+1; local result=table.pack(pcall(callback)); batchDepth=batchDepth-1
+        if batchDepth==0 then local deferred=afterBatch; afterBatch={}; for _,fn in ipairs(deferred) do fn() end end
+        drainStates(); if not result[1] then error(result[2],2) end
+        return table.unpack(result,2,result.n)
+    end
+    function Library:_afterBatch(callback)
+        if batchDepth>0 then afterBatch[#afterBatch+1]=callback else callback() end
+    end
+    function Library:CreateState(value,options)
+        options=options or {}; assert(options.Validate==nil or type(options.Validate)=="function","State Validate must be a function")
+        local state=setmetatable({_value=cloneState(value),_listeners={},Validate=options.Validate,Name=options.Name or "State",_window=options.Window},State)
+        if state.Validate then local valid,reason=state.Validate(state:Get()); assert(valid,reason or "Invalid initial state") end
+        return state
+    end
+    function Library:_isState(value) return getmetatable(value)==State end
+    function State:Get() return cloneState(self._value) end
+    function State:_assign(value)
+        assert(not self.Destroyed,"State has been destroyed")
+        local nextValue=cloneState(value)
+        if self.Validate then local valid,reason=self.Validate(cloneState(nextValue)); assert(valid,reason or "Invalid state") end
+        if same(self._value,nextValue) then return false end
+        self._value=nextValue
+        if not pending[self] then pending[self]=true; queue[#queue+1]=self end
+        drainStates(); return true
+    end
+    function State:Set(value)
+        assert(not self.ReadOnly,"Computed states are read-only")
+        return self:_assign(value)
+    end
+    function State:Update(callback) assert(type(callback)=="function","Update expects a function"); return self:Set(callback(self:Get())) end
+    function State:Subscribe(callback,immediate)
+        assert(not self.Destroyed and type(callback)=="function","Subscribe needs a live state and function")
+        local owner=self; local listener={Connected=true,Callback=callback}
+        function listener:Disconnect() self.Connected=false; owner._listeners[self]=nil end
+        self._listeners[listener]=true
+        if immediate then notifyState(self,listener,self:Get()) end
+        return listener
+    end
+    function State:Destroy()
+        if self.Destroyed then return end
+        self.Destroyed=true
+        local listeners={}; for listener in pairs(self._listeners) do listeners[#listeners+1]=listener end
+        for _,listener in ipairs(listeners) do listener:Disconnect() end
+        if self._scope then self._scope:Destroy(); self._scope=nil end
+    end
+    function Window:CreateState(value,options)
+        assert(not self.Destroyed,"Window has been destroyed")
+        options=copy(options or {}); options.Window=self
+        local state=Library:CreateState(value,options)
+        local scope=self:CreateScope(); state._scope=scope
+        scope:Add(function() if not state.Destroyed then state:Destroy() end end)
+        return state
+    end
+    function Window:Computed(sources,calculate)
+        assert(type(sources)=="table" and #sources>=1 and #sources<=32 and type(calculate)=="function","Computed requires 1–32 states and a function")
+        for _,source in ipairs(sources) do assert(Library:_isState(source) and not source.Destroyed,"Computed source must be a live state") end
+        local function get() local values={}; for i,source in ipairs(sources) do values[i]=source:Get() end; return calculate(table.unpack(values,1,#sources)) end
+        local state=self:CreateState(get()); state.ReadOnly=true
+        local function update()
+            if state.Destroyed or self.Destroyed then return end
+            self:_protected(function() state:_assign(get()) end,{Phase="Computed",Operation=state.Name})
+        end
+        for _,source in ipairs(sources) do state._scope:Add(source:Subscribe(update),"Disconnect") end
+        return state
+    end
+    function Window:GetFlagState(id)
+        assert(type(id)=="string" and self.Controls[id] and not self.Controls[id].Destroyed,"Unknown flag: "..tostring(id))
+        local state=self._flagStates[id]
+        if not state then state=self:CreateState(self:GetFlag(id),{Name="Flag:"..id}); state.ReadOnly=true; self._flagStates[id]=state end
+        return state
+    end
+    function Window:_flagChanged(control)
+        local state=self._flagStates[control.Id]
+        if state and not state.Destroyed then state:_assign(control:GetValue()) end
+    end
+    function Window:SetFlags(values,options)
+        if self.Destroyed then return false,"Window has been destroyed" end
+        options=type(options)=="boolean" and {Silent=options} or options or {}
+        local ok,prepared=pcall(function()
+            assert(type(values)=="table","SetFlags expects a table")
+            local changes={}
+            for id,value in pairs(values) do
+                local control=self.Controls[id]
+                assert(type(id)=="string" and control and not control.Destroyed,"Unknown flag: "..tostring(id))
+                local normalized=control:_normalize(value)
+                if not same(control.Value,normalized) then changes[#changes+1]={Control=control,Value=normalized} end
+            end
+            table.sort(changes,function(a,b) return a.Control.Id<b.Control.Id end)
+            return changes
+        end)
+        if not ok then return false,tostring(prepared) end
+        Library:Batch(function()
+            for _,change in ipairs(prepared) do
+                change.Control._callbackEpoch=(change.Control._callbackEpoch or 0)+1
+                change.Control:SetValue(change.Value,true)
+            end
+        end)
+        if not options.Silent then for _,change in ipairs(prepared) do if not change.Control.Destroyed then change.Control:_emit() end end end
+        self:_scheduleSave(); return true
+    end
+    function Window:Condition(spec)
+        local sources,indices={},{}; local nodes=0
+        local function source(state)
+            if not indices[state] then sources[#sources+1]=state; indices[state]=#sources end
+            return indices[state]
+        end
+        local function compile(rule,seen,depth)
+            nodes=nodes+1; assert(nodes<=64 and depth<=8,"Condition exceeds 64 nodes or 8 levels")
+            if type(rule)=="boolean" then return function() return rule end end
+            if Library:_isState(rule) then local index=source(rule); return function(values) return not not values[index] end end
+            assert(type(rule)=="table" and not seen[rule],"Conditions must be acyclic tables, booleans or states")
+            seen[rule]=true
+            local evaluator
+            if rule.All or rule.Any then
+                assert(not(rule.All and rule.Any),"Condition cannot combine All and Any in the same node")
+                local children=rule.All or rule.Any; assert(type(children)=="table" and #children>=1,"All/Any needs conditions")
+                local tests={}; for i,child in ipairs(children) do tests[i]=compile(child,seen,depth+1) end
+                evaluator=function(values)
+                    for _,test in ipairs(tests) do local v=test(values); if rule.All and not v then return false elseif rule.Any and v then return true end end
+                    return rule.All~=nil
+                end
+            elseif rule.Not~=nil then local test=compile(rule.Not,seen,depth+1); evaluator=function(values) return not test(values) end
+            else
+                local state=rule.State or (rule.Flag and self:GetFlagState(rule.Flag))
+                assert(Library:_isState(state),"Condition needs Flag, State, All, Any or Not")
+                assert(rule.Test==nil or type(rule.Test)=="function","Condition Test must be a function")
+                local index=source(state)
+                evaluator=function(values)
+                    if rule.Test then return not not rule.Test(copy(values[index])) end
+                    if rule.Equals~=nil then return same(values[index],rule.Equals) end
+                    return not not values[index]
+                end
+            end
+            seen[rule]=nil; return evaluator
+        end
+        local evaluate=compile(spec,{},0)
+        if #sources==0 then local state=self:CreateState(evaluate({})); state.ReadOnly=true; return state end
+        return self:Computed(sources,function(...) return evaluate({...}) end)
+    end
+    function Control:BindState(state,options)
+        assert(not self.Destroyed and Library:_isState(state) and not state.Destroyed,"BindState requires a live state and control")
+        options=options or {}; local property=options.Property or "Value"
+        assert(property=="Value" or property=="Text" or property=="Subtitle" or property=="Visible" or property=="Enabled" or property=="Disabled","Unsupported binding property")
+        assert(options.Transform==nil or type(options.Transform)=="function","Binding Transform must be a function")
+        assert(not options.TwoWay or property=="Value" and not state.ReadOnly,"TwoWay needs a writable Value state")
+        local scope=self._resources:Child(); self._resources:Add(scope,"Destroy","binding:"..property)
+        local applying=false
+        local function apply(value)
+            if self.Destroyed then return end
+            self._window:_protected(function()
+                if options.Transform then value=options.Transform(value) end
+                applying=true
+                local ok,err=pcall(function()
+                    if property=="Visible" then self:SetVisible(not not value)
+                    elseif property=="Enabled" or property=="Disabled" then
+                        local disabled=property=="Enabled" and not value or property=="Disabled" and not not value
+                        self:SetDisabled(disabled)
+                        if options.Reason then
+                            if not self._dependencyTip then self._dependencyTip={Original=self:GetTooltip()} end
+                            local original=self._dependencyTip.Original
+                            self:SetTooltip(disabled and {Title=self.Title,Text=(original and original.Text.."\n\n" or "")..tostring(options.Reason)} or original)
+                        end
+                    elseif property=="Text" then assert(self.SetText,"This control does not support Text"); self:SetText(tostring(value))
+                    elseif property=="Subtitle" then assert(self.SetSubtitle,"This control does not support Subtitle"); self:SetSubtitle(tostring(value))
+                    else
+                        self:SetValue(value,not options.FireCallback)
+                        if options.TwoWay and not same(state:Get(),self:GetValue()) then state:Set(self:GetValue()) end
+                    end
+                end)
+                applying=false; if not ok then error(err) end
+            end,{ControlId=self.Id,Phase="Binding"})
+        end
+        scope:Add(state:Subscribe(apply),"Disconnect")
+        if options.TwoWay then scope:Add(self._window:GetFlagState(self.Id):Subscribe(function(value) if not applying and not state.Destroyed then state:Set(value) end end),"Disconnect") end
+        apply(state:Get()); return scope
+    end
+    function Control:DependsOn(options)
+        assert(type(options)=="table","DependsOn expects a table")
+        for _,property in ipairs({"Visible","Enabled"}) do if options[property]~=nil then
+            local state=self._window:Condition(options[property])
+            local binding=self:BindState(state,{Property=property,Reason=options.Reason})
+            binding:Add(state,"Destroy")
+        end end
+        return self
+    end
+
+    -- Cooperative contexts never force-terminate user threads. Replacements in
+    -- the same group wait for the cancelled worker to return before starting.
+    local function token(window,scope)
+        local context={Window=window,Resources=scope,Cancelled=false}
+        function context:IsCancelled() return self.Cancelled or window.Destroyed end
+        function context:ThrowIfCancelled() if self:IsCancelled() then error(cancelSignal,0) end end
+        function context:Manage(resource,method,key) return self.Resources:Add(resource,method,key) end
+        function context:Cancel(reason)
+            if self.Cancelled then return end
+            self.Cancelled=true; self.Reason=reason or "cancelled"; self.Resources:Destroy()
+        end
+        return context
+    end
+    function Window:CreateTask(options)
+        assert(not self.Destroyed and type(options)=="table","CreateTask requires options and a live window")
+        local id=options.Id; local interval=options.Interval or 1
+        assert(type(id)=="string" and #id>=1 and #id<=128 and not self.Tasks[id],"Task Id must be unique and 1–128 bytes")
+        assert(finite(interval) and interval>=.03 and interval<=86400,"Task Interval must be .03–86400 seconds")
+        assert(type(options.Callback)=="function","Task Callback is required")
+        assert(options.OnError==nil or options.OnError=="Stop" or options.OnError=="Continue","Task OnError is Stop or Continue")
+        assert(options.Scope==nil or getmetatable(options.Scope)==Scope and not options.Scope.Destroyed,"Task Scope must be a live resource scope")
+        local count=0; for _ in pairs(self.Tasks) do count=count+1 end; assert(count<128,"Window task limit is 128")
+        local owner=self
+        local job={Id=id,Interval=interval,Callback=options.Callback,Options=options,Requested=false,InFlight=false,Iterations=0,Generation=0}
+        local policyScope=(options.Scope or self._resources):Child({CancelOnHide=options.CancelOnHide==true,CancelOnDisable=options.CancelOnDisable==true,CancelOnFalse=options.CancelOnFalse==true})
+        policyScope:Add(function() job:Stop("scope cleaned") end,nil,"stop")
+        function job:Start()
+            if self.Destroyed or owner.Destroyed or policyScope.Destroyed then return false,"Task has been destroyed" end
+            if self.Requested then return true end
+            if not policyScope._keys.stop then policyScope:Add(function() self:Stop("scope cleaned") end,nil,"stop") end
+            self.Requested=true; self.Generation=self.Generation+1
+            self.Next=os.clock()+(options.Immediate==false and self.Interval or 0)
+            owner:_refreshRuntime(); return true
+        end
+        function job:Stop(reason)
+            self.Requested=false; self.Generation=self.Generation+1
+            if self.Context then self.Context:Cancel(reason) end
+            owner:_refreshRuntime(); return self
+        end
+        job.Cancel=job.Stop
+        function job:IsRunning() return self.Requested or self.InFlight end
+        function job:SetInterval(value)
+            assert(finite(value) and value>=.03 and value<=86400,"Task Interval must be .03–86400")
+            self.Interval=value; self.Next=os.clock()+value; return self
+        end
+        function job:Destroy()
+            if self.Destroyed then return end
+            self:Stop("destroyed"); self.Destroyed=true
+            policyScope:Destroy(); owner.Tasks[id]=nil; owner._resources:Remove("task:"..id,true)
+        end
+        self.Tasks[id]=job; self:Manage(job,"Destroy","task:"..id)
+        if options.Start then job:Start() end
+        return job
+    end
+    function Control:CreateTask(options)
+        assert(not self.Destroyed,"Control has been destroyed")
+        assert(type(options)=="table","CreateTask requires options")
+        local original=options; options={}; for k,v in pairs(original) do options[k]=v end
+        options.Scope=self._resources; options.ControlId=self.Id
+        local job=self._window:CreateTask(options); self:Manage(job,"Destroy","task:"..job.Id); return job
+    end
+    function Window:_stepTasks()
+        local now=os.clock(); local ready={}
+        for _,job in pairs(self.Tasks) do if job.Requested and not job.InFlight and now>=job.Next then ready[#ready+1]=job end end
+        for _,job in ipairs(ready) do
+            if not job.Destroyed and job.Requested and not job.InFlight then
+                job.InFlight=true; local generation=job.Generation
+                local scope=self:CreateScope(); local context=token(self,scope); job.Context=context
+                task.spawn(function()
+                    local ok,result,reason=true,nil,nil
+                    if not context:IsCancelled() and not job.Destroyed then
+                        ok,result,reason=self:_protected(job.Callback,{ControlId=job.Options.ControlId,Operation=job.Id,Phase="Task"},context)
+                    end
+                    scope:Destroy(); job.Context=nil; job.InFlight=false; job.Iterations=job.Iterations+1
+                    if not ok and result~=cancelSignal then
+                        job.LastError=tostring(result)
+                        if job.Options.OnError~="Continue" then job.Requested=false end
+                    end
+                    if job.Options.Once then job.Requested=false end
+                    if job.Generation==generation then job.Next=os.clock()+job.Interval end
+                    if not self.Destroyed and not job.Destroyed then self:_refreshRuntime() end
+                end)
+            end
+        end
+    end
+    function Window:StartTask(id) local job=self.Tasks[id]; assert(job,"Unknown task: "..tostring(id)); return job:Start() end
+    function Window:StopTask(id,reason) local job=self.Tasks[id]; assert(job,"Unknown task: "..tostring(id)); job:Stop(reason); return self end
+    local function actionUpdate(handle,changes)
+        for key,value in pairs(changes) do handle._status[key]=value end
+        if not handle.Status.Destroyed then handle.Status:_assign(handle._status) end
+    end
+    function Window:_finishAction(handle,status,result,err)
+        if handle.Finished then return end
+        handle.Finished=true; handle.Result=result; handle.Error=err
+        handle.Context.Resources:Destroy()
+        local safeResult
+        if result~=nil then local ok,value=pcall(cloneState,result); if ok then safeResult=value end end
+        handle._status.Result=safeResult; handle._status.Error=err and tostring(err):sub(1,2048) or nil
+        actionUpdate(handle,{Status=status,Message=err and tostring(err):sub(1,2048) or handle._status.Message,Progress=status=="Completed" and 1 or handle._status.Progress})
+        local group=self._groups[handle.Group]
+        if group and group.Active==handle then group.Active=nil end
+        self._actions[handle.Id]=nil
+        self._actionHistory[#self._actionHistory+1]=handle
+        while #self._actionHistory>32 do table.remove(self._actionHistory,1):Destroy() end
+        if not self.Destroyed then
+            self:_dispatch(handle.Options.OnComplete,{Operation=handle.Id,Phase="Complete"},handle)
+            if group and not group.Active then self:_startNextAction(group) end
+        end
+    end
+    function Window:_startNextAction(group)
+        if self.Destroyed or group.Active then return end
+        local handle
+        while #group.Queue>0 do
+            local candidate=table.remove(group.Queue,1)
+            if not candidate.Finished and not candidate.Context:IsCancelled() then handle=candidate; break end
+        end
+        if not handle then self._groups[group.Id]=nil; return end
+        group.Active=handle; actionUpdate(handle,{Status="Running"})
+        task.spawn(function()
+            local ok,result,reason=true,nil,nil
+            if not handle.Context:IsCancelled() then
+                ok,result,reason=self:_protected(handle.Options.Callback,{ControlId=handle.Options.ControlId,Operation=handle.Id,Phase="Action"},handle.Context)
+            end
+            if handle.Context:IsCancelled() or result==cancelSignal then self:_finishAction(handle,"Cancelled",nil,handle.Context.Reason)
+            elseif not ok or result==false then self:_finishAction(handle,"Failed",nil,ok and (reason or "Action returned false") or result)
+            else self:_finishAction(handle,"Completed",result) end
+        end)
+    end
+    function Window:RunAction(options)
+        if self.Destroyed then return nil,"Window has been destroyed" end
+        assert(type(options)=="table" and type(options.Callback)=="function","RunAction needs a Callback")
+        local groupId=options.Group or options.Id or "default"
+        local policy=options.Policy or "Reject"
+        assert(type(groupId)=="string" and #groupId>=1 and #groupId<=128,"Action Group must be 1–128 bytes")
+        assert(policy=="Ignore" or policy=="Reject" or policy=="Queue" or policy=="Replace","Action Policy must be Ignore, Reject, Queue or Replace")
+        local group=self._groups[groupId]
+        if group and group.Active then
+            if policy=="Ignore" or policy=="Reject" then return nil,policy=="Ignore" and "ignored" or "Group is busy: "..groupId end
+            if policy=="Replace" then
+                group.Active:Cancel("replaced")
+                local queued={table.unpack(group.Queue)}; for _,entry in ipairs(queued) do entry:Cancel("replaced") end
+            end
+            if #group.Queue>=32 then return nil,"Action queue limit is 32 per group" end
+        end
+        self._nextAction=self._nextAction+1
+        local id=options.Id or "action/"..self._nextAction
+        assert(type(id)=="string" and #id>=1 and #id<=128,"Action Id must be 1–128 bytes")
+        if self._actions[id] then return nil,"Action Id is already running: "..id end
+        local count=0; for _ in pairs(self._groups) do count=count+1 end
+        if not group and count>=32 then return nil,"Action group limit is 32" end
+        group=group or {Id=groupId,Queue={}}; self._groups[groupId]=group
+        local owner=self; local scope=self:CreateScope({CancelOnHide=options.CancelOnHide==true})
+        local handle={Id=id,Group=groupId,Options=options,_status={Status="Queued",Step=0,Total=0,Progress=0,Message=""}}
+        handle.Status=self:CreateState(handle._status,{Name="Action:"..id})
+        handle.Status.ReadOnly=true
+        handle.Context=token(self,scope); handle.Context.Action=handle
+        function handle:GetStatus() return copy(self._status) end
+        function handle:Subscribe(callback,immediate) return self.Status:Subscribe(callback,immediate) end
+        function handle:Cancel(reason)
+            if self.Finished then return self end
+            self.Context:Cancel(reason)
+            if self.Finished then return self end
+            if self._status.Status=="Queued" then
+                local index=table.find(group.Queue,self); if index then table.remove(group.Queue,index) end
+                owner:_finishAction(self,"Cancelled",nil,self.Context.Reason)
+            else actionUpdate(self,{Status="Cancelling",Message=self.Context.Reason}) end
+            return self
+        end
+        function handle:Destroy()
+            if self.Destroyed then return end
+            self:Cancel("destroyed"); self.Destroyed=true; self.Status:Destroy()
+            owner._resources:Remove("action:"..id,true)
+        end
+        function handle.Context:SetProgress(step,total,message)
+            self:ThrowIfCancelled()
+            assert(finite(step) and finite(total) and total>0 and step>=0 and step<=total,"Progress requires 0 <= step <= total and total > 0")
+            actionUpdate(handle,{Step=step,Total=total,Progress=step/total,Message=tostring(message or handle._status.Message):sub(1,2048)})
+            owner:_dispatch(options.OnProgress,{Operation=id,Phase="Progress"},handle:GetStatus(),handle)
+        end
+        function handle.Context:SetMessage(message)
+            self:ThrowIfCancelled(); actionUpdate(handle,{Message=tostring(message):sub(1,2048)}); return self
+        end
+        scope:Add(function() if not handle.Finished then handle:Cancel("scope cleaned") end end)
+        self._actions[id]=handle; self:Manage(handle,"Destroy","action:"..id)
+        group.Queue[#group.Queue+1]=handle; self:_startNextAction(group)
+        return handle
+    end
+    function Window:StopAll(reason)
+        reason=reason or "stop all"
+        for _,job in pairs(self.Tasks) do job:Stop(reason) end
+        local actions={}; for _,handle in pairs(self._actions) do actions[#actions+1]=handle end
+        for _,handle in ipairs(actions) do handle:Cancel(reason) end
+        return self
+    end
+
+    function Window:GetRuntimeStats()
+        local stats={Tasks=0,RunningTasks=0,Actions=0,Animations=0,QueuedVisuals=0,Resources=self._resources:GetCount(),FrameConnection=self._runtimeConnection~=nil}
+        for _,t in pairs(self.Tasks) do stats.Tasks=stats.Tasks+1; if t.Requested or t.InFlight then stats.RunningTasks=stats.RunningTasks+1 end end
+        for _ in pairs(self._actions or {}) do stats.Actions=stats.Actions+1 end
+        for _ in pairs(self._visualQueue) do stats.QueuedVisuals=stats.QueuedVisuals+1 end
+        for _,tracks in pairs(self._tweens or {}) do for _ in pairs(tracks) do stats.Animations=stats.Animations+1 end end
+        return stats
+    end
+end
+-- END MANAGED RUNTIME
+
+-- BEGIN CENTRAL ANIMATOR: conflict cancellation, accessibility and ownership.
+do
+    local function settings(options,current)
+        assert(options==nil or type(options)=="table","Animations must be a table")
+        options=options or {}; current=current or {Enabled=true,Speed=1,Intensity="Normal"}
+        local result={Enabled=options.Enabled,Speed=options.Speed or current.Speed,Intensity=options.Intensity or current.Intensity}
+        if result.Enabled==nil then result.Enabled=current.Enabled end
+        assert(type(result.Enabled)=="boolean","Animations Enabled must be a boolean")
+        assert(finite(result.Speed) and result.Speed>=.25 and result.Speed<=4,"Animation Speed must be .25–4")
+        assert(result.Intensity=="Normal" or result.Intensity=="Subtle" or result.Intensity=="Off","Animation Intensity is Normal, Subtle or Off")
+        return result
+    end
+    Library._animationSettings=settings
+    local function within(object,root)
+        if not root then return true end
+        local parent=object
+        while parent do if parent==root then return true end; parent=parent.Parent end
+        return false
+    end
+    function Window:_cancelTrack(object,channel,finish)
+        local tracks=self._tweens[object]; local record=tracks and tracks[channel]
+        if not record then return end
+        tracks[channel]=nil; if not next(tracks) then self._tweens[object]=nil end
+        if record.Connection then record.Connection:Disconnect(); record.Connection=nil end
+        record.Tween:Cancel(); record.Tween:Destroy()
+        if finish and object.Parent then
+            for key,value in pairs(record.Goals) do object[key]=value end
+            if record.Complete and not self.Destroyed then record.Complete() end
+        end
+    end
+    function Window:_cancelAnimations(root,finish)
+        local targets={}
+        for object,tracks in pairs(self._tweens) do
+            for channel,record in pairs(tracks) do
+                if within(object,root) or record.Owner and record.Owner.Frame==root then targets[#targets+1]={object,channel} end
+            end
+        end
+        for _,target in ipairs(targets) do self:_cancelTrack(target[1],target[2],finish) end
+    end
+    function Window:_animate(object,goals,duration,channel,owner,complete)
+        if self.Destroyed or self._closing or not object.Parent then return end
+        channel=channel or "style"; local tracks=self._tweens[object]
+        local prior=tracks and tracks[channel]
+        if prior and same(prior.Goals,goals) then return prior.Tween end
+        local conflicts={}
+        for name,record in pairs(tracks or {}) do
+            local overlap=name==channel
+            for key in pairs(goals) do if record.Goals[key]~=nil then overlap=true end end
+            if overlap then conflicts[#conflicts+1]=name end
+        end
+        for _,name in ipairs(conflicts) do self:_cancelTrack(object,name,false) end
+        local motion=self.Animations.Enabled and not self.ReducedMotion and self.Animations.Intensity~="Off"
+        if not motion or duration==0 then
+            for key,value in pairs(goals) do object[key]=value end
+            if complete then complete() end
+            return
+        end
+        local time=(duration or .12)/self.Animations.Speed
+        if self.Animations.Intensity=="Subtle" then time=time*.75 end
+        local tween=TweenService:Create(object,TweenInfo.new(time,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),goals)
+        local record={Tween=tween,Goals=goals,Owner=owner,Complete=complete}
+        self._tweens[object]=self._tweens[object] or {}; self._tweens[object][channel]=record
+        record.Connection=tween.Completed:Connect(function(state)
+            if self._tweens[object] and self._tweens[object][channel]==record then
+                self._tweens[object][channel]=nil; if not next(self._tweens[object]) then self._tweens[object]=nil end
+                record.Connection:Disconnect(); record.Connection=nil; tween:Destroy()
+                if state==Enum.PlaybackState.Completed and complete and not self.Destroyed then complete() end
+            end
+        end)
+        tween:Play(); return tween
+    end
+    function Window:SetAnimations(options)
+        local nextOptions=settings(options,self.Animations)
+        self.Animations=nextOptions
+        if not nextOptions.Enabled or nextOptions.Intensity=="Off" or self.ReducedMotion then self:_cancelAnimations(nil,true) end
+        self:_syncSettings(); self:_scheduleSave(); return self
+    end
+    function Window:GetAnimations() return copy(self.Animations) end
+    function Window:_animateWindow(visible)
+        self._visibilityToken=self._visibilityToken+1; local token=self._visibilityToken
+        self:_cancelTrack(self.Main,"window",false)
+        self:_cancelTrack(self.ScaleObject,"window",false)
+        self:_cancelTrack(self.Main,"size",true)
+        if visible then
+            self.Main.Visible=true; self.Main.Active=true; self:_layout()
+            local target=self.Main.Position; local scale=self._actualScale
+            local subtle=self.Animations.Intensity=="Subtle"
+            self.Main.Position=UDim2.new(target.X.Scale,target.X.Offset,target.Y.Scale,target.Y.Offset+(subtle and 3 or 6))
+            self.Main.BackgroundTransparency=.08; self.ScaleObject.Scale=scale*(subtle and .995 or .985)
+            self:_animate(self.Main,{Position=target,BackgroundTransparency=0},.14,"window",self)
+            self:_animate(self.ScaleObject,{Scale=scale},.14,"window",self)
+        else
+            local position=self.Main.Position
+            self:_animate(self.Main,{Position=UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+4),BackgroundTransparency=.15},.1,"window",self,function()
+                if self._visibilityToken==token and not self._shown then self.Main.Visible=false; self.Main.BackgroundTransparency=0 end
+            end)
+        end
+    end
+end
+-- END CENTRAL ANIMATOR
 
 -- Icons are static GUI rectangles, merged into horizontal runs. Only mounted
 -- icons allocate instances; there are no per-pixel signals or render loops.
@@ -493,6 +1282,9 @@ function Window:_hideTooltip()
     if self.TooltipFrame then self.TooltipFrame.Visible=false end
 end
 function Window:_tooltipEligible(control,position)
+    if self._shown==false then return false end
+    local section=control._section and (control._section._parentSection or control._section)
+    if section and section._collapsed then return false end
     if self.Destroyed or control.Destroyed or not control.Tooltip or not self.Main.Visible or self.Minimized or self._drag or self._binding or self._dialog then return false end
     if self._settingsOpen and not control._internal then return false end
     if self._openDropdown and self._openDropdown~=control then return false end
@@ -620,7 +1412,10 @@ function Control:HideTooltip()
 end
 
 function Window:_beginDrag(owner, input, update, finish)
-    if not pointer(input) or owner.Disabled then return end
+    if not pointer(input) or owner.Disabled or owner.Destroyed or self.Destroyed or self._dialog or self._binding then return end
+    local section=owner._section and (owner._section._parentSection or owner._section)
+    if section and (section._collapsed or not section._visible) then return end
+    if (owner==self or owner._section) and self._shown==false then return end
     self:_hideTooltip()
     self:_endDrag()
     self._drag = { Owner=owner, Input=input, Update=update, Finish=finish }
@@ -680,9 +1475,9 @@ function Control:_callbackNow()
         if not self.Destroyed and self._callbackEpoch==epoch and type(callback)=="function" then return callback(...) end
     end
     if self.Type == "ColorPicker" then
-        call(self._window, emit, self:GetColor(), self.Value.Opacity, self:GetValue())
+        self._window:_dispatch(emit,{ControlId=self.Id,Phase="Callback"},self:GetColor(),self.Value.Opacity,self:GetValue())
     else
-        call(self._window, emit, self:GetValue())
+        self._window:_dispatch(emit,{ControlId=self.Id,Phase="Callback"},self:GetValue())
     end
 end
 function Control:SetValue(value, silent)
@@ -692,6 +1487,8 @@ function Control:SetValue(value, silent)
     if changed and self.Type=="Keybind" and self.Mode=="Hold" and self.Active then self:Trigger(false) end
     self.Value = copy(normalized)
     self._window.Flags[self.Id] = self:GetValue()
+    if changed and normalized==false then Library:_afterBatch(function() if not self.Destroyed then self._window:_cleanPolicy("CancelOnFalse",self) end end) end
+    self._window:_flagChanged(self)
     if self._render then self:_render() end
     if self._window._syncFloating then self._window:_syncFloating(self) end
     if changed and not silent then self:_emit() end
@@ -710,6 +1507,7 @@ function Control:OnChanged(callback)
     return listener
 end
 function Control:SetDisabled(disabled)
+    if disabled==true and self._resources then self._window:_cleanPolicy("CancelOnDisable",self) end
     if disabled==true and self.FloatingButton then self.FloatingButton:Release() end
     if disabled == true and self.Type == "Keybind" and self.Mode == "Hold" and self.Active then self:Trigger(false) end
     if disabled == true and self._window._binding == self then self._window._binding = nil end
@@ -759,6 +1557,11 @@ end
 function Control:Destroy()
     if self.Destroyed or self._destroyingControl then return end
     self._destroyingControl=true
+    if self._window._cancelAnimations then self._window:_cancelAnimations(self.Frame,false) end
+    if self._resources then self._resources:Destroy() end
+    local flagState=self._window._flagStates[self.Id]
+    if flagState then flagState:Destroy(); self._window._flagStates[self.Id]=nil end
+    self._window._visualQueue[self]=nil
     self._callbackEpoch=(self._callbackEpoch or 0)+1
     local oldSync=self._window._syncCallbacks; self._window._syncCallbacks=true
     if self.Keybind then self.Keybind:Destroy(); self.Keybind=nil end
@@ -803,6 +1606,7 @@ local function base(section, kind, options, height)
     local self = setmetatable({ Type=kind, Title=tostring(options.Title or kind), Description=tostring(options.Description or ""),
         Tooltip=tooltip,_window=window, _section=section, _connections={},_callbackEpoch=0, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
     window:_register(self, options)
+    self._resources=window:CreateScope(); self._resources._owner=self
     section._count = section._count + 1
     self.Frame = frame(window, section.Content, {
         Name=self.Id, LayoutOrder=section._count, Size=UDim2.new(1,0,0,height or 76),
@@ -836,6 +1640,8 @@ local function init(control, options, default)
     control._hasDefault = true
     control:SetDisabled(control.Disabled)
     control:SetIcon(options.Icon)
+    if options.State then control:BindState(options.State,{TwoWay=options.TwoWay~=false,FireCallback=options.FireOnState==true,Transform=options.Transform}) end
+    if options.DependsOn then control:DependsOn(options.DependsOn) end
     if options.FireOnInit then local epoch=control._callbackEpoch; task.defer(function() if not control.Destroyed and control._callbackEpoch==epoch then control:_emit() end end) end
     if options.Floating then control:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return control
@@ -855,16 +1661,21 @@ function Section:AddToggle(options)
         box.Text = self.Value and (self._window.PixelIcons and "" or "X") or ""
         box.TextColor3 = self._window.Palette[self.Value and "Accent" or "Text"]
         box.Active = not self.Disabled; box.TextTransparency = self.Disabled and .5 or 0
+        if self._hasDefault then self._window:_animate(box,{BackgroundColor3=self._window.Palette[self.Value and "Inset" or "Surface"]},.1,"toggle",self) end
         if self.Value and self._window.PixelIcons and not self._checkIcon then
             self._checkIcon=iconSlot(self._window,box,"check",nil,16,U2(7,6),"Accent")
         end
         if self._checkIcon then
             self._checkIcon:Set(self.Value and self._window.PixelIcons and "check" or false)
             self._checkIcon:SetOpacity(self.Disabled and .5 or 0)
+            if self.Value and self._hasDefault then
+                self._checkIcon.Frame.Position=U2(7,5)
+                self._window:_animate(self._checkIcon.Frame,{Position=U2(7,6)},.1,"toggle",self)
+            end
         end
     end
     connect(self, self.Frame.InputBegan, function(input)
-        if pointer(input) and not self.Disabled and not self._window._binding and not self._window._dialog and not inside(box, point(input))
+        if pointer(input) and not self.Disabled and self._window._shown~=false and not (self._section._parentSection or self._section)._collapsed and not self._window._binding and not self._window._dialog and not inside(box, point(input))
             and (not self.Keybind or not inside(self.Keybind.Frame,point(input))) then
             if input.UserInputType==Enum.UserInputType.Touch then
                 self._touchWasLongPress=false; self._window._touchToggles[self]={Input=input,Position=point(input)}
@@ -919,7 +1730,10 @@ function Section:AddSlider(options)
     end
     function self:_render()
         local ratio = (self.Value-self.Min)/(self.Max-self.Min)
-        fill.Size = UDim2.new(ratio,0,1,0); thumb.Position = UDim2.new(ratio,0,.5,0)
+        fill.Size = UDim2.new(ratio,0,1,0)
+        local target=UDim2.new(ratio,0,.5,0)
+        if self._hasDefault and not (self._window._drag and self._window._drag.Owner==self) then self._window:_animate(thumb,{Position=target},.07,"slider",self)
+        else self._window:_cancelTrack(thumb,"slider",false); thumb.Position=target end
         if not valueBox:IsFocused() then valueBox.Text = string.format("%.6g", self.Value) .. (options.Suffix or "") end
         valueBox.TextEditable = not self.Disabled
     end
@@ -952,20 +1766,44 @@ function Section:AddButton(options)
     function self:_normalize(value) return value end
     function self:_render()
         action.Active = not self.Disabled and not self._busy
-        action.Text=self._busy and (options.BusyText or self._window:_text("running")) or self._normalText
+        local phase=self._busy and self._action and self._action:GetStatus().Status
+        action.Text=self._busy and (phase=="Queued" and self._window:_text("queued") or phase=="Cancelling" and self._window:_text("cancelling") or options.BusyText or self._window:_text("running")) or self._normalText
         action.TextTransparency = self.Disabled and .5 or 0
     end
     function self:Press()
         if self.Disabled or self.Destroyed or self._busy then return false end
+        if options.Group or options.Cancelable or options.Policy then
+            local handle,reason=self._window:RunAction({Group=options.Group or self.Id,Policy=options.Policy or "Reject",ControlId=self.Id,
+                CancelOnHide=options.CancelOnHide,Callback=function(ctx)
+                    if self.Destroyed then ctx:Cancel("control destroyed"); ctx:ThrowIfCancelled() end
+                    if type(self._callback)=="function" then return self._callback(self,ctx) end
+                end,OnComplete=function(completed)
+                    self._busy=false
+                    if not self.Destroyed and not self._window.Destroyed then
+                        self:_render(); self._window:_syncFloating(self)
+                        if self.Feedback then self._window:Notify({Title=self.Title,
+                            Kind=completed:GetStatus().Status=="Completed" and "success" or completed:GetStatus().Status=="Cancelled" and "normal" or "error",
+                            Content=completed.Error or completed:GetStatus().Message or self._window:_text("success")}) end
+                        self._resources:Remove("button-action-observer")
+                        self._resources:Remove("button-action",true)
+                    end
+                end})
+            if not handle then
+                if reason~="ignored" and self.Feedback then self._window:Notify({Title=self.Title,Kind="error",Content=reason}) end
+                return false,reason
+            end
+            self._action=handle; self._busy=true; self:Manage(handle,"Cancel","button-action")
+            self:Manage(handle:Subscribe(function() if not self.Destroyed then self:_render() end end),"Disconnect","button-action-observer")
+            self:_render(); self._window:_syncFloating(self); return true
+        end
         self._busy = true
         self:_render()
         self._window:_syncFloating(self)
         task.spawn(function()
             if self.Destroyed or self._window.Destroyed then self._busy=false; return end
             local ok,result,reason = true,nil,nil
-            if type(self._callback) == "function" then ok,result,reason = pcall(self._callback,self) end
+            if type(self._callback) == "function" then ok,result,reason = self._window:_protected(self._callback,{ControlId=self.Id,Phase="Button"},self) end
             local success=ok and result~=false
-            if not ok then warn("[RetroBox] Button " .. self.Id .. ": " .. tostring(result)) end
             self._busy = false
             if not self.Destroyed and not self._window.Destroyed then
                 self:_render(); self._window:_syncFloating(self)
@@ -976,8 +1814,11 @@ function Section:AddButton(options)
         return true
     end
     self.Button = action
+    function self:Cancel(reason) if self._action then self._action:Cancel(reason); return true end; return false end
+    function self:GetAction() return self._action end
     self:SetDisabled(self.Disabled)
     self:SetIcon(options.Icon)
+    if options.DependsOn then self:DependsOn(options.DependsOn) end
     if options.Floating then self:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return self
 end
@@ -1135,7 +1976,8 @@ function Section:AddDropdown(options)
         if open and self._window._openDropdown and self._window._openDropdown ~= self then self._window._openDropdown:SetOpen(false) end
         self.Open = open
         panel.Visible = open
-        self.Frame.Size = UDim2.new(1,0,0,open and 272 or 80)
+        local target=UDim2.new(1,0,0,open and 272 or 80)
+        if self._hasDefault then self._window:_animate(self.Frame,{Size=target},.12,"expand",self) else self.Frame.Size=target end
         if open then self._window._openDropdown = self
         elseif self._window._openDropdown == self then self._window._openDropdown = nil end
         return self
@@ -1245,8 +2087,9 @@ function Section:AddColorPicker(options)
     expand = button(window,self,self.Frame,"",{
         Position=U2(0,44),Size=UDim2.new(1,0,0,30),TextXAlignment=Enum.TextXAlignment.Left,TextSize=12,
     },function() self:SetOpen(not self.Open) end)
-    ui(window,"UIPadding",{ Parent=expand,PaddingLeft=UDim.new(0,42) })
-    local swatch = frame(window,expand,{ Position=U2(7,6),Size=U2(26,18),BorderSizePixel=1 },"Accent")
+    local caption=label(window,expand,"",{Name="ColorValue",Position=U2(8,0),Size=UDim2.new(1,-52,1,0),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd})
+    local swatch = frame(window,expand,{Name="ColorSwatch",Position=UDim2.new(1,-34,0,6),Size=U2(26,18),BorderSizePixel=1},"Accent")
+    self.Preview=swatch; self.PreviewText=caption
     window:_bind(swatch,{ BorderColor3="Border" })
     local panel = frame(window,self.Frame,{ Position=U2(0,80),Size=UDim2.new(1,0,0,244),Visible=self.Open },"Inset")
     bevel(window,panel,true)
@@ -1286,9 +2129,11 @@ function Section:AddColorPicker(options)
         marker.Position = UDim2.fromScale(s,1-v)
         hueMarker.Position = UDim2.new(self._manualHue,0,.5,0)
         self._currentColor = state.Rainbow and Color3.fromHSV(self._hue,.85,1) or state.Color
-        swatch.BackgroundColor3 = self._currentColor; swatch.BackgroundTransparency = 1-state.Opacity
-        expand.Text = hex(state.Color) .. (state.Rainbow and "  RGB" or "")
-        expand.TextTransparency = self.Disabled and .5 or 0
+        if self._hasDefault and not state.Rainbow then window:_animate(swatch,{BackgroundColor3=self._currentColor},.08,"color",self)
+        else window:_cancelTrack(swatch,"color",false); swatch.BackgroundColor3=self._currentColor end
+        swatch.BackgroundTransparency = 1-state.Opacity
+        caption.Text = hex(state.Color) .. (state.Rainbow and "  RGB" or "")
+        caption.TextTransparency = self.Disabled and .5 or 0
         for i,value in ipairs({state.Color.R,state.Color.G,state.Color.B}) do
             fields[i].Text = tostring(math.floor(value*255+.5)); fields[i].TextEditable = not self.Disabled and not state.Rainbow
         end
@@ -1314,7 +2159,8 @@ function Section:AddColorPicker(options)
     end
     function self:SetOpen(value)
         self.Open=value == true; panel.Visible=self.Open
-        self.Frame.Size=UDim2.new(1,0,0,self.Open and 334 or 80)
+        local target=UDim2.new(1,0,0,self.Open and 334 or 80)
+        if self._hasDefault then window:_animate(self.Frame,{Size=target},.12,"expand",self) else self.Frame.Size=target end
         return self
     end
     function self:_animate(delta)
@@ -1433,6 +2279,247 @@ function Section:AddImage(options)
     return init(self,options,options.Image or "")
 end
 
+-- BEGIN DASHBOARD COMPONENTS: pooled data views, not gameplay features.
+do
+    local function format(value,kind,precision)
+        if type(kind)=="function" then return tostring(kind(value)) end
+        if value==nil then return "—" end
+        if type(value)~="number" then return tostring(value) end
+        precision=precision or 1
+        local function decimal(n) return string.format("%."..precision.."f",n):gsub("(%..-)0+$","%1"):gsub("%.$","") end
+        if kind=="Compact" then
+            local size=math.abs(value)
+            for _,unit in ipairs({{1e12,"T"},{1e9,"B"},{1e6,"M"},{1e3,"K"}}) do if size>=unit[1] then return decimal(value/unit[1])..unit[2] end end
+            return decimal(value)
+        elseif kind=="Percent" then return decimal(value).."%"
+        elseif kind=="Time" then
+            local seconds=math.floor(math.abs(value)); local minutes=math.floor(seconds/60); local hours=math.floor(minutes/60)
+            return (value<0 and "-" or "")..(hours>0 and string.format("%02d:%02d:%02d",hours,minutes%60,seconds%60) or string.format("%02d:%02d",minutes,seconds%60))
+        end
+        return tostring(value)
+    end
+    function Library:FormatValue(value,kind,precision)
+        assert(precision==nil or finite(precision) and precision%1==0 and precision>=0 and precision<=6,"Precision must be 0–6")
+        assert(type(kind)=="function" or kind==nil or kind=="Raw" or kind=="Compact" or kind=="Percent" or kind=="Time","Unknown value format")
+        return format(value,kind,precision)
+    end
+    local function points(value,limit)
+        assert(type(value)=="table" and #value<=4096,"Chart data must be an array with at most 4096 input points")
+        local result={}
+        for key in pairs(value) do assert(type(key)=="number" and key%1==0 and key>=1 and key<=#value,"Chart data must be a dense array") end
+        for i,item in ipairs(value) do
+            local p=type(item)=="number" and {Value=item} or item
+            assert(type(p)=="table" and finite(p.Value),"Point Value must be finite")
+            assert(p.Label==nil or type(p.Label)=="string" and #p.Label<=128,"Point Label must contain at most 128 bytes")
+            assert(p.Time==nil or finite(p.Time),"Point Time must be finite")
+            if i>#value-limit then result[#result+1]={Value=p.Value,Label=p.Label,Time=p.Time} end
+        end
+        return result
+    end
+    local function lineNode(window,parent,pool,index,color)
+        local node=pool[index]
+        if not node then
+            node=frame(window,parent,{Name="ChartElement",AnchorPoint=Vector2.new(.5,.5),Visible=false},"Accent")
+            pool[index]=node
+        end
+        if color then window._skin[node]=nil; node.BackgroundColor3=color end
+        node.Visible=true; return node
+    end
+    local function hideExtra(pool,wanted)
+        for index=wanted+1,#pool do pool[index].Visible=false end
+    end
+    local function lineGeometry(window,node,x1,y1,x2,y2,thickness,animated,owner)
+        local dx,dy=x2-x1,y2-y1
+        local goals={Position=U2((x1+x2)/2,(y1+y2)/2),Size=U2(math.max(1,math.sqrt(dx*dx+dy*dy)),thickness),Rotation=math.deg(math.atan2(dy,dx))}
+        if animated and window._animate then window:_animate(node,goals,.08,"chart",owner)
+        else for key,value in pairs(goals) do node[key]=value end end
+    end
+    function Section:AddStatCard(options)
+        options=options or {}
+        local height=options.Height or (options.Sparkline and 174 or 140)+(options.Description and 20 or 0)
+        assert(finite(height) and height>=116 and height<=600,"StatCard Height must be 116–600")
+        assert(options.Precision==nil or finite(options.Precision) and options.Precision>=0 and options.Precision<=6 and options.Precision%1==0,"Precision must be 0–6")
+        assert(options.Format==nil or type(options.Format)=="function" or options.Format=="Raw" or options.Format=="Compact" or options.Format=="Percent" or options.Format=="Time","Unknown card format")
+        local trend,limit=options.Trend or 0,options.MaxPoints or 40
+        assert(finite(trend) and finite(limit) and limit%1==0 and limit>=2 and limit<=256,"Trend must be finite and MaxPoints 2–256")
+        local self=base(self,"StatCard",options,height); self.Persist=false
+        self.Unit=tostring(options.Unit or ""); self.Subtitle=tostring(options.Subtitle or ""); self.Format=options.Format or "Raw"
+        self.Precision=options.Precision or 1; self.Loading=options.Loading==true; self.Unavailable=options.Unavailable==true
+        self.Trend=trend; self.TrendText=options.TrendText; self._history={}; self.MaxPoints=limit
+        local top=#self.Description>0 and 44 or 24
+        local body=frame(self._window,self.Frame,{Position=U2(0,top),Size=UDim2.new(1,0,1,-top),BorderSizePixel=1},"Inset")
+        self._window:_bind(body,{BackgroundColor3="Inset",BorderColor3="Border"}); bevel(self._window,body,true)
+        self.ValueLabel=label(self._window,body,"",{Position=U2(10,10),Size=UDim2.new(1,self.Unit~="" and -108 or -20,0,34),TextSize=26,TextTruncate=Enum.TextTruncate.AtEnd})
+        self.UnitLabel=label(self._window,body,self.Unit,{Position=UDim2.new(1,-94,0,18),Size=U2(84,20),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Right},"Muted")
+        self.SubtitleLabel=label(self._window,body,self.Subtitle,{Position=U2(10,50),Size=UDim2.new(1,-20,0,18),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd},"Muted")
+        self.TrendLabel=label(self._window,body,"",{Position=U2(10,74),Size=UDim2.new(1,-20,0,18),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd},"Muted")
+        if options.Sparkline then
+            self._spark=frame(self._window,body,{Position=U2(10,100),Size=UDim2.new(1,-20,1,-108),ClipsDescendants=true,BackgroundTransparency=1})
+            self._sparkPool={}
+        end
+        function self:_normalize(value)
+            assert(value==nil or finite(value) or type(value)=="string" and #value<=2048,"StatCard value must be finite, text or nil")
+            return value
+        end
+        function self:_draw()
+            local content=self.Loading and self._window:_text("loading") or self.Unavailable and (self.UnavailableText or self._window:_text("unavailable")) or format(self.Value,self.Format,self.Precision)
+            self.ValueLabel.Text=content; self.SubtitleLabel.Text=self.Subtitle; self.UnitLabel.Text=self.Unit
+            self.ValueLabel.Size=UDim2.new(1,self.Unit~="" and -108 or -20,0,34)
+            self.TrendLabel.Text=self.TrendText or (self.Trend~=0 and (self.Trend>0 and "+" or "")..format(self.Trend,self.Format,self.Precision) or "")
+            self.TrendLabel.TextColor3=self._window.Palette[self.Trend>0 and "Success" or self.Trend<0 and "Danger" or "Muted"]
+            self.ValueLabel.TextColor3=self._window.Palette[(self.Loading or self.Unavailable) and "Muted" or "Text"]
+            if options.Animated and self._window._animate and finite(self.Value) and finite(self._lastValue) and self.Value~=self._lastValue then
+                self.ValueLabel.TextColor3=self._window.Palette[self.Value>self._lastValue and "Success" or "Danger"]
+                self._window:_animate(self.ValueLabel,{TextColor3=self._window.Palette.Text},.25,"stat",self)
+            end
+            self._lastValue=self.Value
+            if self._spark then
+                local size=self._spark.AbsoluteSize; local min,max=math.huge,-math.huge
+                for _,p in ipairs(self._history) do min=math.min(min,p.Value); max=math.max(max,p.Value) end
+                if min==max then min=min-1; max=max+1 end
+                local count=#self._history
+                for i=2,count do
+                    local a,b=self._history[i-1].Value,self._history[i].Value
+                    lineGeometry(self._window,lineNode(self._window,self._spark,self._sparkPool,i-1),
+                        (i-2)/math.max(1,count-1)*size.X,(1-(a-min)/(max-min))*size.Y,
+                        (i-1)/math.max(1,count-1)*size.X,(1-(b-min)/(max-min))*size.Y,2,false,self)
+                end
+                hideExtra(self._sparkPool,math.max(0,count-1))
+            end
+        end
+        function self:_render() self._window:_requestVisual(self,function() self:_draw() end,20) end
+        function self:SetSubtitle(value) self.Subtitle=tostring(value or ""); self:_render(); return self end
+        function self:SetUnit(value) self.Unit=tostring(value or ""); self:_render(); return self end
+        function self:SetTrend(value,text) assert(finite(value),"Trend must be finite"); self.Trend=value; self.TrendText=text; self:_render(); return self end
+        function self:SetLoading(value) self.Loading=value==true; self:_render(); return self end
+        function self:SetUnavailable(value,text) self.Unavailable=value==true; self.UnavailableText=text; self:_render(); return self end
+        function self:SetHistory(data) self._history=points(data,self.MaxPoints); self:_render(); return self end
+        function self:GetHistory() return copy(self._history) end
+        function self:AddPoint(value,labelText) local data=self:GetHistory(); data[#data+1]={Value=value,Label=labelText}; return self:SetHistory(data) end
+        if self._spark then connect(self,self._spark:GetPropertyChangedSignal("AbsoluteSize"),function() self:_render() end) end
+        local value=options.Value; if value==nil then value=0 end
+        return init(self,options,value)
+    end
+    function Section:AddChart(options)
+        options=options or {}; local kind=options.Type or "Line"; local limit=options.MaxPoints or 60
+        assert(kind=="Line" or kind=="Bar" or kind=="Progress" or kind=="Sparkline","Chart Type is Line, Bar, Progress or Sparkline")
+        assert(finite(limit) and limit%1==0 and limit>=2 and limit<=512,"MaxPoints must be 2–512")
+        local minimum,maximum=options.Min,options.Max
+        if kind=="Progress" then minimum=minimum or 0; maximum=maximum or 100 end
+        assert(minimum==nil or finite(minimum),"Chart Min must be finite")
+        assert(maximum==nil or finite(maximum),"Chart Max must be finite")
+        assert(minimum==nil or maximum==nil or maximum>minimum,"Chart Max must exceed Min")
+        local height=options.Height or (kind=="Progress" and 80 or kind=="Sparkline" and 82 or 220)
+        assert(finite(height) and height>=64 and height<=800,"Chart Height must be 64–800")
+        local rate=options.RefreshRate or 20; assert(finite(rate) and rate>=1 and rate<=60,"RefreshRate must be 1–60")
+        assert(options.Precision==nil or finite(options.Precision) and options.Precision%1==0 and options.Precision>=0 and options.Precision<=6,"Precision must be 0–6")
+        assert(options.Thickness==nil or finite(options.Thickness) and options.Thickness>=1 and options.Thickness<=12,"Thickness must be 1–12")
+        assert(options.Format==nil or type(options.Format)=="function" or options.Format=="Raw" or options.Format=="Compact" or options.Format=="Percent" or options.Format=="Time","Unknown chart format")
+        local color=options.Color and parseColor(options.Color) or nil
+        local self=base(self,kind.."Chart",options,height); self.Persist=false
+        self.ChartType=kind; self.MaxPoints=limit; self.Min=minimum; self.Max=maximum; self.RefreshRate=rate
+        self._pool={}; self._grid={}; self.ShowGrid=options.ShowGrid~=false and kind~="Progress" and kind~="Sparkline"
+        self.ShowLabels=options.ShowLabels~=false and kind~="Progress" and kind~="Sparkline"
+        self.Color=color
+        local top=#self.Description>0 and 46 or 26
+        local legendHeight=options.ShowLegend and 20 or 0
+        if options.ShowLegend then self.Legend=label(self._window,self.Frame,options.Legend or self.Title,{Position=U2(8,top),Size=UDim2.new(1,-16,0,18),TextSize=11,TextTruncate=Enum.TextTruncate.AtEnd},"Accent") end
+        local left=self.ShowLabels and 62 or 8; local bottom=self.ShowLabels and 28 or 8
+        self.Plot=frame(self._window,self.Frame,{Name="Plot",Position=U2(left,top+legendHeight),Size=UDim2.new(1,-left-8,1,-top-legendHeight-bottom),ClipsDescendants=true,BorderSizePixel=1},"Inset")
+        self._window:_bind(self.Plot,{BackgroundColor3="Inset",BorderColor3="Border"})
+        for i=0,4 do self._grid[i+1]=frame(self._window,self.Plot,{Position=UDim2.fromScale(0,i/4),Size=UDim2.new(1,0,0,1),BackgroundTransparency=.65,Visible=self.ShowGrid},"Border") end
+        self.EmptyLabel=label(self._window,self.Plot,self._window:_text("noData"),{Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,TextSize=12},"Muted")
+        self.MinLabel=label(self._window,self.Frame,"",{Position=UDim2.new(0,0,1,-bottom-16),Size=U2(56,16),TextSize=10,TextXAlignment=Enum.TextXAlignment.Right,Visible=self.ShowLabels},"Muted")
+        self.MaxLabel=label(self._window,self.Frame,"",{Position=U2(0,top+legendHeight),Size=U2(56,16),TextSize=10,TextXAlignment=Enum.TextXAlignment.Right,Visible=self.ShowLabels},"Muted")
+        self.FirstLabel=label(self._window,self.Frame,"",{Position=UDim2.new(0,left,1,-22),Size=UDim2.new(.5,-left,0,18),TextSize=10,TextTruncate=Enum.TextTruncate.AtEnd,Visible=self.ShowLabels},"Muted")
+        self.LastLabel=label(self._window,self.Frame,"",{Position=UDim2.new(.5,0,1,-22),Size=UDim2.new(.5,-8,0,18),TextSize=10,TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Right,Visible=self.ShowLabels},"Muted")
+        if kind=="Progress" then self.ProgressLabel=label(self._window,self.Plot,"",{Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,TextSize=14,ZIndex=self.Plot.ZIndex+3},"Text") end
+        function self:_normalize(value) if self.ChartType=="Progress" then assert(finite(value),"Progress value must be finite"); return clamp(value,self.Min,self.Max) end; return points(value,self.MaxPoints) end
+        function self:_bounds()
+            if self.ChartType=="Progress" then return self.Min,self.Max end
+            local min,max=math.huge,-math.huge
+            for _,point in ipairs(self.Value) do min=math.min(min,point.Value); max=math.max(max,point.Value) end
+            if #self.Value==0 then min,max=0,1 end
+            if options.StartAtZero or self.ChartType=="Bar" then min=math.min(0,min); max=math.max(0,max) end
+            if min==max then local pad=math.max(1,math.abs(min)*.05); min=min-pad; max=max+pad end
+            min=self.Min or min; max=self.Max or max
+            if max<=min then max=min+1 end
+            return min,max
+        end
+        function self:_draw()
+            local min,max=self:_bounds(); self.Bounds={Min=min,Max=max}
+            local size=self.Plot.AbsoluteSize; local width,height=math.max(1,size.X-2),math.max(1,size.Y-2)
+            local function y(value) return 1+(1-clamp((value-min)/(max-min),0,1))*height end
+            for _,node in ipairs(self._grid) do node.Visible=self.ShowGrid end
+            self.MinLabel.Text=format(min,options.Format or "Compact",options.Precision)
+            self.MaxLabel.Text=format(max,options.Format or "Compact",options.Precision)
+            if self.ChartType=="Progress" then
+                local ratio=(self.Value-min)/(max-min); local node=lineNode(self._window,self.Plot,self._pool,1,self.Color)
+                node.AnchorPoint=Vector2.new(0,0); node.Position=U2(0,0); node.Rotation=0
+                local goals={Size=UDim2.new(ratio,0,1,0)}
+                if options.Animated and self._window._animate then self._window:_animate(node,goals,.12,"chart",self) else node.Size=goals.Size end
+                self.ProgressLabel.Text=format(ratio*100,"Percent",options.Precision); self.EmptyLabel.Visible=false
+                return
+            end
+            local n=#self.Value; self.EmptyLabel.Visible=n==0
+            self.FirstLabel.Text=n>0 and (self.Value[1].Label or "1") or ""
+            self.LastLabel.Text=n>0 and (self.Value[n].Label or tostring(n)) or ""
+            local wanted=0
+            if self.ChartType=="Bar" then
+                local stride=width/math.max(1,n); local zero=y(0)
+                for index,p in ipairs(self.Value) do
+                    wanted=index; local node=lineNode(self._window,self.Plot,self._pool,index,self.Color)
+                    local topY=y(p.Value); node.AnchorPoint=Vector2.new(0,0); node.Rotation=0
+                    local goals={Position=U2(1+(index-1)*stride+2,math.min(zero,topY)),Size=U2(math.max(1,stride-4),math.max(1,math.abs(zero-topY)))}
+                    if options.Animated and self._window._animate then self._window:_animate(node,goals,.08,"chart",self) else for key,value in pairs(goals) do node[key]=value end end
+                end
+            else
+                if n==1 then
+                    wanted=1; local node=lineNode(self._window,self.Plot,self._pool,1,self.Color); node.Position=U2(width/2,y(self.Value[1].Value)); node.Size=U2(3,3); node.Rotation=0
+                end
+                for index=2,n do
+                    wanted=index-1
+                    lineGeometry(self._window,lineNode(self._window,self.Plot,self._pool,index-1,self.Color),
+                        1+(index-2)/(n-1)*width,y(self.Value[index-1].Value),1+(index-1)/(n-1)*width,y(self.Value[index].Value),options.Thickness or 2,options.Animated,self)
+                end
+            end
+            hideExtra(self._pool,wanted)
+        end
+        function self:_render() self._window:_requestVisual(self,function() self:_draw() end,self.RefreshRate) end
+        function self:SetData(data,silent) return self:SetValue(data,silent) end
+        function self:AddPoint(value,labelText,time)
+            assert(self.ChartType~="Progress","ProgressChart uses SetValue")
+            local data=self:GetValue(); data[#data+1]={Value=value,Label=labelText,Time=time}; return self:SetValue(data)
+        end
+        function self:Clear() return self:SetValue(self.ChartType=="Progress" and self.Min or {}) end
+        function self:SetRange(min,max)
+            assert(min==nil or finite(min),"Min must be finite or nil"); assert(max==nil or finite(max),"Max must be finite or nil")
+            assert(min==nil or max==nil or max>min,"Max must exceed Min")
+            if self.ChartType=="Progress" then assert(min~=nil and max~=nil,"Progress requires both bounds") end
+            self.Min=min; self.Max=max
+            if self.ChartType=="Progress" then self:SetValue(self.Value,true) else self:_render() end
+            return self
+        end
+        function self:SetMaxPoints(value)
+            assert(finite(value) and value%1==0 and value>=2 and value<=512,"MaxPoints must be 2–512")
+            self.MaxPoints=value
+            while #self._pool>value do local node=table.remove(self._pool); self._window:_cancelAnimations(node,false); self._window._skin[node]=nil; node:Destroy() end
+            if self.ChartType~="Progress" then self:SetValue(self.Value,true) end
+            return self
+        end
+        connect(self,self.Plot:GetPropertyChangedSignal("AbsoluteSize"),function() self:_render() end)
+        local initial=kind=="Progress" and (options.Value or minimum) or (options.Data or {})
+        return init(self,options,initial)
+    end
+    for name,kind in pairs({AddLineChart="Line",AddBarChart="Bar",AddProgressChart="Progress",AddSparkline="Sparkline"}) do
+        Section[name]=function(self,options)
+            local opts={}; for key,value in pairs(options or {}) do opts[key]=value end; opts.Type=kind
+            return self:AddChart(opts)
+        end
+    end
+end
+-- END DASHBOARD COMPONENTS
+
 function Window:_updateRGB()
     if self.Destroyed then return end
     local active = false
@@ -1466,6 +2553,7 @@ function Window:GetThemeNames()
     table.sort(result); return result
 end
 function Window:_applyTheme()
+    if self._cancelAnimations then self:_cancelAnimations(nil,true) end
     local colors=self._themeOverrides[self.Theme] or Library.Themes[self.Theme]
     self.Palette=copy(colors)
     if self.Accent then
@@ -1499,7 +2587,10 @@ function Window:SetScale(value)
     return self
 end
 function Window:SetReducedMotion(value)
-    self.ReducedMotion=value == true; self:_syncSettings(); self:_scheduleSave(); return self
+    self.ReducedMotion=value == true
+    if self.ReducedMotion and self._dragRender then self:_moveWindow(self._dragRender.Target) end
+    if self.ReducedMotion and self._cancelAnimations then self:_cancelAnimations(nil,true) end
+    self:_syncSettings(); self:_scheduleSave(); return self
 end
 function Window:SetScanlines(value)
     self.Scanlines=value == true
@@ -1511,7 +2602,7 @@ function Window:SetNotifications(value)
 end
 function Window:SetLauncher(value)
     self.LauncherEnabled=value ~= false
-    self.Launcher.Visible=self.LauncherEnabled and not self.Main.Visible
+    self.Launcher.Visible=self.LauncherEnabled and self._shown==false
     self:_syncSettings(); self:_scheduleSave(); return self
 end
 function Window:SetToggleKey(value)
@@ -1557,17 +2648,22 @@ function Window:OnDestroy(callback)
 end
 function Window:Show()
     if self.Destroyed then return self end
-    self.Main.Visible=true; self.Launcher.Visible=false; self:_layoutFloating(); return self
+    local changed=self._shown==false; self._shown=true; self.Launcher.Visible=false
+    if changed then self:_animateWindow(true) else self.Main.Visible=true end
+    self:_layoutFloating(); return self
 end
 function Window:Hide()
     if self.Destroyed then return self end
+    self:_cleanPolicy("CancelOnHide")
+    if self._dragRender then local p=self:_clampCenter(self._dragRender.Target); self.Main.Position=U2(p.X,p.Y); self._dragRender=nil; self:_refreshRuntime() end
     self:_hideTooltip()
     self:_hideSearchResults()
     if self._dialog then self._dialog:Close("hidden") end
     self:_releaseBindings()
     self:ShowSettings(false); self:_endDrag()
     if self._binding then local binding=self._binding; self._binding=nil; binding:_render() end
-    self.Main.Visible=false; self.Launcher.Visible=self.LauncherEnabled
+    self._shown=false; self.Main.Active=false; self.Launcher.Visible=self.LauncherEnabled
+    self:_animateWindow(false)
     local focused=UserInputService:GetFocusedTextBox(); local parent=focused
     while parent do if parent==self.Gui then focused:ReleaseFocus(); break end; parent=parent.Parent end
     self:_layoutFloating()
@@ -1576,13 +2672,21 @@ function Window:Hide()
     end
     return self
 end
-function Window:Toggle() if self.Main.Visible then return self:Hide() else return self:Show() end end
+function Window:Toggle() if self._shown~=false then return self:Hide() else return self:Show() end end
 function Window:Minimize(value)
+    if self.Destroyed then return self end
     self:_hideTooltip()
     self:_hideSearchResults()
-    self.Minimized=value == nil and not self.Minimized or value == true
+    local oldSize=self.Main.Size; local oldPosition=self.Main.Position
+    local targetMinimized=value == nil and not self.Minimized or value == true
+    if targetMinimized==self.Minimized then return self end
+    local oldHeight=oldSize.Y.Offset*self._actualScale
+    local nextHeight=(targetMinimized and 42 or self._logicalSize.Y)*self._actualScale
+    self._position=Vector2.new(oldPosition.X.Offset,oldPosition.Y.Offset+(nextHeight-oldHeight)/2)
+    self.Minimized=targetMinimized
     if self.Minimized then self:ShowSettings(false) end
-    self:_layout(); return self
+    self:_layout(); local targetSize,targetPosition=self.Main.Size,self.Main.Position; self.Main.Size=oldSize; self.Main.Position=oldPosition
+    self:_animate(self.Main,{Size=targetSize,Position=targetPosition},.14,"size",self); return self
 end
 function Window:Center()
     self._position=nil; self:_layout(); return self
@@ -1673,8 +2777,10 @@ end
 function Window:FocusControl(control)
     if type(control)=="string" then control=self.Controls[control] end
     if not control or control._window~=self or control.Destroyed or not control._visible then return false,"Control is unavailable" end
+    local section=control._section._parentSection or control._section
     local tab=control._section._tab
     if tab.Hidden or control._section._visible==false then return false,"Control is hidden" end
+    if section._collapsed then section:SetCollapsed(false) end
     self:Show(); self:Minimize(false)
     self.Search.Text=""; self:SetSearch(""); tab:Select(); self:_hideSearchResults()
     if UserInputService:GetFocusedTextBox()==self.Search then self.Search:ReleaseFocus() end
@@ -1717,6 +2823,10 @@ function Tab:Select()
     window._settingsOpen=self._settingsConfig==true
     if not self._settingsConfig then window._lastContentTab=self end
     window.ActiveTab=self
+    if self.Frame.Visible==false then
+        self.Container.Position=U2(0,4)
+        window:_animate(self.Container,{Position=U2(0,0)},.1,"tab",self)
+    end
     if window._openDropdown then window._openDropdown:SetOpen(false) end
     for _,tab in ipairs(window.Tabs) do if not tab.Hidden then tab.Frame.Visible=tab==self end; tab:_renderSelection() end
     window.Status.Text=self.Title.."  |  v"..Library.Version
@@ -1773,7 +2883,7 @@ function Tab:CreateSection(options)
     assert(not self.Destroyed,"Tab has been destroyed")
     resolveIcon(options.Icon)
     self._sectionCount=self._sectionCount+1
-    local section=setmetatable({ Title=tostring(options.Title or "Section"),_window=self._window,_tab=self,_connections={},Controls={},_count=0,_visible=options.Visible~=false },Section)
+    local section=setmetatable({ Title=tostring(options.Title or "Section"),_window=self._window,_tab=self,_connections={},Controls={},_count=0,_visible=options.Visible~=false,Collapsible=options.Collapsible==true,_collapsed=false },Section)
     if options.Side=="Right" then self.Columns=2 end
     section.Frame=frame(self._window,options.Side=="Right" and self.Right or self.Left,{
         Name=section.Title,LayoutOrder=self._sectionCount,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
@@ -1786,14 +2896,21 @@ function Tab:CreateSection(options)
     section.Header=label(self._window,section.HeaderRow,section.Title:upper(),{Size=UDim2.new(1,0,1,0),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd},"Muted")
     section._titleIcon=iconSlot(self._window,section.HeaderRow,options.Icon,"folder",18,U2(0,3),"Muted",function(visible)
         section.Header.Position=U2(visible and 24 or 0,0)
-        section.Header.Size=UDim2.new(1,visible and -24 or 0,1,0)
+        section.Header.Size=UDim2.new(1,(visible and -24 or 0)-(section.Collapsible and 22 or 0),1,0)
     end)
     section.Icon=section._titleIcon.Frame
     section.Content=frame(self._window,section.Frame,{ LayoutOrder=2,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1 })
-    list(self._window,section.Content,10)
+    section.ContentLayout=list(self._window,section.Content,10)
+    if section.Collapsible then
+        section._collapseIcon=iconSlot(self._window,section.HeaderRow,"chevron-down",nil,12,UDim2.new(1,-14,.5,-6),"Muted")
+        local target=ui(self._window,"TextButton",{Parent=section.HeaderRow,Size=UDim2.fromScale(1,1),Text="",BackgroundTransparency=1,AutoButtonColor=false,ZIndex=section.HeaderRow.ZIndex+4})
+        connect(section,target.Activated,function() if not section.Destroyed and section._window._shown~=false and not section._window._dialog then section:SetCollapsed(not section._collapsed) end end)
+        section.CollapseButton=target
+    end
     table.insert(self.Sections,section)
     connect(section,section.Frame.Destroying,function() if not section.Destroyed then section:Destroy() end end)
     self:_layout()
+    if section.Collapsible and options.Collapsed then section:SetCollapsed(true,true) end
     return section
 end
 function Section:CreateRow(options)
@@ -1844,6 +2961,26 @@ function Row:SetVisible(value)
     self._visible=value~=false; self.Frame.Visible=self._visible; self._window:SetSearch(self._window._query); return self
 end
 function Section:SetTitle(value) self.Title=tostring(value); self.Header.Text=self.Title:upper(); return self end
+function Section:SetCollapsed(value,instant)
+    assert(not self.Destroyed and not self._isRow,"SetCollapsed needs a live Section")
+    assert(type(value)=="boolean","Collapsed must be boolean")
+    if not self.Collapsible then self.Collapsible=true end
+    self._collapsed=value
+    if self._collapseIcon then self._collapseIcon:Set(value and "chevron-right" or "chevron-down") end
+    local old=self.Content.AbsoluteSize.Y
+    self._window:_cancelTrack(self.Content,"collapse",false)
+    self.Content.AutomaticSize=Enum.AutomaticSize.None; self.Content.ClipsDescendants=true; self.Content.Visible=true
+    self.Content.Size=UDim2.new(1,0,0,old)
+    local target=value and 0 or self.ContentLayout.AbsoluteContentSize.Y
+    self._window:_animate(self.Content,{Size=UDim2.new(1,0,0,target)},instant and 0 or .14,"collapse",self,function()
+        if self.Destroyed then return end
+        self.Content.Visible=not self._collapsed
+        self.Content.AutomaticSize=self._collapsed and Enum.AutomaticSize.None or Enum.AutomaticSize.Y
+        if not self._collapsed then self.Content.Size=UDim2.new(1,0,0,0) end
+    end)
+    self._window:_hideTooltip(); return self
+end
+function Section:IsCollapsed() return self._collapsed==true end
 function Section:SetIcon(value)
     assert(not self.Destroyed and not self._isRow,"SetIcon requires a live Section")
     if value==nil then value=false end
@@ -1853,6 +2990,7 @@ function Section:SetVisible(value) self._visible=value~=false; self._window:SetS
 function Section:Destroy()
     if self.Destroyed then return end
     self.Destroyed=true
+    self._window:_cancelAnimations(self.Frame,false)
     for _,row in ipairs({table.unpack(self.Rows or {})}) do row:Destroy() end
     local controls={}
     for _,control in ipairs(self.Controls) do table.insert(controls,control) end
@@ -1894,7 +3032,8 @@ function Window:ExportConfig(asTable)
         Appearance={ Theme=self.Theme,ThemeColors=colors,Accent=self.Accent and hex(self.Accent) or nil,
             Scale=self.UserScale,ReducedMotion=self.ReducedMotion,Scanlines=self.Scanlines,
             Notifications=self.NotificationsEnabled,Launcher=self.LauncherEnabled,ToggleKey=self.ToggleKey.Name,
-            PixelIcons=self.PixelIcons,PixelDecorations=self.PixelDecorations },
+            PixelIcons=self.PixelIcons,PixelDecorations=self.PixelDecorations,
+            Animations=copy(self.Animations),Drag={Smooth=self.SmoothDragging,Responsiveness=self.DragResponsiveness} },
     }
     result.Appearance.Floating={Enabled=self.QuickActionsEnabled,Size=self.FloatSize,Opacity=self.FloatOpacity,Positions={}}
     for id,position in pairs(self._floatingPositions) do result.Appearance.Floating.Positions[id]={X=position.X,Y=position.Y} end
@@ -1926,6 +3065,11 @@ function Window:ImportConfig(source,options)
             ReducedMotion=look.ReducedMotion,Scanlines=look.Scanlines,Notifications=look.Notifications,Launcher=look.Launcher,
             PixelIcons=look.PixelIcons,PixelDecorations=look.PixelDecorations,
             ToggleKey=self.ToggleKey }
+        appearance.Animations=Library._animationSettings(look.Animations,self.Animations)
+        if look.Drag~=nil then
+            assert(type(look.Drag)=="table" and type(look.Drag.Smooth)=="boolean" and finite(look.Drag.Responsiveness) and look.Drag.Responsiveness>=8 and look.Drag.Responsiveness<=80,"Invalid Drag preference")
+            appearance.Drag=copy(look.Drag)
+        end
         if look.Theme~=nil then appearance.Theme=look.Theme end
         if look.Scale~=nil then appearance.Scale=look.Scale end
         if look.ToggleKey~=nil then appearance.ToggleKey=keycode(look.ToggleKey) end
@@ -1977,6 +3121,7 @@ function Window:ImportConfig(source,options)
     self._syncCallbacks=previousSync; self._suppressCallbacks=previousSuppress
     if self.Destroyed then self._importing=false; return false,"Window was destroyed during a callback" end
     local look=prepared.Appearance
+    Library:Batch(function()
     if look.Colors then self._themeOverrides[look.Theme]=look.Colors end
     self.Theme=look.Theme; self.Accent=look.Accent; self.UserScale=look.Scale; self.ToggleKey=look.ToggleKey
     if look.ReducedMotion~=nil then self.ReducedMotion=look.ReducedMotion end
@@ -1985,6 +3130,8 @@ function Window:ImportConfig(source,options)
     if look.Launcher~=nil then self.LauncherEnabled=look.Launcher end
     if look.PixelIcons~=nil then self.PixelIcons=look.PixelIcons end
     if look.PixelDecorations~=nil then self.PixelDecorations=look.PixelDecorations end
+    self:SetAnimations(look.Animations)
+    if look.Drag then self:SetDragOptions(look.Drag) end
     if look.LauncherText then self.LauncherText=look.LauncherText end
     if look.LauncherPosition then self.LauncherPosition=look.LauncherPosition end
     if look.Floating then
@@ -1995,6 +3142,7 @@ function Window:ImportConfig(source,options)
     self:_applyTheme(); self:_layout()
     self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
     self:SetPixelIcons(self.PixelIcons); self:SetPixelDecorations(self.PixelDecorations)
+    end)
     if not options.Silent then for id in pairs(prepared.Changes) do
         local control=self.Controls[id]; if control and not self.Destroyed then control:_emit() end
     end end
@@ -2172,24 +3320,31 @@ function Window:Reset(silent)
     self._syncCallbacks=true; self._suppressCallbacks=silent==true; self:_releaseBindings()
     self._syncCallbacks=previousSync; self._suppressCallbacks=previousSuppress
     if self.Destroyed then self._importing=false; return self end
+    Library:Batch(function()
     for _,control in pairs(self.Controls) do if control.Persist and control._hasDefault then control:SetValue(control._default,true) end end
     self.Theme=self._initial.Theme; self.Accent=self._initial.Accent; self.UserScale=self._initial.Scale
     self._themeOverrides[self._initial.Theme]=copy(self._initial.ThemeColors)
     self.ReducedMotion=self._initial.ReducedMotion; self.Scanlines=self._initial.Scanlines
     self.NotificationsEnabled=self._initial.Notifications; self.LauncherEnabled=self._initial.Launcher
     self.PixelIcons=self._initial.PixelIcons; self.PixelDecorations=self._initial.PixelDecorations
+    self:SetAnimations(copy(self._initial.Animations))
+    self:SetDragOptions({Smooth=self._initial.SmoothDragging,Responsiveness=self._initial.DragResponsiveness})
     self.ToggleKey=self._initial.ToggleKey
     self.FloatSize=self._initial.FloatSize; self.FloatOpacity=self._initial.FloatOpacity; self.QuickActionsEnabled=self._initial.QuickActions
     self.LauncherText=self._initial.LauncherText; self.LauncherPosition=self._initial.LauncherPosition; self._floatingPositions={}
     for _,floating in pairs(self._floatingButtons) do floating.Position=floating._defaultPosition end
     self:_applyTheme(); self:_layout(); self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
     self:SetPixelIcons(self.PixelIcons); self:SetPixelDecorations(self.PixelDecorations)
+    end)
     if not silent then for _,control in pairs(self.Controls) do if control.Persist then control:_emit() end end end
     self._importing=false; self:_scheduleSave(); return self
 end
 
 function Window:_layout()
     if self.Destroyed or not self.Main then return end
+    self:_cancelTrack(self.Main,"size",false)
+    self:_cancelTrack(self.Main,"window",false)
+    if self.ScaleObject then self:_cancelTrack(self.ScaleObject,"window",false) end
     self:_hideTooltip()
     local view=self.Root.AbsoluteSize
     if view.X<=0 or view.Y<=0 then view=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720) end
@@ -2251,6 +3406,12 @@ function Window:_syncSettings()
     controls.Scanlines:SetValue(self.Scanlines,true)
     controls.PixelIcons:SetValue(self.PixelIcons,true)
     controls.PixelDecorations:SetValue(self.PixelDecorations,true)
+    if controls.Animations then
+        controls.Animations:SetValue(self.Animations.Enabled,true)
+        controls.AnimationSpeed:SetValue(self.Animations.Speed,true)
+        controls.AnimationIntensity:SetValue(self:_text("intensity"..self.Animations.Intensity),true)
+        controls.SmoothDragging:SetValue(self.SmoothDragging,true)
+    end
     controls.Notifications:SetValue(self.NotificationsEnabled,true)
     controls.Launcher:SetValue(self.LauncherEnabled,true)
     controls.Shortcut:SetValue(self.ToggleKey,true)
@@ -2326,6 +3487,12 @@ function Window:_createSettings()
     controls.Theme=look:AddDropdown(opts("theme",self:_text("theme"),{Options=self:GetThemeNames(),Default=self.Theme,Callback=function(value) self:SetTheme(value) end}))
     controls.PixelIcons=look:AddToggle(opts("pixel-icons",self:_text("pixelIcons"),{Default=self.PixelIcons,Callback=function(v) self:SetPixelIcons(v) end}))
     controls.PixelDecorations=look:AddToggle(opts("pixel-decorations",self:_text("pixelDecorations"),{Default=self.PixelDecorations,Callback=function(v) self:SetPixelDecorations(v) end}))
+    controls.Animations=look:AddToggle(opts("animations",self:_text("animations"),{Default=self.Animations.Enabled,Callback=function(v) self:SetAnimations({Enabled=v}) end}))
+    controls.AnimationSpeed=look:AddSlider(opts("animation-speed",self:_text("animationSpeed"),{Min=.25,Max=4,Step=.05,Default=self.Animations.Speed,Callback=function(v) self:SetAnimations({Speed=v}) end}))
+    controls.AnimationIntensity=look:AddDropdown(opts("animation-intensity",self:_text("animationIntensity"),{Options={self:_text("intensitySubtle"),self:_text("intensityNormal"),self:_text("intensityOff")},Default=self:_text("intensity"..self.Animations.Intensity),Callback=function(v)
+        for _,kind in ipairs({"Subtle","Normal","Off"}) do if v==self:_text("intensity"..kind) then self:SetAnimations({Intensity=kind}); break end end
+    end}))
+    controls.SmoothDragging=look:AddToggle(opts("smooth-drag",self:_text("smoothDragging"),{Default=self.SmoothDragging,Callback=function(v) self:SetDragOptions({Smooth=v}) end}))
     controls.Accent=look:AddColorPicker(opts("accent",self:_text("accent"),{Default=self.Palette.Accent,AllowRainbow=false,AllowOpacity=false,Callback=function(color) self:SetAccent(color) end}))
     local access=tab:CreateSection(self:_text("accessibility"))
     controls.Scale=access:AddSlider(opts("scale",self:_text("scale"),{Min=.75,Max=1.5,Step=.05,Default=self.UserScale,Suffix="x",Callback=function(value) self:SetScale(value) end}))
@@ -2370,19 +3537,19 @@ function Window:Notify(options)
     local duration=options.Duration or 4
     assert(finite(duration),"Notification Duration must be finite")
     duration=clamp(duration,.1,30)
-    while #self._notifications>=4 do self._notifications[1]:Destroy() end
+    while #self._notifications>=4 do self._notifications[1]:Destroy(true) end
     self._noticeCount=self._noticeCount+1
     local width=math.min(340,math.max(220,self.Root.AbsoluteSize.X-32))
     local notification={ _window=self,_connections={},Destroyed=false }
     notification.Frame=frame(self,self.NotificationHost,{ LayoutOrder=-self._noticeCount,Size=U2(width,82),
-        BorderSizePixel=1,ZIndex=80 },"Surface")
+        BorderSizePixel=1,ZIndex=80,ClipsDescendants=true },"Surface")
     self:_bind(notification.Frame,{ BackgroundColor3="Surface",BorderColor3="Border" }); bevel(self,notification.Frame,false)
     local role=options.Kind=="error" and "Danger" or options.Kind=="success" and "Success" or "Accent"
     frame(self,notification.Frame,{ Position=U2(0,0),Size=UDim2.new(0,4,1,0) },role)
     local title=label(self,notification.Frame,options.Title or self:_text("about"),{
         Position=U2(12,8),Size=UDim2.new(1,-48,0,22),TextSize=13,TextTruncate=Enum.TextTruncate.AtEnd,
     })
-    local defaultIcon=options.Kind=="error" and "error" or options.Kind=="success" and "success" or "info"
+    local defaultIcon=options.Kind=="error" and "error" or options.Kind=="success" and "success" or options.Kind=="warning" and "warning" or options.Kind=="loading" and "refresh" or "info"
     notification._titleIcon=iconSlot(self,notification.Frame,options.Icon,defaultIcon,16,U2(12,11),"Text",function(visible)
         title.Position=U2(visible and 34 or 12,8); title.Size=UDim2.new(1,visible and -70 or -48,0,22)
     end)
@@ -2390,20 +3557,22 @@ function Window:Notify(options)
     label(self,notification.Frame,options.Content or "",{
         Position=U2(12,32),Size=UDim2.new(1,-24,0,42),TextSize=12,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,
     },"Muted")
-    function notification:Destroy()
-        if self.Destroyed then return end
-        self.Destroyed=true
+    function notification:_remove()
+        self._window:_cancelAnimations(self.Frame,false)
         cleanup(self); self.Frame:Destroy()
         local index=table.find(self._window._notifications,self)
         if index then table.remove(self._window._notifications,index) end
     end
+    function notification:Destroy(immediate)
+        if self.Destroyed then if immediate then self:_remove() end; return end
+        self.Destroyed=true; cleanup(self); self._window:_cancelAnimations(self.Frame,false)
+        if immediate or self._window.Destroyed or self._window._closing then self:_remove()
+        else self._window:_animate(self.Frame,{Size=U2(width,0),BackgroundTransparency=1},.12,"notice",self,function() self:_remove() end) end
+    end
     pixelButton(self,notification,notification.Frame,"X","close",{ Position=UDim2.new(1,-32,0,8),Size=U2(22,22),TextSize=12 },function() notification:Destroy() end)
     table.insert(self._notifications,notification)
-    if not self.ReducedMotion then
-        notification.Frame.BackgroundTransparency=.4
-        local tween=TweenService:Create(notification.Frame,TweenInfo.new(.15),{ BackgroundTransparency=0 })
-        tween:Play()
-    end
+    notification.Frame.BackgroundTransparency=.4; notification.Frame.Size=U2(width,4)
+    self:_animate(notification.Frame,{BackgroundTransparency=0,Size=U2(width,82)},.14,"notice",notification)
     task.delay(duration,function() notification:Destroy() end)
     return notification
 end
@@ -2428,7 +3597,7 @@ function Window:_layoutFloating()
         if not floating.Destroyed then
             place(floating.Frame,self._floatingPositions[floating.Id] or floating.Position,Vector2.new(self.FloatSize,self.FloatSize+14))
             floating.Frame.Visible=self.QuickActionsEnabled and floating.Visible and (not floating.MobileOnly or UserInputService.TouchEnabled==true)
-                and (not self.Main.Visible or self.Minimized or floating.VisibleWithMenu)
+                and (self._shown==false or self.Minimized or floating.VisibleWithMenu)
             floating.Button.BackgroundTransparency=1-self.FloatOpacity; floating.Button.TextTransparency=1-self.FloatOpacity
             self:_syncFloating(floating.Control)
         end
@@ -2597,10 +3766,22 @@ function Window:Dialog(options)
         return self
     end
     function dialog:Close(reason,index)
-        if self.Destroyed then return end
+        if self.Destroyed then
+            if reason=="replaced" or reason=="destroyed" or reason=="hidden" then
+                self._window:_cancelAnimations(self.Frame,false)
+                if self._window._dialog==self then self._window._dialog=nil end
+                self.Frame:Destroy()
+            end
+            return
+        end
         self.Destroyed=true; self.Result=index; self.Reason=reason or "closed"
-        if self._window._dialog==self then self._window._dialog=nil end
-        cleanup(self); self.Frame:Destroy()
+        cleanup(self); self._window:_cancelAnimations(self.Frame,false)
+        local function remove()
+            if self._window._dialog==self then self._window._dialog=nil end
+            self._window:_cancelAnimations(self.Frame,false); self.Frame:Destroy()
+        end
+        if reason=="destroyed" or reason=="hidden" or reason=="replaced" or self._window.Destroyed or self._window._closing then remove()
+        else self._window:_animate(self.Frame,{BackgroundTransparency=1},.1,"dialog",self,remove) end
         call(self._window,options.OnClose,self.Reason,index)
     end
     function dialog:Choose(index)
@@ -2621,6 +3802,10 @@ function Window:Dialog(options)
     connect(dialog,self.Root:GetPropertyChangedSignal("AbsoluteSize"),function() dialog:_layout() end)
     connect(dialog,dialog.Frame.Destroying,function() dialog:Close("destroyed") end)
     self._dialog=dialog; dialog:_layout()
+    dialog.Frame.BackgroundTransparency=1
+    dialog.Panel.Position=UDim2.new(.5,0,.5,5)
+    self:_animate(dialog.Panel,{Position=UDim2.fromScale(.5,.5)},.12,"dialog",dialog)
+    self:_animate(dialog.Frame,{BackgroundTransparency=.45},.12,"dialog",dialog)
     return dialog
 end
 function Window:Confirm(options)
@@ -2720,7 +3905,7 @@ function Window:_inputEnded(input)
             self._touchToggles[control]=nil
             local position=point(input); local delta=position-touch.Position
             if not control.Destroyed and not control.Disabled and not control._touchWasLongPress and not touch.Moved and not self._dialog and not self._binding
-                and self.Main.Visible and control.Frame.Visible and control._section._visible~=false and control._section._tab==self.ActiveTab
+                and self._shown~=false and self.Main.Visible and control.Frame.Visible and control._section._visible~=false and not (control._section._parentSection or control._section)._collapsed and control._section._tab==self.ActiveTab
                 and inside(control.Frame,position) and delta.X*delta.X+delta.Y*delta.Y<=100 then control:SetValue(not control.Value) end
         end
     end
@@ -2772,6 +3957,10 @@ function Library:CreateWindow(options)
     resolveIcon(options.Icon)
     assert(options.PixelIcons==nil or type(options.PixelIcons)=="boolean","PixelIcons must be a boolean")
     assert(options.PixelDecorations==nil or type(options.PixelDecorations)=="boolean","PixelDecorations must be a boolean")
+    assert(options.SmoothDragging==nil or type(options.SmoothDragging)=="boolean","SmoothDragging must be a boolean")
+    assert(options.DragResponsiveness==nil or finite(options.DragResponsiveness) and options.DragResponsiveness>=8 and options.DragResponsiveness<=80,"DragResponsiveness must be 8–80")
+    assert(options.Debug==nil or type(options.Debug)=="boolean","Debug must be a boolean")
+    assert(options.CallbackExecutor==nil or type(options.CallbackExecutor)=="function","CallbackExecutor must be a function")
     assert(RunService:IsClient(),"CreateWindow must run on the Roblox client")
     local player=Players.LocalPlayer
     if options.Parent~=nil then assert(typeof(options.Parent)=="Instance","Parent must be a Roblox Instance") end
@@ -2801,6 +3990,10 @@ function Library:CreateWindow(options)
         Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,TooltipDelay=tooltipDelay,TooltipMaxWidth=tooltipWidth,
         ReducedMotion=options.ReducedMotion == true,Scanlines=options.Scanlines == true,
         PixelIcons=options.PixelIcons~=false,PixelDecorations=options.PixelDecorations~=false,
+        SmoothDragging=options.SmoothDragging~=false,DragResponsiveness=options.DragResponsiveness or 24,
+        Debug=options.Debug==true,CallbackExecutor=options.CallbackExecutor,
+        _diagnostics={},_errorListeners={},Tasks={},_actions={},_groups={},_visualQueue={},_flagStates={},_actionHistory={},_nextAction=0,
+        _tweens={},Animations=Library._animationSettings(options.Animations),_shown=true,_visibilityToken=0,
         NotificationsEnabled=options.Notifications~=false,LauncherEnabled=options.Launcher~=false,
         ErrorNotifications=options.ErrorNotifications~=false,
         SettingsEnabled=options.Settings~=false,AutoSave=options.AutoSave,StorageMode="memory",
@@ -2812,6 +4005,9 @@ function Library:CreateWindow(options)
         _floatingButtons={},_floatingPositions={},_touchToggles={},
         _requestedSize=size,Controls={},Flags={},Tabs={},Destroyed=false,
     },Window)
+    assert(finite(window.DragResponsiveness) and window.DragResponsiveness>=8 and window.DragResponsiveness<=80,"DragResponsiveness must be 8–80")
+    assert(window.CallbackExecutor==nil or type(window.CallbackExecutor)=="function","CallbackExecutor must be a function")
+    window._resources=self:CreateScope(); window._resources._window=window
     if window.AutoSave~=nil then profileName(window.AutoSave) end
     assert(finite(window.FloatSize) and window.FloatSize>=44 and window.FloatSize<=96,"FloatSize must be 44–96")
     assert(finite(window.FloatOpacity) and window.FloatOpacity>=.2 and window.FloatOpacity<=1,"FloatOpacity must be 0.2–1")
@@ -2824,6 +4020,7 @@ function Library:CreateWindow(options)
         if adapter then window:SetStorage(adapter) end
     end
     window._initial={ Theme=theme,ThemeColors=copy(self.Themes[theme]),Accent=window.Accent,Scale=userScale,ReducedMotion=window.ReducedMotion,
+        Animations=copy(window.Animations),SmoothDragging=window.SmoothDragging,DragResponsiveness=window.DragResponsiveness,
         Scanlines=window.Scanlines,PixelIcons=window.PixelIcons,PixelDecorations=window.PixelDecorations,
         Notifications=window.NotificationsEnabled,Launcher=window.LauncherEnabled,ToggleKey=toggle,
         FloatSize=window.FloatSize,FloatOpacity=window.FloatOpacity,QuickActions=window.QuickActionsEnabled,LauncherText=window.LauncherText,LauncherPosition=window.LauncherPosition }
@@ -2918,8 +4115,9 @@ function Library:CreateWindow(options)
         local p=point(input)
         if p.X>=header.AbsolutePosition.X+header.AbsoluteSize.X-104 then return end
         local start,center=p,Vector2.new(window.Main.AbsolutePosition.X+window.Main.AbsoluteSize.X/2,window.Main.AbsolutePosition.Y+window.Main.AbsoluteSize.Y/2)
+        window._dragRender=nil
         window:_beginDrag(window,input,function(current)
-            window._position=center+(current-start); window:_layout()
+            window:_moveWindow(center+(current-start))
         end)
     end)
     connect(window,window.ResizeGrip.InputBegan,function(input)
@@ -2962,13 +4160,19 @@ function Library:CreateWindow(options)
     window:SetPixelDecorations(window.PixelDecorations)
     window:_layout(); window:_applyTheme()
     if window.SettingsEnabled then window:_createSettings() end
+    window:_animateWindow(true)
     sharedWindows[window.Gui]=window
     return window
 end
 function Window:Destroy()
     if self.Destroyed or self._closing then return end
     self._closing=true
+    self:_cancelAnimations(nil,false)
     self:_releaseBindings()
+    if self.StopAll then self:StopAll("destroyed") end
+    if self._resources then self._resources:Destroy() end
+    self._dragRender=nil; self._visualQueue={}
+    if self._runtimeConnection then self._runtimeConnection:Disconnect(); self._runtimeConnection=nil end
     self.Destroyed=true; self._saveToken=self._saveToken+1
     self._closing=false
     self:_hideTooltip()
@@ -2982,7 +4186,7 @@ function Window:Destroy()
     local tabs={}
     for _,tab in ipairs(self.Tabs) do table.insert(tabs,tab) end
     for _,tab in ipairs(tabs) do tab:Destroy() end
-    while #self._notifications>0 do self._notifications[1]:Destroy() end
+    while #self._notifications>0 do self._notifications[1]:Destroy(true) end
     local icons={}; for handle in pairs(self._icons) do icons[#icons+1]=handle end
     for _,handle in ipairs(icons) do handle:Destroy() end
     self.Controls={}; self.Flags={}; self._keybinds={}; self._rainbows={}; self._skin={}

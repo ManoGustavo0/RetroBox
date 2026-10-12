@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.4.0
+# RetroBox UI API · 1.5.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -15,6 +15,8 @@ Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Texto
 | `GetCapabilities()` | Booleans: GetHui, ReadFile, WriteFile, MakeFolder, IsFile, IsFolder, ListFiles, FileStorage |
 | `CreateFileStorage(folder?)` | Adaptador de arquivos; retorna tabela ou nil, reason se faltam funções |
 | `DestroyAll()` | Destrói janelas desta instância |
+| `CreateScope()` / `CreateState(value, options?)` | Recursos gerenciados / estado observável independente |
+| `Batch(callback)` / `FormatValue(value, format?, precision?)` | Coalescer estados / formatar números |
 
 Todos os métodos acima usam `Library:Nome(...)`.
 
@@ -42,6 +44,9 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | `Settings` / `Launcher` / `Notifications` | `true` | Aba Configurações + engrenagem, reabrir e notificações |
 | `ErrorNotifications` | `true` | Avisos de erros em callbacks; respeita Notifications |
 | `ReducedMotion` / `Scanlines` | `false` | Reduzir animações e linhas CRT estáticas |
+| `Animations` | `{Enabled=true, Speed=1, Intensity="Normal"}` | Speed .25–4; Intensity Normal/Subtle/Off; preferência salva |
+| `SmoothDragging` / `DragResponsiveness` | `true` / `24` | Suavização do arraste; resposta 8–80; preferências salvas |
+| `Debug` / `CallbackExecutor` | `false` / nil | Traceback/estado nos diagnósticos e adaptador síncrono de callbacks |
 | `DestroyOnClose` | `false` | X oculta e permite reabrir; true destrói |
 | `LauncherText` / `LauncherPosition` | `"UI"` / `Vector2.new(.025,.1)` | Texto de 1–16 bytes e posição relativa à tela (0–1) |
 | `QuickActions` | `true` | Exibe atalhos flutuantes registrados pelos controles |
@@ -80,6 +85,15 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 | `SearchControls(text)` | Lista resultados {Control, Tab, Section}; exclui controles internos/ocultos |
 | `FocusControl(controlOrId)` | Abre a aba, rola e destaca; retorna ok, err sem executar a ação |
 | `GetFlag(id)` / `SetFlag(id, value, silent?)` | Consultar/alterar controle |
+| `SetFlags(values, {Silent?})` / `GetFlagState(id)` | Lote validado; estado observável somente leitura da flag |
+| `CreateScope(options?)` / `Manage(resource, method?, key?)` | Recursos ligados à janela |
+| `CreateTask(options)` / `StartTask(id)` / `StopTask(id, reason?)` | Tarefas periódicas sem sobreposição |
+| `RunAction(options)` / `StopAll(reason?)` | Ações canceláveis e parada das tarefas/ações gerenciadas |
+| `CreateState(value, options?)` / `Computed(sources, calculate)` / `Condition(rule)` | Estados, valores derivados e condições |
+| `SetAnimations(options)` / `GetAnimations()` | Configuração e cópia das preferências |
+| `SetDragOptions({Smooth?, Responsiveness?})` | Preferências de arraste |
+| `SetDebug(bool)` / `SetCallbackExecutor(fnOrNil)` | Diagnóstico e execução |
+| `OnError(callback)` / `GetDiagnostics()` / `GetRuntimeStats()` | Listener de falhas, cópia dos últimos 64 erros e contagens do runtime |
 | `ExportConfig(asTable?)` | Retorna JSON ou cópia de tabela |
 | `ImportConfig(source, {Silent?, Strict?})` | JSON/tabela; retorna ok, err |
 | `SaveConfig(name)` | Retorna ok, jsonOrError |
@@ -94,7 +108,9 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 
 Use `window:Metodo(...)`. `window.Flags` pode ser consultado; escrever diretamente nessa tabela não atualiza componentes. Use SetFlag.
 
-Notify aceita Title, Content, Kind (success/error/normal), Icon e Duration (0.1–30 s). Há no máximo quatro notificações. O ícone automático acompanha Kind; Icon=false remove.
+Notify aceita Title, Content, Kind (success/error/warning/loading/normal), Icon e Duration (0.1–30 s). Há no máximo quatro notificações. O ícone automático acompanha Kind; Icon=false remove. O handle oferece Destroy(immediate?). Loading é um estado visual com ícone estático, sem loop de animação.
+
+Veja [RUNTIME.md](RUNTIME.md) para todos os contratos novos: cards/gráficos, recursos, tarefas, ações, bindings, dependências, lotes, animações e diagnóstico. A API tradicional de callbacks continua disponível.
 
 ## Ícones em pixel art
 
@@ -118,7 +134,7 @@ local right = tab:CreateSection({ Title = "Detalhes", Side = "Right" })
 
 Telas estreitas empilham colunas e levam a navegação para o topo. `tab:Select()` seleciona; `tab:Destroy()` remove as categorias e controles.
 
-Section aceita `SetTitle(text)`, `SetVisible(bool)`, `CreateRow(options?)` e `Destroy()`.
+Section aceita `SetTitle(text)`, `SetVisible(bool)`, `CreateRow(options?)`, `SetCollapsed(bool, instant?)`, `IsCollapsed()` e `Destroy()`. `Collapsible=true` na criação adiciona o botão ao cabeçalho; Collapsed define o estado inicial.
 
 ```lua
 local row = left:CreateRow({ Gap = 10, StackAt = 440 })
@@ -134,9 +150,11 @@ Todos os constructors de Section aceitam `Icon`, opcional junto ao título. `Set
 
 `Id`, `Title`, `Description`, `Tooltip` (ou `Tip`), `Default`, `Callback`, `Visible` (true), `Disabled` (false), `Persist` e `FireOnInit` (false). Toggle, Button e Keybind também aceitam `Floating = true` ou opções de atalho flutuante.
 
+Controles com valor também aceitam `State`, `TwoWay` e `FireOnState`; `DependsOn` declara Visible/Enabled. `BindState`, `DependsOn`, `CreateScope`, `Manage` e `CreateTask` pertencem a Control. Veja [o contrato de bindings e recursos](RUNTIME.md).
+
 IDs são únicos por janela. Use IDs explícitos para preservar configurações entre versões. O prefixo `__retrobox/` é reservado. IDs automáticos seguem a ordem de criação.
 
-Callbacks comuns usam task.spawn e pcall. Liberações de Hold durante destruição ou restauração podem ser síncronas para encerrar o estado antes da operação; continuam protegidas. Erros geram logs e notificações quando habilitadas. A lógica e os eventos próprios do script pertencem ao desenvolvedor.
+Callbacks comuns usam task.spawn e xpcall. Liberações de Hold durante destruição ou restauração podem ser síncronas para encerrar o estado antes da operação; continuam protegidas. Erros geram diagnósticos, logs limitados e notificações quando habilitadas. A lógica e os eventos próprios do script pertencem ao desenvolvedor.
 
 ## Componentes de Section
 
@@ -155,10 +173,13 @@ Callbacks comuns usam task.spawn e pcall. Liberações de Hold durante destruiç
 | `AddLabel` | string | Height, descrição, SetText(text) |
 | `AddSeparator` | string | Divisor com título |
 | `AddImage` | string de imagem | Image, Height |
+| `AddStatCard` | number/string/nil | Unit, Subtitle, Trend, Loading/Unavailable, Format e sparkline opcional |
+| `AddChart` | array de pontos ou número em Progress | Type Line/Bar/Progress/Sparkline, MaxPoints, Min/Max e RefreshRate |
+| `AddLineChart` / `AddBarChart` / `AddProgressChart` / `AddSparkline` | Atalhos para AddChart | SetData, AddPoint, SetRange, SetMaxPoints, Clear; veja RUNTIME |
 
 Cada constructor recebe uma tabela de opções. Label e Separator também aceitam texto diretamente.
 
-Button, Label, Separator, Image e Console não persistem. Progress só persiste com Persist=true.
+Button, Label, Separator, Image, Console, StatCard e gráficos não persistem. Progress só persiste com Persist=true.
 
 Input confirma ao perder foco; Live=true confirma cada edição válida. Validate(text) retorna true ou false, reason. Entradas inválidas conservam o valor anterior. MaxLength conta bytes.
 

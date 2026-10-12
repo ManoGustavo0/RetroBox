@@ -12,6 +12,8 @@ Para atualizar, substitua os arquivos dentro de `RetroBox-UI-v1.1.0/retrobox-ui`
 
 Tooltip requer a fonte 1.2.0 ou posterior. Configurações/lista de saves, mouse, linhas, diálogos, pesquisa navegável e atalhos flutuantes requerem a fonte 1.3.0 ou posterior publicada nesse caminho. A identidade em pixel art e os ícones por nome requerem a fonte 1.4.0 ou posterior. Loader e exemplos deste pacote já usam essa URL. Carregue `RetroBox.lua` para obter a API; `examples/showcase.lua` monta uma demonstração pronta.
 
+O runtime gerenciado, cards, gráficos, estados, dependências e animações configuráveis requerem 1.5.0. `examples/dashboard.lua` demonstra a integração com dados simulados. Uma atualização em PR só aparece no raw de main depois de mesclada; para testar antes, troque main pelo hash completo do commit da PR.
+
 ## Publicar em outro repositório
 
 1. Extraia o ZIP e abra a pasta `retrobox-ui`.

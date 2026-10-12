@@ -329,6 +329,9 @@ test("autosave debounces changes into the latest file state",function()
 end)
 dofile("tests/workflows.lua")(Mock,Library,test)
 dofile("tests/icons.lua")(Mock,Library,test)
+dofile("tests/runtime.lua")(Mock,Library,test)
+dofile("tests/dashboard.lua")(Mock,Library,test)
+dofile("tests/animation.lua")(Mock,Library,test)
 test("diagnostic loader reports HTTP, compile and library errors",function()
     loadstring=load
     for _,response in ipairs({function() error("HTTP failed") end,function() return "local" end,function() return "return {}" end,function() return "" end}) do
@@ -348,7 +351,7 @@ test("all shipped examples use the public API and clean up",function()
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -357,9 +360,17 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==7 and #loaded==7)
+    assert(requests==8 and #loaded==8)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
+            if window.Id=="dashboard-demo" then
+                assert(window:SetFlags({simulate=true,interval=.3})); Mock.pump()
+                Mock.Services.RunService.RenderStepped:Fire(.1); Mock.pump()
+                assert(window:GetFlag("total")>1250 and #window:GetFlag("history")==5)
+                assert(window.Controls.process:Press()); Mock.pump()
+                assert(window.Controls.process:GetAction().Result.Processed==20 and window:GetFlag("progress")==100)
+                window:StopAll(); assert(not window.Tasks.simulation.Requested)
+            end
             window:ShowSettings(true); window:ShowSettings(false)
             assert(window:ImportConfig(window:ExportConfig(),{Silent=true}))
         end

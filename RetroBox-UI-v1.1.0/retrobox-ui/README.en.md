@@ -59,6 +59,12 @@ The executor needs `loadstring` and `game:HttpGet`. [Loader.lua](Loader.lua) add
 - Keyboard/Mouse 1–3 capture, inline toggle keybinds, responsive control rows and draggable touch shortcuts.
 - JSON profiles, optional debounced AutoSave, automatic executor file storage and custom adapters.
 
+## Managed runtime
+
+Version 1.5 adds live stat cards and Line/Bar/Progress/Sparkline charts, bounded histories, pooled geometry, resource scopes, idempotent periodic tasks, cancellable actions and execution groups. Shared states, bindings, All/Any/Not dependencies and batch flag updates coordinate the interface. A central animator respects ReducedMotion; animation/drag preferences round-trip through existing profiles. Collapsible sections, protected background callbacks and bounded Debug diagnostics complete the update.
+
+Hiding/minimizing preserves work by default. Destroy cleans managed resources; long-running callbacks must cooperate with cancellation. See [the runtime guide](docs/RUNTIME.md) and [dashboard.lua](examples/dashboard.lua) for simulated data and a complete integration.
+
 ## Tooltips
 
 Pass `Tooltip = "Your explanation"` or `{Title = "Help", Text = "Your explanation", Delay = 0.4, MaxWidth = 320}` to a control. `Tip` is an alias. Hover opens the tip after 0.4 seconds by default. On touch devices, long-press the title or description, then tap the tip or elsewhere to dismiss it. Reading a tip does not run the control's callback.
@@ -102,8 +108,8 @@ print(window.StorageMode) -- file, memory or custom
 
 ## Examples and testing
 
-[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use this repository's existing source path. Publish version 1.4.0 or later there before running the updated examples; update the URLs if you move the source.
+[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use this repository's existing source path. Publish version 1.5.0 or later there before running the dashboard; update the URLs if you move the source.
 
-82 local logic tests passed. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+120 local logic tests passed, including eight examples and yielding workers/delayed tween doubles. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

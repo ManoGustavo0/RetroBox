@@ -146,8 +146,8 @@ def visual_concept():
     text(right_x + 15, right_y + 49, "Cor do FOV", size=17)
     text(right_x + 15, right_y + 77, "Cor fixa, HSV, HEX ou RGB animado.", "Muted", 12)
     raised((right_x + 15, right_y + 112, right_x + right_w - 15, right_y + 147))
-    rect((right_x + 25, right_y + 120, right_x + 55, right_y + 138), "#326EAA", "Border")
-    text(right_x + 67, right_y + 120, "#326EAA", size=14)
+    text(right_x + 25, right_y + 120, "#326EAA", size=14)
+    rect((right_x + right_w - 57, right_y + 120, right_x + right_w - 27, right_y + 138), "#326EAA", "Border")
     pad_x, pad_y = right_x + 24, right_y + 166
     pad_w, pad_h = right_w - 48, 105
     target = (0, 125, 230)
@@ -196,6 +196,81 @@ def visual_concept():
     image.save(ROOT / "docs/visual-concept.png", optimize=True)
 
 
+def dashboard_concept():
+    import math
+
+    image = Image.new("RGB", (1280, 1040), "#F0EDDF")
+    draw = ImageDraw.Draw(image)
+
+    def text(x, y, value, role="Text", size=16):
+        draw.text((x, y), value, fill=COLORS[role], font=ImageFont.truetype("DejaVuSansMono.ttf", size))
+
+    def box(bounds, role="Surface", inset=False):
+        x1, y1, x2, y2 = bounds
+        draw.rectangle(bounds, fill=COLORS[role])
+        bright, dark = ("Shadow", "Highlight") if inset else ("Highlight", "Shadow")
+        draw.line((x1, y2, x1, y1, x2, y1), fill=COLORS[bright], width=2)
+        draw.line((x1, y2, x2, y2, x2, y1), fill=COLORS[dark], width=2)
+
+    draw_icon(draw, "retrobox", 54, 35, 4)
+    text(122, 39, "RETROBOX / LIVE COMPONENTS", "Accent", 28)
+    text(56, 101, f"v{VERSION}  /  dados simulados  /  identidade retrô", "Muted")
+    box((50, 148, 1228, 940), "Background")
+    draw.rectangle((55, 153, 1223, 190), fill=COLORS["Accent"])
+    draw_icon(draw, "terminal", 67, 161, 2, "AccentText")
+    text(103, 161, "RetroBox / Dashboard", "AccentText", 17)
+    for index, name in enumerate(("minimize", "maximize", "close")):
+        box((1115 + index * 34, 159, 1143 + index * 34, 184))
+        draw_icon(draw, name, 1123 + index * 34, 166, 1)
+    text(68, 207, "Controles dinâmicos, sem perder o estilo da RetroBox.", "Muted", 14)
+    for index, (title, icon) in enumerate((("Dashboard", "grid"), ("Ações", "chevron-right"), ("Visual", "palette"), ("Configurações", "settings"))):
+        y = 250 + index * 46
+        box((66, y, 230, y + 35), "Accent" if index == 0 else "Surface")
+        draw_icon(draw, icon, 77, y + 11, 1, "AccentText" if index == 0 else "Text")
+        text(101, y + 9, title, "AccentText" if index == 0 else "Text", 13)
+    box((251, 248, 1209, 285), "Inset", True)
+    draw_icon(draw, "search", 264, 260, 1)
+    text(287, 258, "Buscar controles...", "Muted", 14)
+    for x, title, value, subtitle, icon in ((251, "TOTAL", "12.5K", "+250 nesta sessão", "star"), (575, "TEMPO ATIVO", "03:42", "Atualização gerenciada", "refresh"), (899, "AMOSTRA ATUAL", "24 un/s", "+6 desde a última", "bolt")):
+        box((x, 307, x + 310, 440))
+        draw_icon(draw, icon, x + 13, 323, 1, "Muted")
+        text(x + 35, 321, title, "Muted", 12)
+        box((x + 10, 348, x + 300, 430), "Inset", True)
+        text(x + 22, 359, value, size=30)
+        text(x + 22, 405, subtitle, "Success" if icon != "refresh" else "Muted", 12)
+    box((251, 460, 831, 730)); text(269, 474, "HISTÓRICO / 60 AMOSTRAS", "Muted", 12)
+    box((309, 511, 812, 695), "Inset", True)
+    for row in range(5):
+        y = 514 + row * 44
+        draw.line((312, y, 808, y), fill=COLORS["Border"])
+    points = [(313 + index * 8, 608 - int(47 * math.sin(index * .27) + 14 * math.cos(index * .71))) for index in range(62)]
+    draw.line(points, fill=COLORS["Accent"], width=3)
+    text(270, 511, "32", "Muted", 11); text(270, 678, "8", "Muted", 11)
+    text(311, 703, "1", "Muted", 11); text(785, 703, "60", "Muted", 11)
+    box((849, 460, 1209, 730)); text(865, 474, "CATEGORIAS", "Muted", 12)
+    box((877, 511, 1191, 695), "Inset", True)
+    for index, height in enumerate((93, 144, 117, 68)):
+        x = 896 + index * 71
+        draw.rectangle((x, 691 - height, x + 44, 691), fill=COLORS["Accent"])
+        text(x + 16, 703, "ABCD"[index], "Muted", 11)
+    box((251, 749, 1209, 869)); text(269, 762, "AÇÃO CANCELÁVEL", "Muted", 12)
+    box((269, 791, 768, 818), "Inset", True)
+    draw.rectangle((272, 794, 577, 815), fill=COLORS["Accent"])
+    text(486, 797, "62%", "AccentText", 12)
+    text(270, 834, "Etapa 12 de 20  /  cancelamento cooperativo", "Muted", 12)
+    box((790, 791, 983, 825)); text(815, 798, "Cancelar ação", size=14)
+    box((1001, 791, 1190, 825)); draw_icon(draw, "close", 1016, 801, 1)
+    text(1040, 798, "Parar tudo", size=14)
+    draw.line((66, 887, 1210, 887), fill=COLORS["Border"])
+    box((70, 900, 104, 931), "Inset", True); text(79, 903, "R", "Accent", 20)
+    text(116, 899, "Seu nome", size=13); text(116, 918, "@usuario", "Muted", 11)
+    draw_icon(draw, "settings", 240, 906, 2)
+    text(981, 910, "RightShift / menu", "Muted", 12)
+    text(54, 970, "CONCEITO VISUAL · perfil ilustrativo · conferência no executor pendente", "Muted", 14)
+    text(54, 1005, "States + Tasks + Scopes + Charts + Actions", "Accent", 15)
+    image.save(ROOT / "docs/dashboard-concept.png", optimize=True)
+
+
 def mark():
     (ROOT / "assets/retrobox-mark.svg").write_text(icon_svg("retrobox", background=True))
 
@@ -219,5 +294,6 @@ def release_zip():
 if __name__ == "__main__":
     pixel_catalog()
     visual_concept()
+    dashboard_concept()
     mark()
     release_zip()

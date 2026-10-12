@@ -2,7 +2,7 @@
 
 Library de GUI em Luau para desenvolvedores de scripts executados no cliente Roblox por executores. Um arquivo independente, carregado pelo link **raw do GitHub**, com visual retrô e API para conectar componentes às funções do seu script.
 
-[English](README.en.md) · [API completa](docs/API.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
+[English](README.en.md) · [API completa](docs/API.md) · [Runtime 1.5](docs/RUNTIME.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
 
 ![Conceito visual da RetroBox UI](docs/visual-concept.png)
 
@@ -74,6 +74,34 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Atalhos flutuantes para toque, com arraste, tamanho/opacidade e posições salvas.
 - JSON, perfis e salvamento automático opcional.
 - Limpeza de eventos ao destruir controles ou a janela; `OnDestroy` para limpar eventos do seu próprio script.
+- Cards de estatísticas ao vivo e gráficos Line/Bar/Progress/Sparkline com histórico limitado, escala automática/manual e elementos reaproveitados.
+- Scopes de recursos, tarefas periódicas idempotentes, ações com progresso/cancelamento e grupos Reject/Ignore/Queue/Replace.
+- Estados observáveis, bindings, dependências All/Any/Not e `SetFlags` coordenado, com callbacks após aplicar todos os valores.
+- Animador central, movimento suave e preferências salvas; ReducedMotion elimina transições. Categorias podem ser recolhidas.
+- Debug opcional com histórico limitado, traceback/estado e adaptador genérico de callbacks.
+
+## Componentes dinâmicos e tarefas
+
+```lua
+local total = window:CreateState(0)
+category:AddStatCard({Title="Total",Icon="star",State=total,TwoWay=false,Format="Compact"})
+local history = category:AddLineChart({Title="Histórico",MaxPoints=60})
+local job = window:CreateTask({Id="sample",Interval=.5,Callback=function(ctx)
+    ctx:ThrowIfCancelled()
+    total:Update(function(value) return value+1 end)
+    history:AddPoint(total:Get())
+end})
+job:Start()
+-- job:Stop() / window:StopAll() / window:Destroy()
+```
+
+Ocultar ou minimizar mantém as tarefas ativas por padrão. Destruir limpa os recursos gerenciados; operações longas precisam respeitar o cancelamento cooperativo. A aba Aparência controla animações e arraste. Cards, gráficos e tarefas são dados temporários; os perfis continuam salvando opções e preferências.
+
+Veja [o guia do runtime](docs/RUNTIME.md) e [dashboard.lua](examples/dashboard.lua) para a demonstração com todas as visualizações, bindings, botões canceláveis, lote de flags, avisos e Stop All.
+
+![Conceito visual dos componentes dinâmicos](docs/dashboard-concept.png)
+
+*Ilustração da identidade e dos novos componentes, com dados simulados; não é captura da GUI em jogo.*
 
 ## Ícones em pixel art
 
@@ -217,12 +245,13 @@ A aba Configurações permite digitar o nome do save, salvar e depois selecioná
 | [tooltips.lua](examples/tooltips.lua) | Dicas simples, personalizadas e alteradas por código |
 | [workflows.lua](examples/workflows.lua) | Saves, keybind combinado, atalhos, pesquisa, feedback e diálogos |
 | [icons.lua](examples/icons.lua) | Catálogo, troca de ícones, temas e registro de pixel art própria |
+| [dashboard.lua](examples/dashboard.lua) | Dados simulados, cards/gráficos, estados, tarefas, dependências e ações canceláveis |
 | [executor-smoke.lua](tests/executor-smoke.lua) | Conferência na engine pelo executor |
 
-Loader e exemplos usam o raw deste repositório. Para carregar a atualização, `RetroBox.lua` nesse caminho precisa conter a versão 1.4.0 ou posterior. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
+Loader e exemplos usam o raw deste repositório. O dashboard novo requer `RetroBox.lua` 1.5.0 ou posterior nesse caminho; ícones requerem 1.4.0. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
 
 ## Validação e licença
 
-82 testes locais passaram, incluindo carregamento simulado do código raw, os sete exemplos, callbacks, saves entre execuções, entrada de mouse/teclado/toque, diálogos, busca, atalhos, cores, arquivos e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+120 testes locais passaram, incluindo carregamento simulado do código raw, os oito exemplos, gráficos, tarefas com yield/cancelamento, lotes, bindings, animações interrompidas, saves e limpeza de eventos. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026
