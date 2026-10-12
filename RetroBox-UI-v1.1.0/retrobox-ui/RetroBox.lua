@@ -1,4 +1,4 @@
--- RetroBox UI 1.5.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.6.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.5.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.6.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -17,6 +17,7 @@ local Row = {}; Row.__index = Row; setmetatable(Row,{__index=Section})
 local Control = {}; Control.__index = Control
 local RGB = Color3.fromRGB
 local U2 = UDim2.fromOffset
+local FIELD_PADDING=12
 -- Share lifecycle handles across separate raw-source loads. Reexecution must
 -- disconnect old input callbacks before engine Destroying events are resumed.
 local sharedWindows=setmetatable({},{__mode="k"})
@@ -292,7 +293,7 @@ local translations = {
         notices="Notificações", appearance="Aparência", accessibility="Interface e acessibilidade",
         pixelIcons="Ícones padrão em pixel art",pixelDecorations="Detalhes em pixel art",
         loading="Carregando...",unavailable="Indisponível",noData="Sem dados",
-        animations="Animações",animationSpeed="Velocidade das animações",animationIntensity="Intensidade",smoothDragging="Arrasto suave",
+        animations="Animações",animationSpeed="Velocidade das animações",animationIntensity="Intensidade",smoothDragging="Suavizar reposicionamento",
         intensitySubtle="Discreta",intensityNormal="Normal",intensityOff="Desativada",
         shortcut="Atalho da janela", configs="Configurações", profile="Nome da configuração", save="Salvar",
         load="Carregar", export="Exportar JSON", import="Importar JSON", reset="Restaurar padrões",
@@ -309,7 +310,7 @@ local translations = {
         notices="Notifications", appearance="Appearance", accessibility="Interface and accessibility",
         pixelIcons="Default pixel art icons",pixelDecorations="Pixel art details",
         loading="Loading...",unavailable="Unavailable",noData="No data",
-        animations="Animations",animationSpeed="Animation speed",animationIntensity="Intensity",smoothDragging="Smooth dragging",
+        animations="Animations",animationSpeed="Animation speed",animationIntensity="Intensity",smoothDragging="Smooth repositioning",
         intensitySubtle="Subtle",intensityNormal="Normal",intensityOff="Off",
         shortcut="Window shortcut", configs="Configurations", profile="Configuration name", save="Save",
         load="Load", export="Export JSON", import="Import JSON", reset="Restore defaults",
@@ -408,7 +409,7 @@ local function textbox(window, parent, text, props)
         Size=UDim2.new(1,0,0,32), RichText=false }
     for k, v in pairs(props or {}) do properties[k] = v end
     local object = ui(window, "TextBox", properties, { BackgroundColor3="Inset", TextColor3="Text", BorderColor3="Border", PlaceholderColor3="Muted" })
-    ui(window, "UIPadding", { Name="TextPadding",Parent=object, PaddingLeft=UDim.new(0,8), PaddingRight=UDim.new(0,8) })
+    ui(window, "UIPadding", { Name="TextPadding",Parent=object, PaddingLeft=UDim.new(0,FIELD_PADDING), PaddingRight=UDim.new(0,FIELD_PADDING) })
     return object
 end
 local function list(window, parent, gap, horizontal)
@@ -602,11 +603,11 @@ do
         local halfX=size.X*scale/2; local halfY=(self.Minimized and 42 or size.Y)*scale/2
         return Vector2.new(clamp(center.X,halfX+8,math.max(halfX+8,view.X-halfX-8)),clamp(center.Y,halfY+24,math.max(halfY+24,view.Y-halfY-8)))
     end
-    function Window:_moveWindow(center)
+    function Window:_moveWindow(center,direct)
         self:_cancelTrack(self.Main,"window",false)
         if self._shown~=false then self.Main.BackgroundTransparency=0 end
         center=self:_clampCenter(center); self._position=center
-        if self.SmoothDragging and not self.ReducedMotion then
+        if self.SmoothDragging and not self.ReducedMotion and not direct then
             self._dragRender={Target=center}; self:_refreshRuntime()
         else self._dragRender=nil; self.Main.Position=U2(center.X,center.Y); self:_refreshRuntime() end
     end
@@ -876,63 +877,187 @@ do
         return self
     end
 
-    -- Cooperative contexts never force-terminate user threads. Replacements in
-    -- the same group wait for the cancelled worker to return before starting.
+    -- Completion waits resume only on settlement, cancellation or timeout.
+    -- No polling coroutine or per-wait frame connection is required.
+    local Context={}; Context.__index=Context
     local function token(window,scope)
-        local context={Window=window,Resources=scope,Cancelled=false}
-        function context:IsCancelled() return self.Cancelled or window.Destroyed end
-        function context:ThrowIfCancelled() if self:IsCancelled() then error(cancelSignal,0) end end
-        function context:Manage(resource,method,key) return self.Resources:Add(resource,method,key) end
-        function context:Cancel(reason)
-            if self.Cancelled then return end
-            self.Cancelled=true; self.Reason=reason or "cancelled"; self.Resources:Destroy()
-        end
+        local context=setmetatable({Window=window,Resources=scope,Cancelled=false,_cancelListeners={}},Context)
+        scope:Add(function()
+            local listeners={}; for listener in pairs(context._cancelListeners) do listeners[#listeners+1]=listener end
+            for _,listener in ipairs(listeners) do listener:Disconnect() end
+        end)
         return context
+    end
+    function Context:IsCancelled()
+        return self.Cancelled or self.Window.Destroyed or self.ParentContext and self.ParentContext:IsCancelled() or false
+    end
+    function Context:ThrowIfCancelled() if self:IsCancelled() then error(cancelSignal,0) end end
+    function Context:Manage(resource,method,key) return self.Resources:Add(resource,method,key) end
+    function Context:OnCancel(callback)
+        assert(type(callback)=="function","OnCancel requires a function")
+        local owner=self; local listener={Connected=true,Callback=callback}
+        function listener:Disconnect() self.Connected=false; owner._cancelListeners[self]=nil end
+        if self:IsCancelled() then listener.Connected=false; self.Window:_protected(callback,{Phase="Cancellation"},self.Reason)
+        elseif self.Resources.Destroyed then listener.Connected=false
+        else self._cancelListeners[listener]=true end
+        return listener
+    end
+    function Context:Cancel(reason)
+        if self.Cancelled then return end
+        self.Cancelled=true; self.Reason=tostring(reason or "cancelled"):sub(1,2048)
+        local listeners={}; for listener in pairs(self._cancelListeners) do listeners[#listeners+1]=listener end
+        for _,listener in ipairs(listeners) do
+            if listener.Connected then self.Window:_protected(listener.Callback,{Phase="Cancellation"},self.Reason) end
+            listener:Disconnect()
+        end
+        self.Resources:Destroy()
+    end
+    function Context:AwaitAction(handle,options)
+        local opts={}; for k,v in pairs(options or {}) do opts[k]=v end; opts.Context=self
+        return self.Window:AwaitAction(handle,opts)
+    end
+    local function awaitedResult(handle)
+        if handle._status.Status=="Completed" then return true,handle.Result,"Completed" end
+        if handle._status.Status=="Failed" then return false,handle.Error or "Action failed","Failed" end
+        return false,handle.Error or handle.Context.Reason or "Action cancelled","Cancelled"
+    end
+    function Window:AwaitAction(handle,options)
+        options=options or {}
+        assert(type(options)=="table","AwaitAction options must be a table")
+        assert(type(handle)=="table" and handle._window==self and type(handle.GetStatus)=="function","AwaitAction requires an action from this window")
+        local timeout,context=options.Timeout,options.Context
+        assert(timeout==nil or finite(timeout) and timeout>=0 and timeout<=86400,"Await timeout must be 0–86400 seconds")
+        assert(context==nil or getmetatable(context)==Context and context.Window==self,"Await context must belong to this window")
+        assert(options.CancelAction==nil or type(options.CancelAction)=="boolean","CancelAction must be boolean")
+        assert(options.Throw==nil or type(options.Throw)=="boolean","Throw must be boolean")
+        local function deliver(ok,result,status)
+            if not ok and options.Throw then
+                if status=="Cancelled" and context and context:IsCancelled() then error(cancelSignal,0) end
+                error(tostring(result),2)
+            end
+            return ok,result,status
+        end
+        -- Completed handles remain readable after history eviction or Destroy.
+        if handle.Finished then return deliver(awaitedResult(handle)) end
+        if context and context.Action==handle then return deliver(false,"An action cannot await itself","Rejected") end
+        if context and context.Action and context.Action.Group==handle.Group and handle._status.Status=="Queued" then
+            return deliver(false,"Awaiting a queued action in the current group would deadlock","Rejected")
+        end
+        local function cancelled(reason,status)
+            if options.CancelAction then handle:Cancel(reason) end
+            return deliver(false,reason,status or "Cancelled")
+        end
+        if self.Destroyed or handle.Destroyed then return cancelled("Window or handle has been destroyed") end
+        if context and (context:IsCancelled() or context.Resources.Destroyed) then return cancelled(context.Reason or "Wait context is no longer active") end
+        if timeout==0 then return cancelled("Action wait timed out","TimedOut") end
+        local thread,main=coroutine.running()
+        if not thread or main then return deliver(false,"AwaitAction requires a yielding worker; use task.spawn or a runtime callback","Rejected") end
+        self._waitCount=self._waitCount or 0
+        if self._waitCount>=256 then return deliver(false,"Action wait limit is 256 per window","Rejected") end
+        local scope=self:CreateScope(); local settled,parked=false,false; local outcome
+        local function resolve(ok,result,status)
+            if settled then return end
+            settled=true; outcome=table.pack(ok,result,status)
+            if not ok and options.CancelAction and (status=="Cancelled" or status=="TimedOut") then handle:Cancel(result) end
+            scope:Destroy()
+            if parked and coroutine.status(thread)=="suspended" then task.defer(thread,table.unpack(outcome,1,outcome.n)) end
+        end
+        self._waitCount=self._waitCount+1
+        scope:Add(function()
+            self._waitCount=self._waitCount-1; handle._awaiters[scope]=nil
+            if not settled then resolve(false,"Wait owner was destroyed","Cancelled") end
+        end)
+        handle._awaiters[scope]=function(destroyed)
+            if handle.Finished then resolve(awaitedResult(handle))
+            elseif destroyed then resolve(false,"Action handle was destroyed","Cancelled") end
+        end
+        if context then scope:Add(context:OnCancel(function(reason) resolve(false,reason or "Wait cancelled","Cancelled") end),"Disconnect") end
+        if timeout then
+            local timer=task.delay(timeout,function() resolve(false,"Action wait timed out","TimedOut") end)
+            scope:Add(function()
+                if timer and timer~=coroutine.running() and type(task.cancel)=="function" then pcall(task.cancel,timer) end
+                timer=nil
+            end)
+        end
+        -- A synchronous cancellation or completion during registration wins.
+        if handle.Finished and not settled then resolve(awaitedResult(handle)) end
+        if settled then return deliver(table.unpack(outcome,1,outcome.n)) end
+        parked=true
+        return deliver(coroutine.yield())
+    end
+
+    local function safeResult(value)
+        local ok,result=pcall(cloneState,value); if ok then return result end
+        return nil
+    end
+    local function taskUpdate(job,phase)
+        if phase then job._phase=phase end
+        if job.Status.Destroyed then return end
+        job.Status:_assign({Id=job.Id,Status=job._phase,Requested=job.Requested,Active=job.Requested or job.InFlight,
+            Running=job._callbackRunning==true,InFlight=job.InFlight,Interval=job.Interval,Iterations=job.Iterations,
+            NextRun=job.Requested and not job.InFlight and job.Next or nil,StartedAt=job.StartedAt,FinishedAt=job.FinishedAt,
+            LastResult=safeResult(job.LastResult),LastError=job.LastError,LastOutcome=job.LastOutcome,StopReason=job.StopReason,Group=job.Options.Group})
     end
     function Window:CreateTask(options)
         assert(not self.Destroyed and type(options)=="table","CreateTask requires options and a live window")
+        local supplied=options; options={}; for k,v in pairs(supplied) do options[k]=v end
         local id=options.Id; local interval=options.Interval or 1
         assert(type(id)=="string" and #id>=1 and #id<=128 and not self.Tasks[id],"Task Id must be unique and 1–128 bytes")
         assert(finite(interval) and interval>=.03 and interval<=86400,"Task Interval must be .03–86400 seconds")
         assert(type(options.Callback)=="function","Task Callback is required")
         assert(options.OnError==nil or options.OnError=="Stop" or options.OnError=="Continue","Task OnError is Stop or Continue")
         assert(options.Scope==nil or getmetatable(options.Scope)==Scope and not options.Scope.Destroyed,"Task Scope must be a live resource scope")
+        assert(options.Group==nil or type(options.Group)=="string" and #options.Group>=1 and #options.Group<=128,"Task Group must be 1–128 bytes")
+        assert(options.Policy==nil or options.Policy=="Ignore" or options.Policy=="Reject" or options.Policy=="Queue" or options.Policy=="Replace","Task Policy is Ignore, Reject, Queue or Replace")
+        assert(options.Policy==nil or options.Group~=nil,"Task Policy requires a Group")
         local count=0; for _ in pairs(self.Tasks) do count=count+1 end; assert(count<128,"Window task limit is 128")
         local owner=self
-        local job={Id=id,Interval=interval,Callback=options.Callback,Options=options,Requested=false,InFlight=false,Iterations=0,Generation=0}
+        local job={Id=id,Interval=interval,Callback=options.Callback,Options=options,Requested=false,InFlight=false,Iterations=0,Generation=0,_window=self,_phase="Inactive"}
+        job.Status=self:CreateState({Id=id,Status="Inactive",Requested=false,Active=false,Running=false,InFlight=false,Interval=interval,Iterations=0})
+        job.Status.ReadOnly=true
         local policyScope=(options.Scope or self._resources):Child({CancelOnHide=options.CancelOnHide==true,CancelOnDisable=options.CancelOnDisable==true,CancelOnFalse=options.CancelOnFalse==true})
         policyScope:Add(function() job:Stop("scope cleaned") end,nil,"stop")
+        function job:GetStatus()
+            local value=self.Status:Get()
+            value.Remaining=value.NextRun and math.max(0,value.NextRun-os.clock()) or nil
+            return value
+        end
+        function job:Subscribe(callback,immediate) return self.Status:Subscribe(callback,immediate) end
         function job:Start()
             if self.Destroyed or owner.Destroyed or policyScope.Destroyed then return false,"Task has been destroyed" end
             if self.Requested then return true end
             if not policyScope._keys.stop then policyScope:Add(function() self:Stop("scope cleaned") end,nil,"stop") end
-            self.Requested=true; self.Generation=self.Generation+1
+            self.Requested=true; self.Generation=self.Generation+1; self.StopReason=nil; self.LastError=nil
             self.Next=os.clock()+(options.Immediate==false and self.Interval or 0)
+            taskUpdate(self,self.InFlight and self._phase or "Waiting")
             owner:_refreshRuntime(); return true
         end
         function job:Stop(reason)
-            self.Requested=false; self.Generation=self.Generation+1
-            if self.Context then self.Context:Cancel(reason) end
+            if self.Destroyed then return self end
+            if not self.Requested and (not self.InFlight or self.Context and self.Context:IsCancelled()) and self._phase~="Inactive" then return self end
+            self.Requested=false; self.Generation=self.Generation+1; self.StopReason=tostring(reason or "stopped"):sub(1,2048)
+            if self.Context then self.Context:Cancel(self.StopReason) end
+            if self.Action and not self.Action.Finished then self.Action:Cancel(self.StopReason) end
+            taskUpdate(self,self.InFlight and "Cancelling" or "Stopped")
             owner:_refreshRuntime(); return self
         end
         job.Cancel=job.Stop
         function job:IsRunning() return self.Requested or self.InFlight end
         function job:SetInterval(value)
             assert(finite(value) and value>=.03 and value<=86400,"Task Interval must be .03–86400")
-            self.Interval=value; self.Next=os.clock()+value; return self
+            self.Interval=value; self.Next=os.clock()+value; taskUpdate(self); return self
         end
         function job:Destroy()
             if self.Destroyed then return end
-            self:Stop("destroyed"); self.Destroyed=true
-            policyScope:Destroy(); owner.Tasks[id]=nil; owner._resources:Remove("task:"..id,true)
+            self:Stop("destroyed"); self.Destroyed=true; taskUpdate(self,"Destroyed")
+            policyScope:Destroy(); self.Status:Destroy(); owner.Tasks[id]=nil; owner._resources:Remove("task:"..id,true)
         end
         self.Tasks[id]=job; self:Manage(job,"Destroy","task:"..id)
         if options.Start then job:Start() end
         return job
     end
     function Control:CreateTask(options)
-        assert(not self.Destroyed,"Control has been destroyed")
-        assert(type(options)=="table","CreateTask requires options")
+        assert(not self.Destroyed and type(options)=="table","CreateTask requires options and a live control")
         local original=options; options={}; for k,v in pairs(original) do options[k]=v end
         options.Scope=self._resources; options.ControlId=self.Id
         local job=self._window:CreateTask(options); self:Manage(job,"Destroy","task:"..job.Id); return job
@@ -940,29 +1065,88 @@ do
     function Window:_stepTasks()
         local now=os.clock(); local ready={}
         for _,job in pairs(self.Tasks) do if job.Requested and not job.InFlight and now>=job.Next then ready[#ready+1]=job end end
+        table.sort(ready,function(a,b) return a.Id<b.Id end)
         for _,job in ipairs(ready) do
             if not job.Destroyed and job.Requested and not job.InFlight then
                 job.InFlight=true; local generation=job.Generation
-                local scope=self:CreateScope(); local context=token(self,scope); job.Context=context
+                local scope=self:CreateScope(); local context=token(self,scope); context.Task=job; job.Context=context
+                taskUpdate(job,job.Options.Group and "WaitingForGroup" or "Waiting")
                 task.spawn(function()
-                    local ok,result,reason=true,nil,nil
-                    if not context:IsCancelled() and not job.Destroyed then
-                        ok,result,reason=self:_protected(job.Callback,{ControlId=job.Options.ControlId,Operation=job.Id,Phase="Task"},context)
+                    local ok,result,reason=true,nil,nil; local outcome="Completed"
+                    local function invoke(ctx)
+                        ctx.Task=job; ctx:ThrowIfCancelled()
+                        job._callbackRunning=true; job.StartedAt=os.clock(); taskUpdate(job,"Running")
+                        ctx:ThrowIfCancelled()
+                        return job.Callback(ctx)
                     end
-                    scope:Destroy(); job.Context=nil; job.InFlight=false; job.Iterations=job.Iterations+1
-                    if not ok and result~=cancelSignal then
-                        job.LastError=tostring(result)
-                        if job.Options.OnError~="Continue" then job.Requested=false end
+                    if context:IsCancelled() or job.Destroyed then outcome="Cancelled"
+                    elseif job.Options.Group then
+                        local action,err=self:RunAction({Group=job.Options.Group,Policy=job.Options.Policy or "Queue",ControlId=job.Options.ControlId,
+                            Callback=function(ctx) ctx.ParentContext=context; return invoke(ctx) end})
+                        job.Action=action
+                        if action then
+                            if context:IsCancelled() and not action.Finished then action:Cancel(context.Reason) end
+                            ok,result,outcome=self:AwaitAction(action)
+                        elseif err=="ignored" then outcome="Skipped"
+                        else ok=false; result=err; outcome="Rejected"; self:_diagnose({Operation=job.Id,Phase="TaskGroup"},err) end
+                    else
+                        ok,result,reason=self:_protected(invoke,{ControlId=job.Options.ControlId,Operation=job.Id,Phase="Task"},context)
+                        if context:IsCancelled() or result==cancelSignal then outcome="Cancelled"
+                        elseif not ok then outcome="Failed" end
                     end
-                    if job.Options.Once then job.Requested=false end
-                    if job.Generation==generation then job.Next=os.clock()+job.Interval end
-                    if not self.Destroyed and not job.Destroyed then self:_refreshRuntime() end
+                    if context:IsCancelled() then outcome="Cancelled" end
+                    job._callbackRunning=false; job.Action=nil; scope:Destroy(); job.Context=nil; job.InFlight=false
+                    job.Iterations=job.Iterations+1; job.FinishedAt=os.clock(); job.LastOutcome=outcome
+                    local failed=outcome=="Failed" or outcome=="Rejected"
+                    if failed then job.LastError=tostring(result):sub(1,2048)
+                    elseif outcome=="Completed" then job.LastResult=result; job.LastError=nil end
+                    if job.Generation==generation then
+                        if failed and job.Options.OnError~="Continue" or job.Options.Once then job.Requested=false end
+                        if job.Requested then job.Next=os.clock()+job.Interval end
+                    end
+                    if not job.Destroyed and not self.Destroyed then
+                        taskUpdate(job,job.Requested and "Waiting" or failed and "Failed" or "Stopped")
+                        self:_refreshRuntime()
+                    end
                 end)
             end
         end
     end
     function Window:StartTask(id) local job=self.Tasks[id]; assert(job,"Unknown task: "..tostring(id)); return job:Start() end
     function Window:StopTask(id,reason) local job=self.Tasks[id]; assert(job,"Unknown task: "..tostring(id)); job:Stop(reason); return self end
+    function Control:BindTask(job,options)
+        options=options or {}
+        assert(self.Type=="Toggle" and not self.Destroyed,"BindTask requires a live Toggle")
+        assert(type(job)=="table" and job._window==self._window and not job.Destroyed and self._window.Tasks[job.Id]==job,"BindTask requires a live task from this window")
+        assert(type(options)=="table","BindTask options must be a table")
+        local onStop=options.OnStop or "TurnOff"; local initial=options.Initial or "Control"
+        assert(onStop=="TurnOff" or onStop=="KeepRequested","OnStop is TurnOff or KeepRequested")
+        assert(initial=="Control" or initial=="Task","Initial is Control or Task")
+        assert(options.FireCallback==nil or type(options.FireCallback)=="boolean","FireCallback must be boolean")
+        assert(options.StopOnUnbind==nil or type(options.StopOnUnbind)=="boolean","StopOnUnbind must be boolean")
+        local scope=self:CreateScope(); self._resources:Add(scope,"Destroy","task-binding")
+        local owner=self; local syncing=false
+        local function show(value)
+            if owner.Destroyed or owner._destroyingControl or owner._window.Destroyed or owner._window._closing then return end
+            if owner:GetValue()==value then return end
+            syncing=true; owner:SetValue(value,not options.FireCallback); syncing=false
+        end
+        local function request(value)
+            if syncing or owner.Destroyed or job.Destroyed then return end
+            if value then
+                local ok,err=job:Start()
+                if not ok then show(false); owner._window:_diagnose({ControlId=owner.Id,Operation=job.Id,Phase="TaskBinding"},err) end
+            elseif job.Requested then job:Stop("toggle off") end
+        end
+        scope:Add(function() if options.StopOnUnbind~=false and not job.Destroyed then job:Stop("task binding removed") end end)
+        scope:Add(self._window:GetFlagState(self.Id):Subscribe(request),"Disconnect")
+        scope:Add(job:Subscribe(function(status)
+            if status.Requested then show(true)
+            elseif onStop=="TurnOff" or status.Status=="Destroyed" then show(false) end
+        end),"Disconnect")
+        if initial=="Task" then show(job.Requested) else request(self:GetValue()) end
+        return scope
+    end
     local function actionUpdate(handle,changes)
         for key,value in pairs(changes) do handle._status[key]=value end
         if not handle.Status.Destroyed then handle.Status:_assign(handle._status) end
@@ -975,6 +1159,8 @@ do
         if result~=nil then local ok,value=pcall(cloneState,result); if ok then safeResult=value end end
         handle._status.Result=safeResult; handle._status.Error=err and tostring(err):sub(1,2048) or nil
         actionUpdate(handle,{Status=status,Message=err and tostring(err):sub(1,2048) or handle._status.Message,Progress=status=="Completed" and 1 or handle._status.Progress})
+        local waits={}; for _,callback in pairs(handle._awaiters) do waits[#waits+1]=callback end
+        for _,callback in ipairs(waits) do callback(false) end
         local group=self._groups[handle.Group]
         if group and group.Active==handle then group.Active=nil end
         self._actions[handle.Id]=nil
@@ -1028,12 +1214,13 @@ do
         if not group and count>=32 then return nil,"Action group limit is 32" end
         group=group or {Id=groupId,Queue={}}; self._groups[groupId]=group
         local owner=self; local scope=self:CreateScope({CancelOnHide=options.CancelOnHide==true})
-        local handle={Id=id,Group=groupId,Options=options,_status={Status="Queued",Step=0,Total=0,Progress=0,Message=""}}
+        local handle={Id=id,Group=groupId,Options=options,_window=self,_awaiters={},_status={Status="Queued",Step=0,Total=0,Progress=0,Message=""}}
         handle.Status=self:CreateState(handle._status,{Name="Action:"..id})
         handle.Status.ReadOnly=true
         handle.Context=token(self,scope); handle.Context.Action=handle
         function handle:GetStatus() return copy(self._status) end
         function handle:Subscribe(callback,immediate) return self.Status:Subscribe(callback,immediate) end
+        function handle:Await(options) return owner:AwaitAction(self,options) end
         function handle:Cancel(reason)
             if self.Finished then return self end
             self.Context:Cancel(reason)
@@ -1047,6 +1234,8 @@ do
         function handle:Destroy()
             if self.Destroyed then return end
             self:Cancel("destroyed"); self.Destroyed=true; self.Status:Destroy()
+            local waits={}; for _,callback in pairs(self._awaiters) do waits[#waits+1]=callback end
+            for _,callback in ipairs(waits) do callback(true) end
             owner._resources:Remove("action:"..id,true)
         end
         function handle.Context:SetProgress(step,total,message)
@@ -1072,7 +1261,7 @@ do
     end
 
     function Window:GetRuntimeStats()
-        local stats={Tasks=0,RunningTasks=0,Actions=0,Animations=0,QueuedVisuals=0,Resources=self._resources:GetCount(),FrameConnection=self._runtimeConnection~=nil}
+        local stats={Tasks=0,RunningTasks=0,Actions=0,WaitingActions=self._waitCount or 0,Animations=0,QueuedVisuals=0,Resources=self._resources:GetCount(),FrameConnection=self._runtimeConnection~=nil}
         for _,t in pairs(self.Tasks) do stats.Tasks=stats.Tasks+1; if t.Requested or t.InFlight then stats.RunningTasks=stats.RunningTasks+1 end end
         for _ in pairs(self._actions or {}) do stats.Actions=stats.Actions+1 end
         for _ in pairs(self._visualQueue) do stats.QueuedVisuals=stats.QueuedVisuals+1 end
@@ -1424,6 +1613,9 @@ end
 function Window:_endDrag()
     local drag = self._drag
     self._drag = nil
+    if drag and drag.Owner==self and self._dragRender then
+        local p=self:_clampCenter(self._dragRender.Target); self.Main.Position=U2(p.X,p.Y); self._dragRender=nil; self:_refreshRuntime()
+    end
     if drag and drag.Finish then drag.Finish() end
 end
 function Window:_scheduleSave()
@@ -1893,7 +2085,7 @@ function Section:AddDropdown(options)
     header = button(self._window,self,self.Frame,"",{
         Position=U2(0,44),Size=UDim2.new(1,0,0,30),TextXAlignment=Enum.TextXAlignment.Left,
     },function() self:SetOpen(not self.Open) end)
-    ui(self._window,"UIPadding",{ Parent=header,PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,24) })
+    ui(self._window,"UIPadding",{Name="TextPadding",Parent=header,PaddingLeft=UDim.new(0,FIELD_PADDING),PaddingRight=UDim.new(0,24)})
     local arrow=label(self._window,header,"v",{ Position=UDim2.new(1,-24,0,0),Size=U2(20,30),TextXAlignment=Enum.TextXAlignment.Center })
     iconSlot(self._window,arrow,nil,"chevron-down",12,UDim2.new(.5,-6,.5,-6),"Text",function(visible) arrow.Text=visible and "" or "v" end)
     local panel = frame(self._window,self.Frame,{ Position=U2(0,79),Size=UDim2.new(1,0,0,184),Visible=false },"Inset")
@@ -1951,7 +2143,7 @@ function Section:AddDropdown(options)
             if query == "" or name:lower():find(query,1,true) then
                 count = count + 1
                 local item = button(self._window,self,results,"",{ LayoutOrder=index,Size=UDim2.new(1,-6,0,28),TextXAlignment=Enum.TextXAlignment.Left })
-                ui(self._window,"UIPadding",{ Parent=item,PaddingLeft=UDim.new(0,6) })
+                ui(self._window,"UIPadding",{Name="TextPadding",Parent=item,PaddingLeft=UDim.new(0,FIELD_PADDING),PaddingRight=UDim.new(0,FIELD_PADDING)})
                 self._rows[name] = item
                 local connection = item.Activated:Connect(function()
                     if self.Disabled or self.Destroyed then return end
@@ -2660,7 +2852,7 @@ function Window:Hide()
     self:_hideSearchResults()
     if self._dialog then self._dialog:Close("hidden") end
     self:_releaseBindings()
-    self:ShowSettings(false); self:_endDrag()
+    self:_endDrag()
     if self._binding then local binding=self._binding; self._binding=nil; binding:_render() end
     self._shown=false; self.Main.Active=false; self.Launcher.Visible=self.LauncherEnabled
     self:_animateWindow(false)
@@ -2684,12 +2876,17 @@ function Window:Minimize(value)
     local nextHeight=(targetMinimized and 42 or self._logicalSize.Y)*self._actualScale
     self._position=Vector2.new(oldPosition.X.Offset,oldPosition.Y.Offset+(nextHeight-oldHeight)/2)
     self.Minimized=targetMinimized
-    if self.Minimized then self:ShowSettings(false) end
     self:_layout(); local targetSize,targetPosition=self.Main.Size,self.Main.Position; self.Main.Size=oldSize; self.Main.Position=oldPosition
     self:_animate(self.Main,{Size=targetSize,Position=targetPosition},.14,"size",self); return self
 end
 function Window:Center()
-    self._position=nil; self:_layout(); return self
+    local old=self.Main.Position; local view=self.Root.AbsoluteSize
+    self._position=nil; self:_layout(); local target=self.Main.Position
+    if self.SmoothDragging and not self.ReducedMotion then
+        self.Main.Position=U2(old.X.Scale*view.X+old.X.Offset,old.Y.Scale*view.Y+old.Y.Offset)
+        self:_moveWindow(Vector2.new(target.X.Offset,target.Y.Offset)); self._position=nil
+    end
+    return self
 end
 function Window:SetSearch(query)
     self:_hideTooltip()
@@ -2753,17 +2950,17 @@ function Window:_rebuildSearchResults()
     self._searchOwner={_connections={}}
     self._searchMatches={}; self._searchCells={}
     if self.SearchResults then for _,child in ipairs(self.SearchResults:GetChildren()) do child:Destroy() end end
-    if self._query=="" or self._settingsOpen or self._dialog or not self.Main.Visible or self.Minimized then self:_hideSearchResults(); return end
+    if self._query=="" or self._settingsOpen or self._dialog or self._shown==false or not self.Main.Visible or self.Minimized then self:_hideSearchResults(); return end
     local matches=self:SearchControls(self._query)
     for index,entry in ipairs(matches) do if index>30 then break end; self._searchMatches[#self._searchMatches+1]=entry end
     if not self.SearchResults then
-        self.SearchResults=ui(self,"ScrollingFrame",{Parent=self.Main,Name="SearchResults",BorderSizePixel=1,ZIndex=70,
+        self.SearchResults=ui(self,"ScrollingFrame",{Parent=self.Body,Name="SearchResults",BorderSizePixel=1,ZIndex=70,
             CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,
             ScrollBarThickness=4,ClipsDescendants=true},{BackgroundColor3="Surface",BorderColor3="Border",ScrollBarImageColor3="Border"})
     end
-    local origin=self.Search.Position
+    local origin=self.SearchContainer.Position
     self.SearchResults.Position=UDim2.new(origin.X.Scale,origin.X.Offset,origin.Y.Scale,origin.Y.Offset+34)
-    self.SearchResults.Size=UDim2.new(self.Search.Size.X.Scale,self.Search.Size.X.Offset,0,
+    self.SearchResults.Size=UDim2.new(self.SearchContainer.Size.X.Scale,self.SearchContainer.Size.X.Offset,0,
         math.min(math.max(42,#self._searchMatches*42),230,math.max(42,self._logicalSize.Y-origin.Y.Offset-78)))
     list(self,self.SearchResults,2,false)
     if #self._searchMatches==0 then label(self,self.SearchResults,self:_text("empty"),{Size=UDim2.new(1,-8,0,40),ZIndex=71}) end
@@ -3014,6 +3211,97 @@ function Tab:Destroy()
     end
 end
 
+-- Script configuration versions are independent of Library.Version/Schema.
+do
+    local rootFields={Library=true,Schema=true,Version=true,ConfigVersion=true,Flags=true,Appearance=true}
+    local appearanceFields={Theme=true,ThemeColors=true,Accent=true,Scale=true,ReducedMotion=true,Scanlines=true,
+        Notifications=true,Launcher=true,ToggleKey=true,PixelIcons=true,PixelDecorations=true,Animations=true,Drag=true,
+        Floating=true,LauncherText=true,LauncherPosition=true}
+    local function version(value)
+        assert(finite(value) and value%1==0 and value>=1 and value<=65535,"ConfigVersion must be an integer 1–65535")
+        return value
+    end
+    Library._configVersion=version
+    local function clone(value,seen,depth,budget)
+        local kind=typeof(value)
+        if kind=="Color3" then return hex(value) end
+        if kind=="EnumItem" then return value.Name end
+        if type(value)~="table" then
+            assert(value==nil or type(value)=="boolean" or type(value)=="string" or finite(value),"Configuration data must be serializable; functions/instances are not accepted")
+            return value
+        end
+        seen=seen or {}; depth=depth or 0; budget=budget or {Count=0}
+        assert(depth<16 and not seen[value],"Configuration data must be acyclic and at most 16 levels deep")
+        seen[value]=true; local result={}; local count=0
+        for key,item in pairs(value) do
+            count=count+1; budget.Count=budget.Count+1
+            assert(count<=4096 and budget.Count<=32768,"Configuration data exceeds its entry limit")
+            assert(type(key)=="string" or finite(key),"Configuration keys must be strings or finite numbers")
+            result[key]=clone(item,seen,depth+1,budget)
+        end
+        seen[value]=nil; return result
+    end
+    function Window:SetConfigVersion(value) self.ConfigVersion=version(value); return self end
+    function Window:RegisterMigration(fromVersion,callback)
+        version(fromVersion); assert(fromVersion<65535 and type(callback)=="function","Migration needs a source version and function")
+        self._migrations[fromVersion]=callback; return self
+    end
+    function Window:_prepareProfile(source,options)
+        assert(type(options)=="table","ImportConfig options must be a table")
+        assert(options.Migrate==nil or type(options.Migrate)=="boolean","Migrate must be boolean")
+        local policy=options.Strict and "Reject" or options.UnknownFlags or self.UnknownFlags
+        assert(policy=="Ignore" or policy=="Preserve" or policy=="Reject","UnknownFlags is Ignore, Preserve or Reject")
+        local profile=clone(type(source)=="string" and HttpService:JSONDecode(source) or source)
+        assert(type(profile)=="table" and profile.Library=="RetroBox UI" and profile.Schema==1,"Unsupported configuration format")
+        assert(type(profile.Flags)=="table","Missing Flags")
+        local current=version(profile.ConfigVersion or 1)
+        assert(current<=self.ConfigVersion,"Profile uses a newer script ConfigVersion: "..current)
+        assert(options.Migrate~=false or current==self.ConfigVersion,"Profile migration is disabled")
+        assert(self.ConfigVersion-current<=32,"Profile requires more than 32 migration steps")
+        while current<self.ConfigVersion do
+            local callback=self._migrations[current]; assert(callback,"Missing migration from ConfigVersion "..current)
+            local candidate=clone(profile)
+            local thread=coroutine.create(function() return callback(candidate,current,current+1) end)
+            local ok,result=coroutine.resume(thread)
+            if coroutine.status(thread)~="dead" then
+                if type(task.cancel)=="function" then pcall(task.cancel,thread) end
+                local message="Profile migration must be synchronous and cannot yield"
+                self:_diagnose({Phase="Migration",Operation="config/"..current},message); error(message)
+            end
+            if not ok then
+                self:_diagnose({Phase="Migration",Operation="config/"..current},result)
+                error("Migration "..current.." failed: "..tostring(result))
+            end
+            assert(result==nil or type(result)=="table","Migration must return a profile table or nil after editing the supplied copy")
+            profile=clone(result or candidate); current=current+1; profile.ConfigVersion=current
+            assert(profile.Library=="RetroBox UI" and profile.Schema==1 and type(profile.Flags)=="table","Migration changed the RetroBox envelope or removed Flags")
+        end
+        profile.ConfigVersion=self.ConfigVersion
+        local json=HttpService:JSONEncode(profile)
+        assert(#json<=self.MaxConfigBytes,"Migrated configuration exceeds MaxConfigBytes")
+        local extras={Root={},Appearance={},Flags={}}
+        for key,value in pairs(profile) do if not rootFields[key] then extras.Root[key]=clone(value) end end
+        for key,value in pairs(profile.Appearance or {}) do if not appearanceFields[key] then extras.Appearance[key]=clone(value) end end
+        if policy=="Preserve" then
+            for id,record in pairs(profile.Flags) do
+                if type(id)=="string" and not id:match("^__retrobox/") and not self.Controls[id] then
+                    assert(type(record)=="table" and type(record.Type)=="string" and #record.Type<=64,"Invalid preserved flag: "..id)
+                    extras.Flags[id]=clone(record)
+                end
+            end
+        end
+        return profile,extras,policy
+    end
+    function Window:_exportProfileExtras(profile)
+        local extras=self._profileExtras or {Root={},Appearance={},Flags={}}
+        for key,value in pairs(extras.Root) do if not rootFields[key] then profile[key]=clone(value) end end
+        for key,value in pairs(extras.Appearance) do if not appearanceFields[key] then profile.Appearance[key]=clone(value) end end
+        for id,record in pairs(extras.Flags) do if not self.Controls[id] then profile.Flags[id]=clone(record) end end
+        profile.ConfigVersion=self.ConfigVersion
+        return profile
+    end
+end
+
 local function encode(control)
     local value=control:GetValue()
     if control.Type=="ColorPicker" then value.Color=hex(value.Color)
@@ -3039,6 +3327,7 @@ function Window:ExportConfig(asTable)
     for id,position in pairs(self._floatingPositions) do result.Appearance.Floating.Positions[id]={X=position.X,Y=position.Y} end
     result.Appearance.LauncherText=self.LauncherText
     result.Appearance.LauncherPosition={X=self.LauncherPosition.X,Y=self.LauncherPosition.Y}
+    self:_exportProfileExtras(result)
     if asTable then return result end
     return HttpService:JSONEncode(result)
 end
@@ -3047,7 +3336,7 @@ function Window:ImportConfig(source,options)
     if self.Destroyed then return false,"Window has been destroyed" end
     if type(source)=="string" and #source>self.MaxConfigBytes then return false,"Configuration exceeds MaxConfigBytes" end
     local ok,prepared=pcall(function()
-        local config=type(source)=="string" and HttpService:JSONDecode(source) or source
+        local config,extras,policy=self:_prepareProfile(source,options)
         assert(type(config)=="table" and config.Library=="RetroBox UI" and config.Schema==1,"Unsupported configuration format")
         assert(type(config.Flags)=="table","Missing Flags")
         local changes={}
@@ -3057,7 +3346,7 @@ function Window:ImportConfig(source,options)
             if control and control.Persist then
                 assert(type(record)=="table" and record.Type==control.Type,"Control type mismatch: "..id)
                 changes[id]={ Value=control:_normalize(record.Value) }
-            elseif options.Strict then error("Unknown or nonpersistent control: "..id) end
+            elseif policy=="Reject" then error("Unknown or nonpersistent control: "..id) end
         end
         local look=config.Appearance or {}
         assert(type(look)=="table","Appearance must be a table")
@@ -3110,7 +3399,7 @@ function Window:ImportConfig(source,options)
                 appearance.Floating.Positions[id]=position(p)
             end
         end
-        return { Changes=changes,Appearance=appearance }
+        return {Changes=changes,Appearance=appearance,Extras=extras}
     end)
     if not ok then return false,tostring(prepared) end
     self._importing=true
@@ -3122,6 +3411,7 @@ function Window:ImportConfig(source,options)
     if self.Destroyed then self._importing=false; return false,"Window was destroyed during a callback" end
     local look=prepared.Appearance
     Library:Batch(function()
+    self._profileExtras=prepared.Extras
     if look.Colors then self._themeOverrides[look.Theme]=look.Colors end
     self.Theme=look.Theme; self.Accent=look.Accent; self.UserScale=look.Scale; self.ToggleKey=look.ToggleKey
     if look.ReducedMotion~=nil then self.ReducedMotion=look.ReducedMotion end
@@ -3358,6 +3648,7 @@ function Window:_layout()
     self.ScaleObject.Scale=scale
     local renderedHeight=self.Minimized and 42 or height
     self.Main.Size=U2(width,renderedHeight)
+    if self.Body then self.Body.Visible=not self.Minimized end
     self.SubtitleLabel.Visible=not self.Minimized
     self.Nav.Visible=not self.Minimized; self.Search.Visible=not self.Minimized
     self.PageHost.Visible=not self.Minimized; self.Footer.Visible=not self.Minimized
@@ -3365,20 +3656,17 @@ function Window:_layout()
         self.Nav.Position=U2(10,70); self.Nav.Size=UDim2.new(1,-20,0,38)
         self.NavLayout.FillDirection=Enum.FillDirection.Horizontal
         self.Nav.AutomaticCanvasSize=Enum.AutomaticSize.X; self.Nav.ScrollingDirection=Enum.ScrollingDirection.X
-        self.Search.Position=U2(10,116); self.Search.Size=UDim2.new(1,-20,0,30)
+        self.SearchContainer.Position=U2(10,116); self.SearchContainer.Size=UDim2.new(1,-20,0,30)
         self.PageHost.Position=U2(10,156); self.PageHost.Size=UDim2.new(1,-20,1,-220)
     else
         self.Nav.Position=U2(10,76); self.Nav.Size=UDim2.new(0,160,1,-141)
         self.NavLayout.FillDirection=Enum.FillDirection.Vertical
         self.Nav.AutomaticCanvasSize=Enum.AutomaticSize.Y; self.Nav.ScrollingDirection=Enum.ScrollingDirection.Y
-        self.Search.Position=U2(184,73); self.Search.Size=UDim2.new(1,-198,0,30)
+        self.SearchContainer.Position=U2(184,73); self.SearchContainer.Size=UDim2.new(1,-198,0,30)
         self.PageHost.Position=U2(184,114); self.PageHost.Size=UDim2.new(1,-198,1,-178)
     end
     self.Status.Visible=not self.Mobile; self.ResizeGrip.Visible=not self.Mobile and not self._maximized
-    if self._searchIcon then
-        local p=self.Search.Position
-        self._searchIcon.Frame.Position=UDim2.new(p.X.Scale,p.X.Offset+7,p.Y.Scale,p.Y.Offset+7)
-    end
+    self.SearchContainer.Visible=not self.Minimized
     if self.PixelMotif then self.PixelMotif.Visible=self.PixelDecorations and not self.Minimized end
     if self.PixelSeal then self.PixelSeal.Visible=self.PixelDecorations and not self.Mobile and width>=620 end
     for _,tab in ipairs(self.Tabs) do
@@ -3954,6 +4242,12 @@ local function mountGui(gui,explicitParent,player)
 end
 function Library:CreateWindow(options)
     options=options or {}
+    local configVersion=Library._configVersion(options.ConfigVersion or 1)
+    assert(options.UnknownFlags==nil or options.UnknownFlags=="Ignore" or options.UnknownFlags=="Preserve" or options.UnknownFlags=="Reject","UnknownFlags is Ignore, Preserve or Reject")
+    assert(options.Migrations==nil or type(options.Migrations)=="table","Migrations must be a table")
+    for from,callback in pairs(options.Migrations or {}) do
+        Library._configVersion(from); assert(from<65535 and type(callback)=="function","Invalid migration registration")
+    end
     resolveIcon(options.Icon)
     assert(options.PixelIcons==nil or type(options.PixelIcons)=="boolean","PixelIcons must be a boolean")
     assert(options.PixelDecorations==nil or type(options.PixelDecorations)=="boolean","PixelDecorations must be a boolean")
@@ -3990,7 +4284,7 @@ function Library:CreateWindow(options)
         Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,TooltipDelay=tooltipDelay,TooltipMaxWidth=tooltipWidth,
         ReducedMotion=options.ReducedMotion == true,Scanlines=options.Scanlines == true,
         PixelIcons=options.PixelIcons~=false,PixelDecorations=options.PixelDecorations~=false,
-        SmoothDragging=options.SmoothDragging~=false,DragResponsiveness=options.DragResponsiveness or 24,
+        SmoothDragging=options.SmoothDragging==true,DragResponsiveness=options.DragResponsiveness or 24,
         Debug=options.Debug==true,CallbackExecutor=options.CallbackExecutor,
         _diagnostics={},_errorListeners={},Tasks={},_actions={},_groups={},_visualQueue={},_flagStates={},_actionHistory={},_nextAction=0,
         _tweens={},Animations=Library._animationSettings(options.Animations),_shown=true,_visibilityToken=0,
@@ -4002,12 +4296,14 @@ function Library:CreateWindow(options)
         _locale=translations[options.Locale or "pt-BR"] or translations["pt-BR"],
         _connections={},_skin=setmetatable({},{ __mode="k" }),_icons={},_themeOverrides={},_rainbows={},_keybinds={},_destroyListeners={},
         _profiles={},_notifications={},_noticeCount=0,_nextId=0,_saveToken=0,_query="",
+        ConfigVersion=configVersion,UnknownFlags=options.UnknownFlags or "Ignore",_migrations={},_profileExtras={Root={},Appearance={},Flags={}},
         _floatingButtons={},_floatingPositions={},_touchToggles={},
         _requestedSize=size,Controls={},Flags={},Tabs={},Destroyed=false,
     },Window)
     assert(finite(window.DragResponsiveness) and window.DragResponsiveness>=8 and window.DragResponsiveness<=80,"DragResponsiveness must be 8–80")
     assert(window.CallbackExecutor==nil or type(window.CallbackExecutor)=="function","CallbackExecutor must be a function")
     window._resources=self:CreateScope(); window._resources._window=window
+    for from,callback in pairs(options.Migrations or {}) do window:RegisterMigration(from,callback) end
     if window.AutoSave~=nil then profileName(window.AutoSave) end
     assert(finite(window.FloatSize) and window.FloatSize>=44 and window.FloatSize<=96,"FloatSize must be 44–96")
     assert(finite(window.FloatOpacity) and window.FloatOpacity>=.2 and window.FloatOpacity<=1,"FloatOpacity must be 0.2–1")
@@ -4036,7 +4332,7 @@ function Library:CreateWindow(options)
     window.Root=frame(window,window.Gui,{ Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Name="Root" })
     window.Main=frame(window,window.Root,{
         Name="Window",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=U2(size.X,size.Y),
-        BorderSizePixel=1,Active=true,
+        BorderSizePixel=1,Active=true,ClipsDescendants=true,
     },"Background")
     window:_bind(window.Main,{ BackgroundColor3="Background",BorderColor3="Border" }); bevel(window,window.Main,false)
     window.ScaleObject=ui(window,"UIScale",{ Parent=window.Main,Scale=userScale })
@@ -4056,23 +4352,25 @@ function Library:CreateWindow(options)
     window.CloseButton=pixelButton(window,window,header,"X","close",{ Position=UDim2.new(1,-34,0,4),Size=U2(27,26) },function()
         if options.DestroyOnClose==true then window:Destroy() else window:Hide() end
     end)
-    window.SubtitleLabel=label(window,window.Main,window.Subtitle,{
+    window.Body=frame(window,window.Main,{Name="Body",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true})
+    window.SubtitleLabel=label(window,window.Body,window.Subtitle,{
         Position=U2(14,44),Size=UDim2.new(1,-28,0,22),TextSize=12,TextTruncate=Enum.TextTruncate.AtEnd,
     },"Muted")
-    window.PixelMotif=frame(window,window.Main,{Name="PixelMotif",Position=UDim2.new(1,-72,0,49),Size=U2(54,12),BackgroundTransparency=1})
+    window.PixelMotif=frame(window,window.Body,{Name="PixelMotif",Position=UDim2.new(1,-72,0,49),Size=U2(54,12),BackgroundTransparency=1})
     for index,name in ipairs({"spark","retrobox","spark"}) do
         iconSlot(window,window.PixelMotif,name,nil,12,U2((index-1)*18,0),"Muted")
     end
     window.Nav=ui(window,"ScrollingFrame",{
-        Parent=window.Main,BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
+        Parent=window.Body,BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
         CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,
     },{ ScrollBarImageColor3="Border" })
     window.NavLayout=list(window,window.Nav,8,false)
-    window.Search=textbox(window,window.Main,"",{ PlaceholderText=window:_text("search"),TextSize=12 })
+    window.SearchContainer=frame(window,window.Body,{Name="SearchContainer",Size=UDim2.new(1,0,0,30),BackgroundTransparency=1})
+    window.Search=textbox(window,window.SearchContainer,"",{Size=UDim2.fromScale(1,1),PlaceholderText=window:_text("search"),TextSize=12})
     local searchPadding=window.Search:FindFirstChild("TextPadding")
-    window._searchIcon=iconSlot(window,window.Main,nil,"search",16,U2(0,0),"Muted",function(visible) searchPadding.PaddingLeft=UDim.new(0,visible and 30 or 8) end)
-    window.PageHost=frame(window,window.Main,{ BackgroundTransparency=1 })
-    window.Footer=frame(window,window.Main,{ Position=UDim2.new(0,10,1,-56),Size=UDim2.new(1,-20,0,48),BackgroundTransparency=1 })
+    window._searchIcon=iconSlot(window,window.SearchContainer,nil,"search",16,U2(FIELD_PADDING,7),"Muted",function(visible) searchPadding.PaddingLeft=UDim.new(0,visible and FIELD_PADDING+22 or FIELD_PADDING) end)
+    window.PageHost=frame(window,window.Body,{ BackgroundTransparency=1 })
+    window.Footer=frame(window,window.Body,{ Position=UDim2.new(0,10,1,-56),Size=UDim2.new(1,-20,0,48),BackgroundTransparency=1 })
     frame(window,window.Footer,{ Size=UDim2.new(1,0,0,1) },"Border")
     window.Profile=frame(window,window.Footer,{ Position=U2(2,1),Size=U2(182,46),BackgroundTransparency=1,Visible=options.ShowProfile~=false })
     window:_profile(player)
@@ -4089,24 +4387,41 @@ function Library:CreateWindow(options)
     window.ResizeGrip=label(window,window.Footer,"//",{
         Position=UDim2.new(1,-24,1,-24),Size=U2(24,24),TextXAlignment=Enum.TextXAlignment.Right,Active=true,
     },"Muted")
-    window.Launcher=button(window,window,window.Root,"UI",{ Position=U2(16,60),Size=U2(44,38),Visible=false,ZIndex=30 },function() window:Show() end)
+    window._launcherOwner={_connections={}}
+    window.Launcher=button(window,window._launcherOwner,window.Root,"UI",{ Position=U2(16,60),Size=U2(44,38),Visible=false,ZIndex=30 },function()
+        if not window._launcherSuppressClick then window:Show() end
+    end)
     local launcherHandle=button(window,window,window.Launcher,"::",{Position=U2(0,-14),Size=UDim2.new(1,0,0,14),TextSize=11,ZIndex=31})
-    connect(window,launcherHandle.InputBegan,function(input)
+    local function dragLauncher(input)
         if not pointer(input) or window._dialog then return end
-        local start=point(input); local origin=window.Launcher.AbsolutePosition
-        window:_beginDrag(window,input,function(current)
+        local start=point(input); local pos=window.Launcher.Position; local view=window.Root.AbsoluteSize
+        local origin=Vector2.new(pos.X.Scale*view.X+pos.X.Offset,pos.Y.Scale*view.Y+pos.Y.Offset)
+        window._launcherSuppressClick=false
+        window._launcherReleaseToken=nil
+        window:_beginDrag(window._launcherOwner,input,function(current)
+            local delta=current-start
+            if delta.X*delta.X+delta.Y*delta.Y<=16 and not window._launcherSuppressClick then return end
+            window._launcherSuppressClick=true
             local view=window.Root.AbsoluteSize; local position=origin+(current-start)
             window.LauncherPosition=Vector2.new(clamp(position.X/math.max(1,view.X),0,1),clamp(position.Y/math.max(1,view.Y),0,1))
             window:_layoutFloating()
-        end,function() window:_scheduleSave() end)
-    end)
+        end,function()
+            window:_scheduleSave()
+            if window._launcherSuppressClick then
+                local token={}; window._launcherReleaseToken=token
+                task.delay(.25,function() if not window.Destroyed and window._launcherReleaseToken==token then window._launcherSuppressClick=false end end)
+            end
+        end)
+    end
+    connect(window,window.Launcher.InputBegan,dragLauncher)
+    connect(window,launcherHandle.InputBegan,dragLauncher)
     window.NotificationHost=frame(window,window.Root,{
         AnchorPoint=Vector2.new(1,1),Position=UDim2.new(1,-16,1,-16),Size=UDim2.new(0,math.min(340,math.max(220,window.Root.AbsoluteSize.X-32)),0,0),
         AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=80,
     })
     local noticeLayout=list(window,window.NotificationHost,8,false)
     noticeLayout.HorizontalAlignment=Enum.HorizontalAlignment.Right
-    window._scanlineLayer=frame(window,window.Main,{ Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=20,Visible=window.Scanlines })
+    window._scanlineLayer=frame(window,window.Body,{ Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=20,Visible=window.Scanlines })
     for index=1,96 do
         frame(window,window._scanlineLayer,{ Position=UDim2.fromScale(0,index/96),Size=UDim2.new(1,0,0,1),BackgroundTransparency=.95,ZIndex=20 },"Text")
     end
@@ -4114,10 +4429,12 @@ function Library:CreateWindow(options)
         if window._maximized then return end
         local p=point(input)
         if p.X>=header.AbsolutePosition.X+header.AbsoluteSize.X-104 then return end
-        local start,center=p,Vector2.new(window.Main.AbsolutePosition.X+window.Main.AbsoluteSize.X/2,window.Main.AbsolutePosition.Y+window.Main.AbsoluteSize.Y/2)
+        local position,view=window.Main.Position,window.Root.AbsoluteSize
+        local start,center=p,Vector2.new(position.X.Scale*view.X+position.X.Offset,position.Y.Scale*view.Y+position.Y.Offset)
+        window:_cancelTrack(window.Main,"window",false)
         window._dragRender=nil
         window:_beginDrag(window,input,function(current)
-            window:_moveWindow(center+(current-start))
+            window:_moveWindow(center+(current-start),true)
         end)
     end)
     connect(window,window.ResizeGrip.InputBegan,function(input)
@@ -4183,6 +4500,7 @@ function Window:Destroy()
     self:_endDrag()
     if self._rgbConnection then self._rgbConnection:Disconnect(); self._rgbConnection=nil end
     cleanup(self)
+    if self._launcherOwner then self._launcherOwner.Destroyed=true; cleanup(self._launcherOwner) end
     local tabs={}
     for _,tab in ipairs(self.Tabs) do table.insert(tabs,tab) end
     for _,tab in ipairs(tabs) do tab:Destroy() end

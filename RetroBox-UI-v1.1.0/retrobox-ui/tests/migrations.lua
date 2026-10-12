@@ -1,0 +1,87 @@
+return function(Mock,Library,test)
+    local function fixture(options)
+        options=options or {}; options.Id="migration-test"; options.FileStorage=false; options.Settings=false; options.ReducedMotion=true
+        local w=Library:CreateWindow(options); local s=w:CreateTab("Main"):CreateSection("Controls")
+        local amount=s:AddSlider({Id="amount",Default=5}); local enabled=s:AddToggle({Id="enabled"})
+        return w,amount,enabled,s
+    end
+    local function finish(w) w:Destroy(); Mock.pump(100); Mock.YieldingTasks=false; Mock.Warnings={}; assert(Mock.Connections==0) end
+    local function oldProfile()
+        return {Library="RetroBox UI",Schema=1,Version="1.5.0",Flags={old_amount={Type="Input",Value="25"}},CustomMetadata={Author="example"}}
+    end
+    test("sequential script migrations rename flags and convert values before validation",function()
+        local calls={}; local w,a,b=fixture({ConfigVersion=3,Migrations={
+            [1]=function(p,from,to) calls[#calls+1]={from,to}; p.Flags.amount={Type="Slider",Value=tonumber(p.Flags.old_amount.Value)}; p.Flags.old_amount=nil end,
+            [2]=function(p) calls[#calls+1]={2,3}; p.Flags.enabled={Type="Toggle",Value=true}; return p end,
+        }})
+        local profile=oldProfile(); local seen; w:GetFlagState("amount"):Subscribe(function() seen=w:GetFlag("enabled") end)
+        assert(w:ImportConfig(profile,{Silent=true}) and a:GetValue()==25 and b:GetValue() and seen==true)
+        assert(#calls==2 and calls[1][1]==1 and calls[1][2]==2 and profile.Flags.old_amount.Value=="25" and not profile.ConfigVersion)
+        local saved=w:ExportConfig(true); assert(saved.ConfigVersion==3 and saved.Schema==1 and saved.CustomMetadata.Author=="example")
+        assert(w:ImportConfig(saved,{Silent=true}) and #calls==2); finish(w)
+    end)
+    test("migration failure preserves values, source data and stored original",function()
+        local profile=oldProfile(); local raw=Mock.Services.HttpService:JSONEncode(profile); local writes=0
+        local w,a=fixture({ConfigVersion=3,Storage={Load=function() return raw end,Save=function() writes=writes+1 end}})
+        w:RegisterMigration(1,function(p) p.Flags.amount={Type="Slider",Value=40}; p.Flags.old_amount=nil end)
+        w:RegisterMigration(2,function(p) p.Flags.amount.Value=80; error("migration failed") end)
+        local ok,err=w:LoadConfig("old"); assert(not ok and err:find("migration failed",1,true) and a:GetValue()==5 and writes==0)
+        assert(profile.Flags.old_amount.Value=="25" and not w.LastConfigName and w:GetDiagnostics()[1].Phase=="Migration"); finish(w)
+    end)
+    test("missing, future, corrupt and disabled migrations leave the interface intact",function()
+        local w,a=fixture({ConfigVersion=2}); local p=oldProfile()
+        assert(not w:ImportConfig(p) and a:GetValue()==5)
+        w:RegisterMigration(1,function(data) data.Flags={amount={Type="Slider",Value=30}} end)
+        assert(not w:ImportConfig(p,{Migrate=false}) and a:GetValue()==5)
+        p.ConfigVersion=3; assert(not w:ImportConfig(p) and a:GetValue()==5)
+        p.ConfigVersion=1.5; assert(not w:ImportConfig(p)); assert(not w:ImportConfig("{bad"))
+        p.ConfigVersion=1; p.Schema=2; assert(not w:ImportConfig(p)); finish(w)
+    end)
+    test("unknown flag policies preserve selectively and never save transient components",function()
+        local w,a,_,s=fixture({UnknownFlags="Preserve"}); local card=s:AddStatCard({Id="stat",Value=1})
+        local p=w:ExportConfig(true); p.Flags.future={Type="Toggle",Value=true}; p.Flags.stat={Type="StatCard",Value=999}
+        p.Appearance.FutureStyle={Spacing=8}; p.Custom="kept"
+        assert(w:ImportConfig(p,{Silent=true})); local exported=w:ExportConfig(true)
+        assert(exported.Flags.future.Value and not exported.Flags.stat and card:GetValue()==1 and exported.Custom=="kept" and exported.Appearance.FutureStyle.Spacing==8)
+        p.Flags.amount.Value=50; assert(not w:ImportConfig(p,{UnknownFlags="Reject"}) and a:GetValue()==5)
+        assert(w:ImportConfig(p,{UnknownFlags="Ignore",Silent=true}) and not w:ExportConfig(true).Flags.future)
+        finish(w)
+    end)
+    test("validation after migration is atomic across controls and appearance",function()
+        local w,a,b=fixture({ConfigVersion=2}); local p=oldProfile()
+        w:RegisterMigration(1,function(data) data.Flags={amount={Type="Slider",Value=40},enabled={Type="Toggle",Value="bad"}}; data.Appearance={Theme="Terminal"} end)
+        assert(not w:ImportConfig(p) and a:GetValue()==5 and not b:GetValue() and w.Theme=="Retro98")
+        w:RegisterMigration(1,function(data) data.Flags={amount={Type="Slider",Value=40}}; data.Appearance={Theme="missing"} end)
+        assert(not w:ImportConfig(p) and a:GetValue()==5); finish(w)
+    end)
+    test("profile data cannot supply code or cyclic structures",function()
+        local w,a=fixture(); local ran=false; local p=w:ExportConfig(true)
+        p.Injected=function() ran=true end; assert(not w:ImportConfig(p) and not ran and a:GetValue()==5)
+        p.Injected=nil; p.Self=p; assert(not w:ImportConfig(p)); p.Self=nil; p.ConfigVersion=1/0; assert(not w:ImportConfig(p)); finish(w)
+    end)
+    test("migration callbacks cannot yield or continue writing after rejection",function()
+        Mock.YieldingTasks=true; local w,a=fixture({ConfigVersion=2}); local resumed=false
+        w:RegisterMigration(1,function(p) p.Flags={amount={Type="Slider",Value=30}}; task.wait(.1); resumed=true; p.Flags.amount.Value=40 end)
+        local ok,err=w:ImportConfig(oldProfile()); Mock.pump(1)
+        assert(not ok and err:find("cannot yield",1,true) and not resumed and a:GetValue()==5); finish(w)
+    end)
+    test("legacy schema and version fields remain compatible without migrations",function()
+        local w,a=fixture(); local p=w:ExportConfig(true); p.ConfigVersion=nil; p.Version="1.3.0"; p.Flags.amount.Value=10
+        assert(w:ImportConfig(p,{Silent=true}) and a:GetValue()==10 and w:ExportConfig(true).ConfigVersion==1)
+        assert(not p.ConfigVersion); finish(w)
+    end)
+    test("migrated toggle and interval apply together before bound task can execute",function()
+        Mock.YieldingTasks=true; local w,a,b=fixture({ConfigVersion=2}); local snapshots={}
+        local job=w:CreateTask({Id="bound",Callback=function() snapshots[#snapshots+1]=w:GetFlag("amount") end}); b:BindTask(job)
+        w:RegisterMigration(1,function(p) p.Flags={amount={Type="Slider",Value=50},enabled={Type="Toggle",Value=true}} end)
+        assert(w:ImportConfig(oldProfile(),{Silent=true}) and job.Requested and #snapshots==0)
+        Mock.Services.RunService.RenderStepped:Fire(.1); Mock.pump(); assert(snapshots[1]==50)
+        w:StopAll(); assert(not b:GetValue()); finish(w)
+    end)
+    test("invalid migration registrations and expanded payloads are rejected",function()
+        local w,a=fixture(); assert(not pcall(function() w:RegisterMigration(0,function() end) end))
+        assert(not pcall(function() w:SetConfigVersion(1.5) end)); w:SetConfigVersion(2)
+        w:RegisterMigration(1,function(p) p.Large=string.rep("x",300000) end)
+        assert(not w:ImportConfig(oldProfile()) and a:GetValue()==5); finish(w)
+    end)
+end

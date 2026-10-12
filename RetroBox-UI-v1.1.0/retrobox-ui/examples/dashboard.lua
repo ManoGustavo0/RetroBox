@@ -1,11 +1,11 @@
--- Requires RetroBox 1.5.0+. All data and operations below are simulated.
+-- Requires RetroBox 1.6.0+. All data and operations below are simulated.
 local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
-assert(type(RetroBox.CreateState)=="function", "Publish RetroBox 1.5.0+ before running this example")
+assert(type(RetroBox.CreateState)=="function", "Publish RetroBox 1.6.0+ before running this example")
 local window = RetroBox:CreateWindow({
     Id="dashboard-demo", Title="RetroBox / Live dashboard", Icon="terminal",
     Subtitle="Dados simulados · tarefas gerenciadas · ações canceláveis",
     ConfigFolder="RetroBox/DashboardDemo", Debug=true,
-    Animations={Enabled=true,Speed=1,Intensity="Normal"}, SmoothDragging=true,
+    Animations={Enabled=true,Speed=1,Intensity="Normal"}, SmoothDragging=false,
 })
 local tab=window:CreateTab({Title="Dashboard",Icon="grid"})
 local metrics=tab:CreateSection({Title="Métricas",Icon="star",Collapsible=true})
@@ -34,13 +34,13 @@ local job=window:CreateTask({Id="simulation",Interval=sampling:GetValue(),Callba
     duration:SetValue(elapsed,true); trend:SetValue(value,true):SetTrend(value-18):AddPoint(value)
     bars:SetData({{Value=value,Label="A"},{Value=value+5,Label="B"},{Value=math.max(0,value-4),Label="C"}},true)
 end})
-sampling:Manage(sampling:OnChanged(function(value) job:SetInterval(value) end),"Disconnect")
+sampling:Manage(window:GetFlagState("interval"):Subscribe(function(value) job:SetInterval(value) end),"Disconnect")
 local simulate=controls:AddToggle({
     Id="simulate",Title="Atualizar dados simulados",Default=false,
     Tooltip="Inicia uma tarefa periódica sem sobreposição. Ocultar ou minimizar o menu mantém a tarefa ativa.",
     Keybind={Default=Enum.KeyCode.G,Mode="Toggle"},Floating={Text="DADOS"},
-    Callback=function(enabled) if enabled then job:Start() else job:Stop("toggle off") end end,
 })
+simulate:BindTask(job)
 local action=controls:AddButton({
     Id="process",Title="Processar demonstração",Icon="chevron-right",Group="demo-processing",Cancelable=true,Feedback=true,
     DependsOn={Enabled={Not={State=busy}},Reason="Aguarde ou cancele a operação atual."},
@@ -76,6 +76,6 @@ end})
 window:Manage(function() print("[RetroBox] Dashboard resources cleaned") end)
 -- Create every control first. Loading named saves invokes normal callbacks
 -- after every flag has been applied; Silent=true skips control callbacks.
--- UI observers still update on silent loads. Transient cards/history/tasks
+-- UI observers and BindTask still update on silent loads. Transient cards/history/tasks
 -- and execution status are never stored in a profile.
 -- See docs/RUNTIME.md for Queue/Replace, BindState and lifecycle policies.

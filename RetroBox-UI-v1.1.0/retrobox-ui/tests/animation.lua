@@ -1,7 +1,7 @@
 return function(Mock,Library,test)
     local function fixture()
         Mock.AnimatedTweens=true
-        local w=Library:CreateWindow({Id="animation-test",FileStorage=false,Settings=false})
+        local w=Library:CreateWindow({Id="animation-test",FileStorage=false,Settings=false,SmoothDragging=true})
         local s=w:CreateTab("Main"):CreateSection({Title="Controls",Collapsible=true})
         Mock.pump(1); return w,s
     end
@@ -86,6 +86,7 @@ return function(Mock,Library,test)
         header._props.AbsolutePosition=Vector2.new(249,79)
         local other=Library:CreateWindow({Id="independent",Settings=false,FileStorage=false,ReducedMotion=true}); local otherPosition=other.Main.Position.X.Offset
         for _,kind in ipairs({Enum.UserInputType.MouseButton1,Enum.UserInputType.Touch}) do
+            w:_moveWindow(center,true)
             Mock.MousePosition=Vector2.new(400,90)
             local input={UserInputType=kind,Position=Vector2.new(400,90)}; header.InputBegan:Fire(input)
             if kind==Enum.UserInputType.Touch then
