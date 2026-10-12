@@ -1,7 +1,7 @@
--- Native smoke test: publish RetroBox 1.4.0+, then run in your executor.
+-- Native smoke test: publish RetroBox 1.5.0+, then run in your executor.
 local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 local window = RetroBox:CreateWindow({ Id = "executor-smoke", Title = "RetroBox / engine smoke", ReducedMotion = true, ConfigFolder = "RetroBox/EngineSmoke" })
-assert(type(RetroBox.GetIconNames)=="function", "Publish RetroBox 1.4.0+ before this smoke test")
+assert(type(RetroBox.CreateState)=="function", "Publish RetroBox 1.5.0+ before this smoke test")
 local section = window:CreateTab({Title="Engine",Icon="gamepad"}):CreateSection({Title="Todos os componentes",Icon="grid"})
 assert(window.Icon:GetAttribute("RetroBoxIcon")=="retrobox")
 local toggle = section:AddToggle({ Id = "toggle", Icon = "bolt", Default = false, Tooltip = "Esta função ativa o recurso de exemplo.",
@@ -42,6 +42,28 @@ toggle:ShowTooltip(); assert(window.TooltipFrame.Visible)
 toggle:SetTooltip("Dica atualizada."); assert(toggle:GetTooltip().Text == "Dica atualizada.")
 toggle:HideTooltip(); assert(not window.TooltipFrame.Visible)
 print("[RetroBox] Confira também o hover e o toque longo no título do toggle.")
+local dynamic=window:CreateTab({Title="Live",Icon="terminal"}):CreateSection({Title="Runtime",Collapsible=true})
+local state=window:CreateState(1250)
+local card=dynamic:AddStatCard({Id="live-card",Title="Stat",State=state,TwoWay=false,Format="Compact",Sparkline=true})
+local line=dynamic:AddLineChart({Title="Line",Data={1,2,3},MaxPoints=5,Animated=true})
+dynamic:AddBarChart({Title="Bar",Data={-3,5,7}})
+dynamic:AddSparkline({Title="Sparkline",Data={2,3,2}})
+local progress=dynamic:AddProgressChart({Title="Progress",Value=25})
+state:Set(2500); card:AddPoint(2500); line:AddPoint(4)
+assert(card:GetValue()==2500 and #line:GetValue()==4)
+local iterations=0
+local job=window:CreateTask({Id="engine-task",Interval=.05,Callback=function(ctx) ctx:ThrowIfCancelled(); iterations=iterations+1 end})
+job:Start(); job:Start(); task.wait(.2); job:Stop(); assert(iterations>0)
+local operation=window:RunAction({Group="engine-action",Callback=function(ctx)
+    ctx:SetProgress(1,2); task.wait(.1); ctx:ThrowIfCancelled(); ctx:SetProgress(2,2); return "done"
+end})
+progress:BindState(operation.Status,{Transform=function(v) return v.Progress*100 end})
+task.wait(.3); assert(operation:GetStatus().Status=="Completed" and progress:GetValue()==100)
+assert(window:SetFlags({toggle=false,slider=8},{Silent=true})); assert(not toggle:GetValue() and slider:GetValue()==8)
+dynamic:SetCollapsed(true,true); assert(dynamic:IsCollapsed()); assert(window:FocusControl(card)); assert(not dynamic:IsCollapsed())
+window:SetReducedMotion(false); window:SetAnimations({Enabled=true,Speed=1,Intensity="Subtle"})
+window:Hide(); task.wait(.15); assert(not window.Main.Visible); window:Show(); task.wait(.2)
+print("[RetroBox] Confira HEX/amostra separados, arraste PC/toque, animações, gráficos e Stop All no dashboard.")
 window:Notify({ Title = "Smoke passou", Content = "Agora confira arraste, toque, cores, menus e texto visualmente.", Kind = "success" })
 print("[RetroBox] Real-engine smoke passed. Inspect layout and input before shipping.")
 

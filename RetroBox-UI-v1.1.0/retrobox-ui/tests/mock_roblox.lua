@@ -1,5 +1,7 @@
 -- Minimal engine double. Exercises library logic; does not render Roblox UI.
 local Mock = { Connections=0, Queue={}, Time=0, Warnings={} }
+math.atan2=math.atan -- Lua 5.4 equivalent of the Luau built-in used by chart segments.
+os.clock=function() return Mock.Time end
 function typeof(value)
     if type(value)=="table" and getmetatable(value) and getmetatable(value).__type then return getmetatable(value).__type end
     return type(value)
@@ -11,7 +13,8 @@ local function signal()
     function s:Connect(callback)
         local connection={ Connected=true,Callback=callback }
         Mock.Connections=Mock.Connections+1
-        function connection:Disconnect()
+        function connection:Disconnect(automatic)
+            if not automatic then self._explicitDisconnected=true end
             if self.Connected then self.Connected=false; Mock.Connections=Mock.Connections-1 end
         end
         table.insert(self.listeners,connection)
@@ -21,7 +24,14 @@ local function signal()
         local snapshot={table.unpack(self.listeners)}
         for _,c in ipairs(snapshot) do if c.Connected then c.Callback(...) end end
     end
-    function s:DisconnectAll() for _,c in ipairs(self.listeners) do c:Disconnect() end end
+    function s:FireDeferred(...)
+        local snapshot,args={},table.pack(...)
+        for _,c in ipairs(self.listeners) do if c.Connected then snapshot[#snapshot+1]=c end end
+        task.defer(function()
+            for _,c in ipairs(snapshot) do if not c._explicitDisconnected then c.Callback(table.unpack(args,1,args.n)) end end
+        end)
+    end
+    function s:DisconnectAll(automatic) for _,c in ipairs(self.listeners) do c:Disconnect(automatic) end end
     return s
 end
 Mock.signal=signal
@@ -29,7 +39,10 @@ task={}
 function task.spawn(fn,...) table.insert(Mock.Queue,{ Due=Mock.Time,Fn=fn,Args=table.pack(...) }) end
 task.defer=task.spawn
 function task.delay(seconds,fn,...) table.insert(Mock.Queue,{ Due=Mock.Time+seconds,Fn=fn,Args=table.pack(...) }) end
-function task.wait(seconds) Mock.Time=Mock.Time+(seconds or .03) end
+function task.wait(seconds)
+    if Mock.YieldingTasks then local _,main=coroutine.running(); if not main then return coroutine.yield(seconds or .03) end end
+    Mock.Time=Mock.Time+(seconds or .03)
+end
 function Mock.pump(advance)
     Mock.Time=Mock.Time+(advance or 0)
     local passes=0
@@ -40,7 +53,12 @@ function Mock.pump(advance)
         end
         if not nextIndex then break end
         local item=table.remove(Mock.Queue,nextIndex)
-        item.Fn(table.unpack(item.Args,1,item.Args.n))
+        if Mock.YieldingTasks then
+            item.Thread=item.Thread or coroutine.create(item.Fn)
+            local ok,delay=coroutine.resume(item.Thread,table.unpack(item.Args,1,item.Args.n))
+            assert(ok,delay)
+            if coroutine.status(item.Thread)~="dead" then item.Due=Mock.Time+(delay or 0); item.Args=table.pack(); table.insert(Mock.Queue,item) end
+        else item.Fn(table.unpack(item.Args,1,item.Args.n)) end
         passes=passes+1; assert(passes<10000,"Runaway task queue")
     end
 end
@@ -56,6 +74,7 @@ end })
 local vectorMT={ __type="Vector2" }
 vectorMT.__add=function(a,b) return Vector2.new(a.X+b.X,a.Y+b.Y) end
 vectorMT.__sub=function(a,b) return Vector2.new(a.X-b.X,a.Y-b.Y) end
+vectorMT.__mul=function(a,b) if type(a)=="number" then return Vector2.new(a*b.X,a*b.Y) end; return Vector2.new(a.X*b,a.Y*b) end
 vectorMT.__div=function(a,b) return Vector2.new(a.X/b,a.Y/b) end
 Vector2={new=function(x,y) return setmetatable({X=x,Y=y},vectorMT) end}
 UDim={new=function(scale,offset) return {Scale=scale,Offset=offset} end}
@@ -153,9 +172,11 @@ end
 function instanceMethods:Destroy()
     if self._destroying or self._destroyed then return end
     self._destroying=true
-    if Mock.DeferDestroying then task.defer(function() self.Destroying:Fire() end) else self.Destroying:Fire() end
+    -- Engine destruction disconnects signals but retains already queued calls;
+    -- explicit Disconnect drops them. See Creator Hub deferred-events docs.
+    if Mock.DeferDestroying then self.Destroying:FireDeferred() else self.Destroying:Fire() end
     for _,child in ipairs(self:GetChildren()) do child:Destroy() end
-    for _,s in pairs(self._signals) do s:DisconnectAll() end
+    for _,s in pairs(self._signals) do s:DisconnectAll(true) end
     self.Parent=nil; self._destroyed=true; self._destroying=false
 end
 
@@ -231,10 +252,24 @@ local services={
     Players={LocalPlayer=player,GetUserThumbnailAsync=function() return "rbxthumb://test-avatar",true end},
     UserInputService={InputBegan=signal(),InputChanged=signal(),InputEnded=signal(),WindowFocusReleased=signal(),
         GetMouseLocation=function() return Mock.MousePosition or Vector2.new(50,50) end,GetFocusedTextBox=function() return Mock.Focused end},
-    RunService={Heartbeat=signal(),IsClient=function() return true end},
+    RunService={Heartbeat=signal(),RenderStepped=signal(),IsClient=function() return true end},
     HttpService={JSONEncode=function(_,value) return jsonEncode(value) end,JSONDecode=function(_,value) return jsonDecode(value) end,
         GenerateGUID=function() return "test-"..tostring(math.random(1,1000000)) end},
-    TweenService={Create=function(_,object,_,properties) return {Play=function() for k,v in pairs(properties) do object[k]=v end end} end},
+    TweenService={Create=function(_,object,info,properties)
+        local tween={Completed=signal(),PlaybackState=Enum.PlaybackState.Begin}
+        function tween:Play()
+            self.PlaybackState=Enum.PlaybackState.Playing
+            local function complete()
+                if self.PlaybackState~=Enum.PlaybackState.Playing then return end
+                for k,v in pairs(properties) do object[k]=v end
+                self.PlaybackState=Enum.PlaybackState.Completed; self.Completed:Fire(self.PlaybackState)
+            end
+            if Mock.AnimatedTweens then task.delay(info.Time,complete) else complete() end
+        end
+        function tween:Cancel() self.PlaybackState=Enum.PlaybackState.Cancelled; self.Completed:Fire(self.PlaybackState) end
+        function tween:Destroy() self.Completed:DisconnectAll(); self.Destroyed=true end
+        return tween
+    end},
     TextService={GetTextSize=function(_,text,size,_,bounds)
         local lines=0
         for line in (text.."\n"):gmatch("(.-)\n") do lines=lines+math.max(1,math.ceil(#line*size*.6/bounds.X)) end
