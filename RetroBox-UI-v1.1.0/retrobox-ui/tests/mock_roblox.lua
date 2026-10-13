@@ -290,6 +290,19 @@ local player=Instance.new("Player")
 player.Name="TestUser"; player.DisplayName="Test Player"; player.UserId=42
 local playerGui=Instance.new("PlayerGui"); playerGui.Name="PlayerGui"; playerGui.Parent=player
 local services={
+    ContentProvider={PreloadAsync=function(_,assets,callback)
+        Mock.ThumbnailRequests=Mock.ThumbnailRequests or {}
+        for _,uri in ipairs(assets) do
+            Mock.ThumbnailRequests[#Mock.ThumbnailRequests+1]=uri
+            if Mock.ThumbnailDelay then task.wait(Mock.ThumbnailDelay) end
+            if Mock.ThumbnailError then error(Mock.ThumbnailError) end
+            callback(uri,Enum.AssetFetchStatus.Success)
+        end
+    end},
+    TeleportService={TeleportInitFailed=signal(),Teleport=function(_,placeId,player)
+        if Mock.TeleportError then error(Mock.TeleportError) end
+        Mock.TeleportRequests=Mock.TeleportRequests or {}; Mock.TeleportRequests[#Mock.TeleportRequests+1]={PlaceId=placeId,Player=player}
+    end},
     Players={LocalPlayer=player,GetUserThumbnailAsync=function() return "rbxthumb://test-avatar",true end},
     UserInputService={InputBegan=signal(),InputChanged=signal(),InputEnded=signal(),WindowFocusReleased=signal(),
         GetMouseLocation=function() return Mock.MousePosition or Vector2.new(50,50) end,GetFocusedTextBox=function() return Mock.Focused end},
@@ -317,7 +330,7 @@ local services={
         return Vector2.new(bounds.X,lines*(size+2))
     end},
 }
-game={GetService=function(_,name) return assert(services[name],"Unknown service: "..name) end}
+game={PlaceId=1234,GameId=5678,GetService=function(_,name) return assert(services[name],"Unknown service: "..name) end}
 workspace={CurrentCamera={ViewportSize=Mock.Viewport}}
 Mock.Services=services
 return Mock

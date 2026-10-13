@@ -154,3 +154,6 @@ Hide/Show e minimizar/restaurar preservam aba ativa, seleção de Configuraçõe
 O arraste da barra usa a posição local da âncora e a diferença das coordenadas de entrada. Isso evita somar o inset de AbsolutePosition outra vez. Atualizações manuais são diretas, preservam a pegada, não fazem relayout e não deixam inércia ao soltar. SmoothDragging continua aceito/salvo para reposicionamentos gerenciados como Center, padrão false; ele não atrasa o gesto manual. ReducedMotion continua respeitado. GuiInset, escala e origem não zero são exercitados no double, mas precisam de conferência na engine.
 
 Campos editáveis e dropdowns usam padding horizontal central de 12 px. Títulos externos e componentes com alinhamento próprio permanecem no papel anterior. Veja [VALIDATION.md](VALIDATION.md) para evidências e testes reais pendentes.
+
+
+Na 1.9, [Script Hub Mode](SCRIPT-HUB.md) reutiliza flags, scopes e RunAction: Play é registrado em código, usa grupo exclusivo e exige cancelamento cooperativo. Catálogos/callbacks, imagens e dados de execução não são salvos. Favoritos, ordenação e seleção usam flags normais; construa o catálogo antes de LoadConfig. Detecção e restauração de perfis não acionam Play ou teleporte.

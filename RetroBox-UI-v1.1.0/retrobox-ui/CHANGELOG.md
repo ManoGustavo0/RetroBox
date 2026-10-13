@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.0 · 2026-10-13
+
+- Command Palette: seção interna com estado de visibilidade, linhas ativáveis por clique/toque, níveis de GUI corretos, captura estável de abas, foco/scroll após layout, tratamento de alvos removidos e feedback da ação real.
+- Theme Studio: botão de fechamento, retorno à aba anterior, remoção do tab temporário e ciclo reabrível; alterações não salvas oferecem Save/Discard/Cancel. Catálogo preservado em fechamento normal e perfis anteriores compatíveis.
+- Script Hub opcional: cadastro dinâmico, pesquisa e ordenação, miniaturas oficiais com cache/fallback, scripts/callbacks/metadados, Play por entrada, grupos exclusivos, cancelamento, favoritos e seleção por flags.
+- AutoDetectGame prioriza PlaceId exato e usa UniverseId somente como correspondência secundária; seleção não dispara scripts nem teleportes.
+- Teleporte explícito com confirmação, PlaceId, adapter de desenvolvedor e compatibilidade cliente legada, erros síncronos/assíncronos e timeout sem alegar chegada.
+- Contrato permanente de distribuição por HTTP/loadstring; loader com verificação de capacidades/versão, testes sem funções de arquivo e validator do prompt.
+- Novos guias, dois exemplos e regressões da navegação/hub/distribuição; 221 testes e 19 exemplos no simulador. Renderização/input/assets/teleporte reais permanecem pendentes.
+
 ## 1.8.0 · 2026-10-13
 
 - Seis temas oficiais: Hacker, Dracula, Nord, Sakura, Ocean e Amber; doze paletas no total. Tokens completos de superfícies, tinta, relevos, destaque e estados.

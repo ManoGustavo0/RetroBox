@@ -1,4 +1,4 @@
--- RetroBox UI 1.8.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.9.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.8.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.9.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -3126,14 +3126,35 @@ function Window:FocusControl(control)
     if not control or control._window~=self or control.Destroyed or not control._visible then return false,"Control is unavailable" end
     local section=control._section._parentSection or control._section
     local tab=control._section._tab
-    if tab.Hidden or control._section._visible==false then return false,"Control is hidden" end
+    if tab.Hidden or control._section._visible==false or section._visible==false then return false,"Control is hidden" end
     if section._collapsed then section:SetCollapsed(false) end
     self:Show(); self:Minimize(false)
     self.Search.Text=""; self:SetSearch(""); tab:Select(); self:_hideSearchResults()
     if UserInputService:GetFocusedTextBox()==self.Search then self.Search:ReleaseFocus() end
-    local canvas=tab.Frame.CanvasPosition or Vector2.new(0,0)
-    local y=canvas.Y+(control.Frame.AbsolutePosition.Y-tab.Frame.AbsolutePosition.Y)/math.max(.1,self._actualScale)
-    tab.Frame.CanvasPosition=Vector2.new(0,math.max(0,y-12))
+    if self._focusNavigation then self._focusNavigation:Destroy() end
+    local navigation=self:CreateScope(); self._focusNavigation=navigation
+    local function scrollAndFocus()
+        if self.Destroyed or control.Destroyed or tab.Destroyed or self.ActiveTab~=tab or self._overlay or self._dialog or self._shown==false or self.Minimized then return end
+        local canvas=tab.Frame.CanvasPosition or Vector2.new(0,0)
+        local y=canvas.Y+(control.Frame.AbsolutePosition.Y-tab.Frame.AbsolutePosition.Y)/math.max(.1,self._actualScale)
+        tab.Frame.CanvasPosition=Vector2.new(canvas.X,math.max(0,y-12))
+        if not control.Disabled then
+            local target=control.Input or control.Button or control.TitleLabel
+            if control.Viewport and control._onKey then
+                target=control.Viewport
+                for _,row in ipairs(control._pool or {}) do if row.Button.Visible then target=row.Button; break end end
+            end
+            if target and target.Parent then
+                if target:IsA("TextBox") then target:CaptureFocus() else self:_focusObject(target) end
+                if control.Viewport and control._onKey then self._activeAdvanced=control end
+            end
+        end
+    end
+    scrollAndFocus()
+    navigation:Add(RunService.RenderStepped:Connect(function()
+        scrollAndFocus(); navigation:Destroy()
+        if self._focusNavigation==navigation then self._focusNavigation=nil end
+    end),"Disconnect")
     if control._focusBorder==nil then control._focusBorder=control.Frame.BorderSizePixel end
     control.Frame.BorderColor3=self.Palette.Accent; control.Frame.BorderSizePixel=1
     control._focusToken=(control._focusToken or 0)+1; local token=control._focusToken
@@ -4869,7 +4890,8 @@ do
     function Window:_focusObject(object)
         if not object or not object.Parent then return false end
         self._keyboardFocus=object
-        if not self._focusRing then
+        if self._activeAdvanced and object.Parent~=self._activeAdvanced.Viewport then self._activeAdvanced=nil end
+        if not self._focusRing or not self._focusRing.Parent then
             self._focusRing=frame(self,object,{Name="KeyboardFocus",BackgroundTransparency=1,BorderSizePixel=2,Size=UDim2.fromScale(1,1),ZIndex=190})
             self:_bind(self._focusRing,{BorderColor3="Accent"})
         else self._focusRing.Parent=object; self._focusRing.Visible=true end
@@ -5100,6 +5122,7 @@ do
             local index=self._indices[position]; if not index or self.Disabled or self._loading then return false end
             self._cursor=position; self:SetValue(self.Keys[index]); window._activeAdvanced=self
             if activate and self._activateNode then self:_activateNode(index) end
+            if self.Destroyed then return true end
             call(window,options.OnSelect,Library._copyConfigData(self.Items[index]),self.Keys[index],index)
             return true
         end
@@ -5503,20 +5526,21 @@ do
             local target=appearance.Theme
             assert(type(target)=="string" and (advanced.Themes[target] or Library.Themes[target] or self._themeOverrides[target]),"Profile theme is unknown")
             self:_applyAdvanced({Themes=advanced.Themes},true)
-            self:SetTheme(target); if self._themeStudio then self._themeStudio:Refresh() end
+            self:SetTheme(target); if self._themeStudio then self._themeStudio:_markSaved(); self._themeStudio:Refresh() end
             return target
         end)
         return ok,result
     end
     function Window:OpenThemeStudio()
         if self._themeStudio and not self._themeStudio.Destroyed then self._themeStudio.Tab:Select(); self._themeStudio:Refresh(); return self._themeStudio end
-        local window=self; local manager={_connections={},Scope=self:CreateScope(),Pickers={}}
+        local window=self; local manager={_connections={},Scope=self:CreateScope(),Pickers={},PreviousTab=self.ActiveTab}
         local tab=self:CreateTab({Title=self:_text("themeStudio"),Icon="palette",Columns=2,Internal=true}); manager.Tab=tab; self._themeStudio=manager; tab._toolManager=manager
         local function opts(key,title,extra)
             local result={Id="__retrobox/theme-studio/"..key,Title=title,Internal=true,Persist=false}
             for k,v in pairs(extra or {}) do result[k]=v end; return result
         end
         local choose=tab:CreateSection({Title=self:_t17("Temas","Themes"),Icon="palette"})
+        manager.CloseButton=choose:AddButton(opts("close",self:_t17("Fechar editor","Close editor"),{Icon="close",Callback=function() manager:Close() end}))
         manager.Select=choose:AddDropdown(opts("select",self:_text("theme"),{Options=self:GetThemeNames(),Default=self.Theme,Callback=function(name) if name then window:SetTheme(name); manager:Refresh() end end}))
         manager.Name=choose:AddInput(opts("name",self:_t17("Nome da variação","Variation name"),{Default=self:_t17("Meu tema","My theme"),MaxLength=48}))
         local function notify(ok,value) window:Notify({Title=window:_text(ok and "success" or "error"),Content=tostring(value or ""),Kind=ok and "success" or "error"}) end
@@ -5568,13 +5592,52 @@ do
             self.Contrast:SetText(bad==0 and window:_t17("Paleta com bom contraste.","Palette contrast passed.") or window:_t17("Combinações que merecem revisão: ","Combinations to review: ")..bad..window:_t17(". O texto se ajusta à superfície real.",". Ink adapts to the actual surface."))
             self._refreshing=false
         end
+        function manager:_markSaved()
+            self._savedCatalog=copy(window._customThemes); self._savedTheme=window.Theme
+        end
+        function manager:IsDirty() return not self.Destroyed and not same(self._savedCatalog,window._customThemes) end
+        function manager:Close(choice,profileName)
+            if self.Destroyed then return true end
+            if choice=="Cancel" then return false,"cancelled" end
+            if choice=="Discard" then
+                local theme=window.Theme
+                window:_applyAdvanced({Themes=copy(self._savedCatalog)},true)
+                if not window._themeOverrides[theme] and not Library.Themes[theme] then theme=self._savedTheme end
+                window:SetTheme(theme); self:Destroy(); return true
+            end
+            if choice=="Save" then
+                local name=profileName or self.Profile:GetValue()
+                local ok,reason=window:SaveConfig(name)
+                if not ok then notify(false,reason); return false,reason end
+                self:Destroy(); return true
+            end
+            assert(choice==nil,"Close choice must be Save, Discard or Cancel")
+            if not self:IsDirty() then self:Destroy(); return true end
+            window:Dialog({Title=window:_t17("Alterações do tema","Theme changes"),Content=window:_t17("Salvar as alterações em um perfil antes de fechar?","Save changes to a profile before closing?"),Buttons={
+                {Text=window:_t17("Salvar","Save"),Callback=function() self:Close("Save") end},
+                {Text=window:_t17("Descartar","Discard"),Callback=function() self:Close("Discard") end},
+                {Text=window:_t17("Cancelar","Cancel"),Callback=function() self:Close("Cancel") end},
+            }})
+            return false,"confirmation pending"
+        end
         function manager:Destroy()
             if self.Destroyed then return end; self.Destroyed=true; self.Scope:Destroy(); if window._themeStudio==self then window._themeStudio=nil end
             window._resources:Remove("theme-studio",true)
             if not self.Tab.Destroyed then self.Tab:Destroy() end
+            if not window.Destroyed and self.PreviousTab and not self.PreviousTab.Destroyed and not self.PreviousTab.Hidden then self.PreviousTab:Select() end
         end
         manager.Scope:Add(function() cleanup(manager) end); self:Manage(manager,"Destroy","theme-studio")
-        manager:Refresh(); tab:Select(); return manager
+        manager:_markSaved(); manager:Refresh(); tab:Select(); return manager
+    end
+    function Window:CloseThemeStudio(choice,profileName)
+        if not self._themeStudio then return true end
+        return self._themeStudio:Close(choice,profileName)
+    end
+    local saveConfig=Window.SaveConfig
+    function Window:SaveConfig(...)
+        local ok,result=saveConfig(self,...)
+        if ok and self._themeStudio and not self._themeStudio.Destroyed then self._themeStudio:_markSaved() end
+        return ok,result
     end
 end
 
@@ -5890,7 +5953,13 @@ do
         if type(enabled)=="function" then local ok,value=self:_protected(enabled,{Operation=id,Phase="CommandAvailability"},self); enabled=ok and value==true end
         if enabled==false then return nil,"Command is disabled" end
         local function run()
-            return self:RunAction({Group=command.Options.Group or command.Id,Policy=command.Options.Policy or "Reject",Callback=function(ctx) return command.Options.Callback(ctx,self,command) end})
+            return self:RunAction({Group=command.Options.Group or command.Id,Policy=command.Options.Policy or "Reject",
+                Callback=function(ctx) return command.Options.Callback(ctx,self,command) end,
+                OnComplete=function(handle)
+                    if self.Destroyed then return end
+                    local status=handle:GetStatus().Status
+                    if status=="Completed" or status=="Failed" then self:Notify({Title=command.Title,Content=status=="Completed" and self:_text("success") or tostring(handle.Error),Kind=status=="Completed" and "success" or "error"}) end
+                end})
         end
         if command.Options.Confirm then self:Confirm({Title=command.Title,Content=command.Options.Confirm,OnConfirm=run}); return nil,"confirmation pending" end
         return run()
@@ -5919,29 +5988,40 @@ do
         owner.Header=label(self,owner.Panel,self:_text("commandPalette"),{Position=U2(12,8),Size=UDim2.new(1,-24,0,24),ZIndex=221})
         owner.Search=textbox(self,owner.Panel,"",{Position=U2(12,40),Size=UDim2.new(1,-24,0,32),PlaceholderText=self:_text("search"),ZIndex=221})
         -- This host uses the same Section/base/viewport renderer as ordinary lists.
-        local host={_window=self,_tab=nil,_count=0,Controls={},Content=owner.Panel}
+        local host={_window=self,_tab=nil,_count=0,_visible=true,_collapsed=false,Controls={},Content=owner.Panel}
         owner.Rows=Section.AddVirtualList(host,{Id="__retrobox/palette-results",Internal=true,Persist=false,Title="",Searchable=false,Items={},Height=math.max(120,height-78),RowHeight=34})
-        owner.Rows.Frame.Position=U2(12,54); owner.Rows.Frame.Size=UDim2.new(1,-24,0,height-64); owner.Rows.TitleLabel.Visible=false
+        owner.Rows.Frame.ZIndex=221; owner.Search.ZIndex=225; owner.Rows.Frame.Position=U2(12,54); owner.Rows.Frame.Size=UDim2.new(1,-24,0,height-64); owner.Rows.TitleLabel.Visible=false
         owner.Rows.Viewport.ZIndex=221; owner.Rows.EmptyLabel.ZIndex=222
         owner.Scope:Add(owner.Rows,"Destroy")
         function owner:Choose(index)
-            local row=self.Results[index]; if not row then return false end
+            if self.Destroyed then return false,"Palette is closed" end
+            local row=self.Results[index]; if not row then return false,"Result is unavailable" end
+            local target=self._tabs and self._tabs[row.TargetId]
             self:Close("selected")
-            if row.Kind=="Control" then return window:FocusControl(row.TargetId)
-            elseif row.Kind=="Tab" then local tab=window.Tabs[tonumber(row.TargetId)]; if tab and not tab.Destroyed then tab:Select(); return true end; return false
+            local ok,reason
+            if row.Kind=="Control" then ok,reason=window:FocusControl(row.TargetId)
+            elseif row.Kind=="Tab" then
+                ok=target and not target.Destroyed and not target.Hidden
+                if ok then window:Show(); window:Minimize(false); target:Select() else reason="Tab is unavailable" end
             else
-                local handle,reason=window:ExecuteCommand(row.TargetId)
-                if not handle and reason~="confirmation pending" and reason~="ignored" then window:Notify({Title=window:_text("error"),Content=reason,Kind="error"}) end
-                return handle~=nil or reason=="confirmation pending"
+                local handle; handle,reason=window:ExecuteCommand(row.TargetId)
+                ok=handle~=nil or reason=="confirmation pending" or reason=="ignored"
             end
+            if not ok then window:Notify({Title=window:_text("error"),Content=tostring(reason or "Result is unavailable"),Kind="error"}) end
+            return not not ok,reason
         end
         function owner:Refresh()
-            self.Results=window:GetCommandResults(self.Search.Text:sub(1,256)); self.Selection=1
+            self.Results=window:GetCommandResults(self.Search.Text:sub(1,256)); self.Selection=1; self._tabs={}
+            for _,result in ipairs(self.Results) do if result.Kind=="Tab" then self._tabs[result.TargetId]=window.Tabs[tonumber(result.TargetId)] end end
             self.Rows:SetItems(self.Results)
             for _,row in ipairs(self.Rows._pool) do row.Button.ZIndex=222; for _,object in ipairs(row.Button:GetDescendants()) do if object:IsA("GuiObject") then object.ZIndex=223 end end end
             if self.Results[1] then self.Rows:SetValue(self.Results[1].Id,true) end
         end
-        owner.Rows._activateNode=function(_,index) owner:Choose(index) end
+        owner.Rows._renderNode=function(_,row)
+            row.Button.ZIndex=222
+            for _,object in ipairs(row.Button:GetDescendants()) do if object:IsA("GuiObject") then object.ZIndex=223 end end
+        end
+        owner.Rows._activateNode=function(_,index) owner.Selection=index; owner:Choose(index) end
         function owner:OnKey(key)
             if key=="Escape" then self:Close("escape"); return true end
             if key=="Enter" or key=="Return" then self:Choose(self.Selection); return true end
@@ -6017,5 +6097,516 @@ do
 end
 
 -- END RETRO170 PREFERENCES
+
+-- BEGIN RETRO190 SCRIPT HUB
+-- This optional mode uses native tabs, recycled lists, flags, scopes and actions.
+do
+    local Hub={}; Hub.__index=Hub
+    local function key(value,label)
+        assert(type(value)=="string" and #value>=1 and #value<=64 and value:match("^[%w_%.%-]+$"),(label or "Id").." must be 1–64 letters, numbers, dots, underscores or hyphens")
+        return value
+    end
+    local function text(value,maximum,label,required)
+        assert(value==nil or type(value)=="string",label.." must be text")
+        value=value or ""; assert(#value<=maximum and (not required or #value>0),label.." has an invalid length"); return value
+    end
+    local function identifier(value,label)
+        if value==nil or value==false then return nil end
+        assert(finite(value) and value%1==0 and value>0 and value<=9007199254740991,label.." must be a positive safe integer")
+        return value
+    end
+    local function array(value,limit,label)
+        assert(type(value)=="table",label.." must be an array")
+        local n=0; for i in pairs(value) do assert(type(i)=="number" and i%1==0 and i>=1 and i<=limit,label.." has an invalid index"); n=n+1 end
+        assert(n==#value and n<=limit,label.." must be a dense bounded array"); return value
+    end
+    local function imageURI(value)
+        if value==nil or value==false then return nil end
+        if type(value)=="number" then return "rbxassetid://"..string.format("%.0f",identifier(value,"Image")) end
+        assert(type(value)=="string" and #value<=512,"Image must be a Roblox content identifier")
+        assert(value:match("^rbxassetid://%d+$") or value:match("^rbxthumb://type=%a+&id=%d+&w=%d+&h=%d+$") or value:match("^rbxasset://[%w_/%-%.]+$"),"Image must use rbxassetid, rbxthumb or rbxasset; external web URLs are unsupported")
+        return value
+    end
+    local function normalizeScript(value)
+        assert(type(value)=="table","Script must be a record")
+        local result={Id=key(value.Id,"Script Id"),Title=text(value.Title,128,"Script Title",true),Description=text(value.Description,2048,"Script Description"),Author=text(value.Author,128,"Author"),Version=text(value.Version and tostring(value.Version),64,"Version"),Status=text(value.Status,128,"Status")}
+        assert(value.Callback==nil or type(value.Callback)=="function","Script Callback must be a function")
+        assert(value.Enabled==nil or type(value.Enabled)=="boolean" or type(value.Enabled)=="function","Script Enabled must be a boolean or predicate")
+        assert(value.Confirm==nil or type(value.Confirm)=="string" and #value.Confirm<=4096,"Script Confirm must be text")
+        assert(value.CurrentGameOnly==nil or type(value.CurrentGameOnly)=="boolean","CurrentGameOnly must be boolean")
+        result.Callback=value.Callback; result.Enabled=value.Enabled; result.Confirm=value.Confirm; result.CurrentGameOnly=value.CurrentGameOnly==true
+        result.Icon=value.Icon or "code"; resolveIcon(result.Icon)
+        result.Requires={}
+        for _,cap in ipairs(array(value.Requires or {},16,"Requires")) do
+            assert(cap=="HttpGet" or cap=="loadstring" or cap=="readfile" or cap=="writefile" or cap=="setclipboard","Unknown required capability: "..tostring(cap))
+            result.Requires[#result.Requires+1]=cap
+        end
+        return result
+    end
+    local function normalizeGame(value,order)
+        assert(type(value)=="table","Game must be a record")
+        local result={Id=key(value.Id,"Game Id"),Name=text(value.Name,128,"Game Name",true),Description=text(value.Description,2048,"Game Description"),PlaceId=identifier(value.PlaceId,"PlaceId"),UniverseId=identifier(value.UniverseId,"UniverseId"),Image=imageURI(value.Image),Scripts={}}
+        assert(value.Order==nil or finite(value.Order) and value.Order%1==0 and math.abs(value.Order)<=1000000,"Game Order must be an integer between -1000000 and 1000000")
+        result.Order=value.Order or order; local ids={}
+        for _,entry in ipairs(array(value.Scripts or {},128,"Scripts")) do local script=normalizeScript(entry); assert(not ids[script.Id],"Duplicate script Id: "..script.Id); ids[script.Id]=true; result.Scripts[#result.Scripts+1]=script end
+        return result
+    end
+    local function normalizeGames(values)
+        local result,ids,total={},{},0
+        for index,value in ipairs(array(values or {},512,"Games")) do
+            local gameRecord=normalizeGame(value,index); assert(not ids[gameRecord.Id],"Duplicate game Id: "..gameRecord.Id)
+            ids[gameRecord.Id]=true; total=total+#gameRecord.Scripts; assert(total<=4096,"Script catalog limit is 4096 entries"); result[#result+1]=gameRecord
+        end
+        return result
+    end
+    local upper={ ["Á"]="á",["À"]="à",["Â"]="â",["Ã"]="ã",["Ä"]="ä",["É"]="é",["È"]="è",["Ê"]="ê",["Ë"]="ë",["Í"]="í",["Ì"]="ì",["Î"]="î",["Ï"]="ï",["Ó"]="ó",["Ò"]="ò",["Ô"]="ô",["Õ"]="õ",["Ö"]="ö",["Ú"]="ú",["Ù"]="ù",["Û"]="û",["Ü"]="ü",["Ç"]="ç" }
+    local function lower(value) value=value:lower(); for a,b in pairs(upper) do value=value:gsub(a,b) end; return value end
+    local function metadata(record)
+        if not record then return nil end
+        local result={}; for name,value in pairs(record) do if name~="Scripts" and name~="Callback" and name~="Enabled" then result[name]=copy(value) end end
+        return result
+    end
+    local function optionalService(name)
+        local ok,value=pcall(game.GetService,game,name); return ok and value or nil
+    end
+    function Hub:_game(id) return self._games[id] end
+    function Hub:_script(gameId,scriptId)
+        local rec=self:_game(gameId); if rec then for _,entry in ipairs(rec.Scripts) do if entry.Id==scriptId then return entry,rec end end end
+    end
+    function Hub:GetGame(id)
+        local rec=self:_game(id); if not rec then return nil end
+        local value=metadata(rec); value.Scripts={}; for _,entry in ipairs(rec.Scripts) do value.Scripts[#value.Scripts+1]=metadata(entry) end; return value
+    end
+    function Hub:GetGames() local out={}; for _,id in ipairs(self._order) do out[#out+1]=self:GetGame(id) end; return out end
+    function Hub:GetScript(gameId,scriptId) return metadata(self:_script(gameId,scriptId)) end
+    function Hub:GetSelectedGame() return self:GetGame(self.SelectedGameId) end
+    function Hub:IsCurrentGame(id)
+        local rec=self:_game(id)
+        return not not (rec and ((rec.PlaceId and rec.PlaceId==game.PlaceId) or (rec.UniverseId and rec.UniverseId==game.GameId)))
+    end
+    function Hub:DetectCurrentGame()
+        for _,id in ipairs(self._order) do local rec=self._games[id]; if rec.PlaceId and rec.PlaceId==game.PlaceId then return id end end
+        for _,id in ipairs(self._order) do local rec=self._games[id]; if rec.UniverseId and rec.UniverseId==game.GameId then return id end end
+    end
+    function Hub:IsFavorite(id) return table.find(self.Favorites:GetValue(),id)~=nil end
+    function Hub:SetFavorite(id,value)
+        assert(self:_game(id),"Unknown game"); assert(type(value)=="boolean","Favorite must be boolean")
+        local values=self.Favorites:GetValue(); local index=table.find(values,id)
+        if value and not index then values[#values+1]=id elseif not value and index then table.remove(values,index) end
+        self.Favorites:SetValue(values); return self
+    end
+    function Hub:SetGameQuery(value)
+        assert(type(value)=="string" and #value<=256,"Game query must be up to 256 bytes")
+        self.GameSearch:SetValue(value); return self
+    end
+    function Hub:SetScriptQuery(value)
+        assert(type(value)=="string" and #value<=256,"Script query must be up to 256 bytes")
+        self.ScriptSearch:SetValue(value); return self
+    end
+    function Hub:SetSort(value)
+        assert(value=="Order" or value=="Alphabetical" or value=="Favorites","Sort must be Order, Alphabetical or Favorites")
+        self.Sort:SetValue(value); return self
+    end
+    function Hub:_thumbnailURI(rec)
+        if rec.Image then return rec.Image end
+        if rec.UniverseId then return "rbxthumb://type=GameIcon&id="..string.format("%.0f",rec.UniverseId).."&w=150&h=150" end
+        if rec.PlaceId then return "rbxthumb://type=GameThumbnail&id="..string.format("%.0f",rec.PlaceId).."&w=256&h=144" end
+        return nil
+    end
+    function Hub:GetThumbnailStatus(id)
+        local rec=self:_game(id); if not rec then return nil,"Unknown game" end
+        local uri=self:_thumbnailURI(rec); local cached=uri and self._thumbs[uri]
+        return {Status=cached and cached.Status or "Unavailable",URI=uri,Error=cached and cached.Error}
+    end
+    function Hub:_paintThumbnail(image,fallback,uri)
+        local cached=uri and self._thumbs[uri]; local loaded=cached and cached.Status=="Loaded"
+        image.Image=loaded and uri or ""; image.Visible=not not loaded
+        if fallback then fallback.Frame.Visible=not loaded end
+    end
+    function Hub:_refreshImages()
+        if self.Destroyed then return end
+        self.GameList:_render()
+        local rec=self:_game(self.SelectedGameId); local uri=rec and self:_thumbnailURI(rec)
+        local cached=uri and self._thumbs[uri]
+        self.GameImage:SetValue(cached and cached.Status=="Loaded" and uri or "",true)
+        self.ImageStatus:SetText(cached and cached.Status=="Loading" and self.Window:_t17("Carregando miniatura…","Loading thumbnail…") or cached and cached.Status=="Loaded" and "" or self.Window:_t17("Miniatura indisponível","Thumbnail unavailable"))
+    end
+    function Hub:_pumpThumbnails()
+        while not self.Destroyed and self._thumbActive<4 and #self._thumbQueue>0 do
+            local request=table.remove(self._thumbQueue,1); self._thumbActive=self._thumbActive+1
+            local resourceKey="thumbnail:"..request.URI
+            local thread=task.defer(function()
+                local success,reason=false,nil
+                local provider=optionalService("ContentProvider")
+                if provider and type(provider.PreloadAsync)=="function" then
+                    local fetched
+                    local ok,result=pcall(function() provider:PreloadAsync({request.URI},function(_,status) fetched=status and status.Name=="Success" end) end)
+                    success=ok and fetched==true; reason=not ok and tostring(result) or not success and "Image fetch did not succeed" or nil
+                else reason="ContentProvider unavailable" end
+                self.Scope:Remove(resourceKey,true)
+                if self.Destroyed then return end
+                self._thumbActive=self._thumbActive-1
+                if self._thumbs[request.URI]==request then request.Status=success and "Loaded" or "Unavailable"; request.Error=reason end
+                self:_refreshImages(); self:_pumpThumbnails()
+            end)
+            self.Scope:Add(thread,function(value) if coroutine.status(value)~="dead" then pcall(task.cancel,value) end end,resourceKey)
+        end
+    end
+    function Hub:_requestThumbnail(rec)
+        local uri=self:_thumbnailURI(rec); if not uri or self._thumbs[uri] then return uri end
+        if #self._thumbOrder>=128 then
+            local evict
+            for index,key in ipairs(self._thumbOrder) do if self._thumbs[key].Status~="Loading" then evict=index; break end end
+            if not evict then return uri end
+            local old=table.remove(self._thumbOrder,evict); self._thumbs[old]=nil
+        end
+        local cached={URI=uri,Status="Loading"}; self._thumbs[uri]=cached; self._thumbOrder[#self._thumbOrder+1]=uri
+        self._thumbQueue[#self._thumbQueue+1]=cached; self:_pumpThumbnails(); return uri
+    end
+    function Hub:RetryThumbnail(id)
+        local rec=assert(self:_game(id),"Unknown game"); local uri=self:_thumbnailURI(rec)
+        if uri then
+            local cached=self._thumbs[uri]; if cached and cached.Status=="Loading" then return self end
+            self._thumbs[uri]=nil; local index=table.find(self._thumbOrder,uri); if index then table.remove(self._thumbOrder,index) end
+        end
+        self:_requestThumbnail(rec); self:_refreshImages(); return self
+    end
+    function Hub:IsScriptAvailable(gameId,scriptId)
+        local spec,rec=self:_script(gameId,scriptId); if not spec then return false,"Script is unavailable" end
+        if not spec.Callback then return false,self.Window:_t17("Nenhuma ação foi cadastrada.","No action was registered.") end
+        if spec.CurrentGameOnly and not self:IsCurrentGame(gameId) then return false,self.Window:_t17("Disponível somente neste jogo.","Only available in this game.") end
+        local enabled=spec.Enabled
+        if type(enabled)=="function" then
+            local ok,value=self.Window:_protected(enabled,{Operation=self.Id,Phase="HubAvailability"},self,metadata(rec),metadata(spec)); enabled=ok and value==true
+        end
+        if enabled==false then return false,self.Window:_t17("Indisponível","Unavailable") end
+        local caps={loadstring=loadstring,readfile=readfile,writefile=writefile,setclipboard=setclipboard}
+        for _,cap in ipairs(spec.Requires) do
+            local fn=caps[cap]
+            if cap=="HttpGet" then local ok,value=pcall(function() return game.HttpGet end); fn=ok and value or nil end
+            if type(fn)~="function" then return false,self.Window:_t17("Capacidade ausente: ","Missing capability: ")..cap end
+        end
+        return true
+    end
+    function Hub:GetScriptStatus(gameId,scriptId)
+        local spec=self:_script(gameId,scriptId); if not spec then return nil,"Unknown script" end
+        local pending=self._pendingScripts[gameId.."/"..scriptId]
+        if pending then return pending:GetStatus() end
+        local status=self._scriptStatus[gameId.."/"..scriptId]
+        if status then return copy(status) end
+        local available,reason=self:IsScriptAvailable(gameId,scriptId)
+        return {Status=available and "Available" or "Unavailable",Error=reason}
+    end
+    function Hub:_scriptRows()
+        local out={}; local rec=self:_game(self.SelectedGameId)
+        for _,spec in ipairs(rec and rec.Scripts or {}) do
+            local status=self:GetScriptStatus(rec.Id,spec.Id); local author=spec.Author~="" and " · "..spec.Author or ""
+            local pt={Available="Disponível",Unavailable="Indisponível",Queued="Na fila",Running="Executando",Cancelling="Cancelando",Completed="Concluído",Failed="Falha",Cancelled="Cancelado"}
+            local label=self.Window:_t17(pt[status.Status] or status.Status,status.Status)
+            out[#out+1]={Id=spec.Id,Title=spec.Title,Text=spec.Title..author..(spec.Version~="" and " · "..spec.Version or "").."\n"..label..(spec.Status~="" and " · "..spec.Status or ""),Description=spec.Description}
+        end
+        return out
+    end
+    function Hub:_refreshScriptDetails()
+        if self.Destroyed or not self.ScriptList then return end
+        local spec,rec=self:_script(self.SelectedGameId,self.ScriptList:GetValue())
+        local available,reason=false,self.Window:_t17("Selecione um script.","Select a script.")
+        if spec then available,reason=self:IsScriptAvailable(rec.Id,spec.Id) end
+        self.PlayButton:SetDisabled(not available or spec and self._pendingScripts[rec.Id.."/"..spec.Id]~=nil)
+        local info=spec and (spec.Title.."\n"..spec.Description..(spec.Author~="" and "\n"..spec.Author or "")..(spec.Version~="" and " · "..spec.Version or "")..(not available and "\n"..tostring(reason) or "")) or self.Window:_t17("Nenhum script disponível\nEste jogo ainda não possui scripts cadastrados.","No scripts available\nThis game has no registered scripts yet.")
+        self.ScriptDetails:SetText(info)
+    end
+    function Hub:RefreshScripts()
+        if self.Destroyed then return self end
+        self.ScriptList:SetItems(self:_scriptRows()); self:_filterScripts()
+        if not self.ScriptList:GetValue() and #self.ScriptList.Items>0 then self.ScriptList:SetValue(self.ScriptList.Items[1].Id,true) end
+        self:_refreshScriptDetails(); return self
+    end
+    function Hub:_filterScripts()
+        local query=lower(self.ScriptSearch:GetValue())
+        self.ScriptList:SetFilter(function(row) return query=="" or lower(row.Text.." "..row.Description):find(query,1,true)~=nil end)
+    end
+    function Hub:_refreshGames()
+        if self.Destroyed or self._refreshingGames then return end
+        self._refreshingGames=true
+        local rows,ids={},{}
+        for _,id in ipairs(self._order) do
+            local rec=self._games[id]; ids[#ids+1]=id
+            rows[#rows+1]={Id=id,Name=rec.Name,Order=rec.Order,Favorite=self:IsFavorite(id),Text=(self:IsFavorite(id) and "★ " or "")..rec.Name.."\n"..#rec.Scripts..self.Window:_t17(" scripts"," scripts")..(self:IsCurrentGame(id) and self.Window:_t17(" · Jogo atual"," · Current game") or "")}
+        end
+        local sort=self.Sort:GetValue()
+        table.sort(rows,function(a,b)
+            if sort=="Favorites" and a.Favorite~=b.Favorite then return a.Favorite end
+            if sort=="Order" and a.Order~=b.Order then return a.Order<b.Order end
+            local x,y=lower(a.Name),lower(b.Name); return x==y and a.Id<b.Id or x~=y and x<y
+        end)
+        self.Favorites:SetOptions(ids,true)
+        self.GameList:SetItems(rows)
+        local query=lower(self.GameSearch:GetValue())
+        self.GameList:SetFilter(function(row) return query=="" or lower(row.Name):find(query,1,true)~=nil end)
+        self._refreshingGames=false
+    end
+    function Hub:SelectGame(id)
+        if self.Destroyed or not self._games[id] then return false,"Game is unavailable" end
+        if self._selecting then return true end
+        self._selecting=true; self.SelectedGameId=id
+        self.GameList:SetValue(id,true)
+        local rec=self._games[id]
+        self.GameDetails:SetText(rec.Name..(self:IsCurrentGame(id) and self.Window:_t17(" · Jogo atual"," · Current game") or "").."\n"..rec.Description)
+        self.FavoriteButton.Button.Text=self:IsFavorite(id) and self.Window:_t17("Remover favorito","Remove favorite") or self.Window:_t17("Favoritar","Favorite")
+        self.TeleportButton:SetDisabled(not rec.PlaceId or rec.PlaceId==game.PlaceId or self._teleportPending~=nil)
+        self:_requestThumbnail(rec); self:_refreshImages(); self:RefreshScripts(); self._selecting=false
+        return true
+    end
+    function Hub:_afterCatalog()
+        self:_refreshGames()
+        local selected=self.GameList:GetValue()
+        if selected and self._games[selected] then self:SelectGame(selected)
+        else
+            local target=self.AutoDetectGame and self:DetectCurrentGame() or nil
+            target=target or self.GameList.Items[1] and self.GameList.Items[1].Id
+            if target then self:SelectGame(target) else
+                self.SelectedGameId=nil; self.ScriptList:SetItems({}); self.ImageStatus:SetText(""); self.GameDetails:SetText(self.Window:_t17("Nenhum jogo cadastrado.","No games registered.")); self.GameImage:SetValue("",true)
+                self.PlayButton:SetDisabled(true); self.TeleportButton:SetDisabled(true); self.FavoriteButton:SetDisabled(true); self:_refreshScriptDetails()
+            end
+        end
+        if self.SelectedGameId then self.FavoriteButton:SetDisabled(false) end
+    end
+    function Hub:_checkCount(replacement)
+        local total=0; for id,rec in pairs(self._games) do total=total+#((replacement and replacement.Id==id and replacement or rec).Scripts) end
+        if replacement and not self._games[replacement.Id] then total=total+#replacement.Scripts end
+        assert(total<=4096,"Script catalog limit is 4096 entries")
+    end
+    function Hub:AddGame(value)
+        assert(not self.Destroyed,"Hub has been destroyed"); assert(#self._order<512,"Game catalog limit is 512")
+        local rec=normalizeGame(value,#self._order+1); assert(not self._games[rec.Id],"Duplicate game Id"); self:_checkCount(rec)
+        self._games[rec.Id]=rec; self._order[#self._order+1]=rec.Id; self:_afterCatalog(); return rec.Id
+    end
+    function Hub:_cancelScripts(gameId,scriptId)
+        for name,handle in pairs(self._pendingScripts) do
+            if scriptId and name==gameId.."/"..scriptId or not scriptId and name:sub(1,#gameId+1)==gameId.."/" then handle:Cancel("catalog changed") end
+        end
+    end
+    function Hub:UpdateGame(id,patch)
+        local old=assert(self:_game(id),"Unknown game"); assert(type(patch)=="table","Game patch must be a table")
+        local value={}; for name,item in pairs(old) do value[name]=item end; for name,item in pairs(patch) do value[name]=item end
+        assert(value.Id==id,"Game Id cannot be renamed"); local rec=normalizeGame(value,old.Order); self:_checkCount(rec)
+        self:_cancelScripts(id); self._games[id]=rec; self:_afterCatalog(); return self
+    end
+    function Hub:RemoveGame(id)
+        if not self:_game(id) then return false end
+        self:_cancelScripts(id); if self._teleportPending and self._teleportPending.GameId==id then self:_endTeleport("Cancelled","Game removed") end; self._games[id]=nil; table.remove(self._order,table.find(self._order,id)); self:_afterCatalog(); return true
+    end
+    function Hub:AddScript(gameId,value)
+        local old=assert(self:_game(gameId),"Unknown game"); local spec=normalizeScript(value)
+        assert(not self:_script(gameId,spec.Id),"Duplicate script Id"); local scripts={table.unpack(old.Scripts)}; scripts[#scripts+1]=spec
+        return self:UpdateGame(gameId,{Scripts=scripts})
+    end
+    function Hub:UpdateScript(gameId,id,patch)
+        local old,rec=self:_script(gameId,id); assert(old,"Unknown script"); assert(type(patch)=="table","Script patch must be a table")
+        local value={}; for name,item in pairs(old) do value[name]=item end; for name,item in pairs(patch) do value[name]=item end
+        assert(value.Id==id,"Script Id cannot be renamed"); value=normalizeScript(value)
+        local scripts={}; for _,spec in ipairs(rec.Scripts) do scripts[#scripts+1]=spec.Id==id and value or spec end
+        self:UpdateGame(gameId,{Scripts=scripts}); self._scriptStatus[gameId.."/"..id]=nil; self:RefreshScripts(); return self
+    end
+    function Hub:RemoveScript(gameId,id)
+        local old,rec=self:_script(gameId,id); if not old then return false end
+        local scripts={}; for _,spec in ipairs(rec.Scripts) do if spec.Id~=id then scripts[#scripts+1]=spec end end
+        self:UpdateGame(gameId,{Scripts=scripts}); self._scriptStatus[gameId.."/"..id]=nil; return true
+    end
+    function Hub:RunScript(gameId,scriptId,options)
+        options=options or {}; if self.Destroyed then return nil,"Hub has been destroyed" end
+        local available,reason=self:IsScriptAvailable(gameId,scriptId); if not available then return nil,reason end
+        local spec,rec=self:_script(gameId,scriptId); local name=gameId.."/"..scriptId
+        if self._pendingScripts[name] then return nil,"Script is already running" end
+        if spec.Confirm and not options.Confirmed then
+            self.Window:Confirm({Title=spec.Title,Content=spec.Confirm,OnConfirm=function() self:RunScript(gameId,scriptId,{Confirmed=true}) end}); return nil,"confirmation pending"
+        end
+        local hub=self
+        local function complete(handle)
+            if handle._hubCompleted then return end; handle._hubCompleted=true
+            if hub._pendingScripts[name]==handle then hub._pendingScripts[name]=nil end
+            hub.Scope:Remove("script-listener:"..name)
+            if hub.Destroyed or hub:_script(gameId,scriptId)~=spec then return end
+            hub._scriptStatus[name]=handle:GetStatus(); hub:RefreshScripts()
+            local status=handle:GetStatus().Status
+            hub.Window:Notify({Title=spec.Title,Content=status=="Completed" and hub.Window:_text("success") or tostring(handle.Error or status),Kind=status=="Completed" and "success" or status=="Failed" and "error" or "normal"})
+        end
+        local handle,err=self.Window:RunAction({Group="hub/"..self.Id.."/"..name,Policy="Reject",Callback=function(ctx)
+            local ready,why=hub:IsScriptAvailable(gameId,scriptId); if not ready or hub:_script(gameId,scriptId)~=spec then return false,why or "Script was replaced" end
+            return spec.Callback(ctx,hub,metadata(rec),metadata(spec))
+        end,OnComplete=complete})
+        if not handle then return nil,err end
+        if handle.Finished then complete(handle)
+        else
+            self._pendingScripts[name]=handle
+            self.Scope:Add(handle:Subscribe(function(status) if not hub.Destroyed and hub:_script(gameId,scriptId)==spec then hub._scriptStatus[name]=status; hub:RefreshScripts() end end,true),"Disconnect","script-listener:"..name)
+        end
+        return handle
+    end
+    function Hub:_endTeleport(status,message)
+        local request=self._teleportPending; if not request then return end
+        self._teleportPending=nil; self.Scope:Remove("teleport-timeout")
+        self.TeleportStatus:SetText(message or status)
+        if self.SelectedGameId then self:SelectGame(self.SelectedGameId) end
+        if status=="Failed" then self.Window:Notify({Title=self.Window:_t17("Falha no teleporte","Teleport failed"),Content=tostring(message),Kind="error"}) end
+    end
+    function Hub:TeleportToGame(id,options)
+        options=options or {}; if self.Destroyed then return nil,"Hub has been destroyed" end
+        local rec=self:_game(id); if not rec or not rec.PlaceId then return nil,"Game has no PlaceId" end
+        if rec.PlaceId==game.PlaceId then return nil,"Already in this place" end
+        if self._teleportPending then return nil,"A teleport request is pending" end
+        local service=optionalService("TeleportService")
+        if not self.Teleporter and (not service or type(service.Teleport)~="function") then return nil,"Client teleport is unavailable; configure a Teleporter adapter" end
+        if self.ConfirmTeleport and not options.Confirmed then
+            self.Window:Confirm({Title=self.Window:_t17("Entrar no jogo?","Join game?"),Content=rec.Name,OnConfirm=function()
+                local handle,err=self:TeleportToGame(id,{Confirmed=true}); if not handle then self.Window:Notify({Content=tostring(err),Kind="error"}) end
+            end}); return nil,"confirmation pending"
+        end
+        local request={GameId=id,PlaceId=rec.PlaceId}; self._teleportPending=request; self.TeleportButton:SetDisabled(true)
+        self.TeleportStatus:SetText(self.Window:_t17("Solicitando teleporte…","Requesting teleport…"))
+        local hub=self
+        local handle,err=self.Window:RunAction({Group="hub/"..self.Id.."/teleport",Policy="Reject",Callback=function(ctx)
+            if hub:_game(id)~=rec then return false,"Game was removed or replaced" end
+            local ok,result,reason
+            if hub.Teleporter then ok,result,reason=pcall(hub.Teleporter,rec.PlaceId,Players.LocalPlayer,metadata(rec),ctx)
+            else ok,result=pcall(service.Teleport,service,rec.PlaceId,Players.LocalPlayer) end
+            if not ok or result==false then return false,ok and (reason or "Teleport was rejected") or tostring(result) end
+            if hub._teleportPending==request then
+                hub.TeleportStatus:SetText(hub.Window:_t17("Teleporte solicitado; aguardando o Roblox.","Teleport requested; waiting for Roblox."))
+                local thread=task.delay(30,function()
+                    hub.Scope:Remove("teleport-timeout",true)
+                    if not hub.Destroyed and hub._teleportPending==request then hub:_endTeleport("Unconfirmed",hub.Window:_t17("Não foi possível confirmar o teleporte.","Teleport could not be confirmed.")) end
+                end)
+                hub.Scope:Add(thread,function(t) if coroutine.status(t)~="dead" then pcall(task.cancel,t) end end,"teleport-timeout")
+            end
+            return {Requested=true,PlaceId=rec.PlaceId}
+        end,OnComplete=function(action)
+            if not hub.Destroyed and hub._teleportPending==request and action:GetStatus().Status~="Completed" then hub:_endTeleport("Failed",tostring(action.Error or action:GetStatus().Status)) end
+        end})
+        if not handle then self:_endTeleport("Failed",err); return nil,err end
+        self.Scope:Add(handle,"Cancel","teleport-action"); return handle
+    end
+    function Hub:Show() self.Window:Show(); self.Window:Minimize(false); self.Tab:Select(); return self end
+    function Hub:Hide() self.Window:Hide(); return self end
+    function Hub:Destroy()
+        if self.Destroyed then return end; self.Destroyed=true
+        for _,handle in pairs(self._pendingScripts) do handle:Cancel("hub destroyed") end
+        self.Scope:Destroy(); self._thumbQueue={}; cleanup(self)
+        if self.Window._scriptHubs then self.Window._scriptHubs[self.Id]=nil end
+        self.Window._resources:Remove("script-hub:"..self.Id,true)
+        if not self.Tab.Destroyed then self.Tab:Destroy() end
+        if self.OwnsWindow and not self.Window.Destroyed then self.Window:Destroy() end
+    end
+    function Window:CreateScriptHub(options)
+        assert(type(options)=="table","Script Hub options must be a table")
+        local id=key(options.Id or "script-hub","Hub Id"); self._scriptHubs=self._scriptHubs or {}; assert(not self._scriptHubs[id],"Hub Id already registered")
+        assert(options.AutoDetectGame==nil or type(options.AutoDetectGame)=="boolean","AutoDetectGame must be boolean")
+        assert(options.ConfirmTeleport==nil or type(options.ConfirmTeleport)=="boolean","ConfirmTeleport must be boolean")
+        assert(options.Teleporter==nil or type(options.Teleporter)=="function","Teleporter must be a developer callback")
+        local initial=normalizeGames(options.Games)
+        local hub=setmetatable({Id=id,Window=self,Scope=self:CreateScope(),_connections={},_games={},_order={},_scriptStatus={},_pendingScripts={},_thumbs={},_thumbOrder={},_thumbQueue={},_thumbActive=0,AutoDetectGame=options.AutoDetectGame~=false,ConfirmTeleport=options.ConfirmTeleport~=false,Teleporter=options.Teleporter},Hub)
+        for _,rec in ipairs(initial) do hub._games[rec.Id]=rec; hub._order[#hub._order+1]=rec.Id end
+        self._scriptHubs[id]=hub
+        local function opts(name,title,extra)
+            local result={Id="hub/"..id.."/"..name,Title=title}; for a,b in pairs(extra or {}) do result[a]=b end; return result
+        end
+        local window=self
+        local ok,reason=pcall(function()
+            hub.Tab=self:CreateTab({Title=options.Title or "Script Hub",Icon="gamepad",Columns=2}); hub.Tab._toolManager=hub
+            local nav=hub.Tab:CreateSection({Title=self:_t17("Jogos","Games"),Icon="gamepad"})
+            hub.GameSearch=nav:AddInput(opts("game-search",self:_t17("Pesquisar jogos","Search games"),{Live=true,MaxLength=256,Persist=false}))
+            hub.Sort=nav:AddDropdown(opts("sort",self:_t17("Ordenação","Sort"),{Options={"Order","Alphabetical","Favorites"},Default="Order"}))
+            hub.Favorites=nav:AddDropdown(opts("favorites","Favorites",{Options={},Multi=true,Default={}})); hub.Favorites:SetVisible(false)
+            hub.GameList=nav:AddVirtualList(opts("games",self:_t17("Catálogo de jogos","Game catalog"),{Items={},Searchable=false,Height=360,RowHeight=64,Persist=true,EmptyText=self:_t17("Nenhum jogo encontrado.","No matching games.")}))
+            local normalize=hub.GameList._normalize
+            function hub.GameList:_normalize(value) if value~=nil and not self._keyIndex[tostring(value)] then return nil end; return normalize(self,value) end
+            hub.GameList._renderNode=function(_,row,index)
+                if not row.Thumb then
+                    row.Thumb=ui(window,"ImageLabel",{Parent=row.Button,Position=U2(8,6),Size=U2(48,48),BackgroundTransparency=1,Image="",ScaleType=Enum.ScaleType.Fit})
+                    row.Fallback=iconSlot(window,row.Button,"gamepad",nil,24,U2(20,18),"Muted")
+                end
+                row.Labels[1].Position=U2(66,4); row.Labels[1].Size=UDim2.new(1,-76,1,-8); row.Labels[1].TextWrapped=true
+                local item=hub.GameList.Items[index]; local rec=hub:_game(item.Id)
+                hub:_paintThumbnail(row.Thumb,row.Fallback,rec and hub:_requestThumbnail(rec))
+            end
+            local details=hub.Tab:CreateSection({Title=self:_t17("Jogo selecionado","Selected game"),Icon="info",Side="Right"})
+            hub.GameDetails=details:AddLabel(opts("game-details",self:_t17("Informações","Information"),{Height=82,Persist=false}))
+            hub.GameImage=details:AddImage(opts("image",self:_t17("Miniatura","Thumbnail"),{Image="",Height=104}))
+            hub.ImageStatus=details:AddLabel(opts("image-status","",{Height=30,Persist=false}))
+            local actions=details:CreateRow()
+            hub.FavoriteButton=actions:AddButton(opts("favorite",self:_t17("Favoritar","Favorite"),{Icon="star",Callback=function() if hub.SelectedGameId then hub:SetFavorite(hub.SelectedGameId,not hub:IsFavorite(hub.SelectedGameId)) end end}))
+            hub.TeleportButton=actions:AddButton(opts("teleport",self:_t17("Entrar no jogo","Join game"),{Icon="chevron-right",Callback=function()
+                local handle,err=hub:TeleportToGame(hub.SelectedGameId); if not handle and err~="confirmation pending" then window:Notify({Content=tostring(err),Kind="error"}) end
+            end}))
+            hub.TeleportStatus=details:AddLabel(opts("teleport-status","",{Height=38,Persist=false}))
+            local scripts=hub.Tab:CreateSection({Title=self:_t17("Scripts disponíveis","Available scripts"),Icon="code",Side="Right"})
+            hub.ScriptSearch=scripts:AddInput(opts("script-search",self:_t17("Pesquisar scripts","Search scripts"),{Live=true,MaxLength=256,Persist=false}))
+            hub.ScriptList=scripts:AddVirtualList(opts("scripts",self:_t17("Catálogo de scripts","Script catalog"),{Items={},Searchable=false,Height=250,RowHeight=64,EmptyText=self:_t17("Nenhum script disponível","No scripts available"),Persist=false}))
+            hub.ScriptList._renderNode=function(_,row,index)
+                if not row.Play then
+                    row.PlayOwner={_connections=row._connections,_section=row._section}
+                    row.Play=button(window,row.PlayOwner,row.Button,"Play",{Position=UDim2.new(1,-66,0,15),Size=U2(58,30)},function()
+                        local item=row.Index and hub.ScriptList.Items[row.Index]
+                        if item then local handle,err=hub:RunScript(hub.SelectedGameId,item.Id); if not handle and err~="confirmation pending" then window:Notify({Content=tostring(err),Kind="error"}) end end
+                    end)
+                end
+                row.Labels[1].Position=U2(36,4); row.Labels[1].Size=UDim2.new(1,-114,1,-8); row.Labels[1].TextWrapped=true
+                local item=hub.ScriptList.Items[index]
+                if not row.ScriptIcon then row.ScriptIcon=iconSlot(window,row.Button,false,nil,20,U2(8,22),"Text") end
+                local spec=hub:_script(hub.SelectedGameId,item.Id); row.ScriptIcon:Set(spec and spec.Icon or "code")
+                row.ScriptIcon:SetRole(hub.ScriptList:GetValue()==item.Id and "AccentText" or "Text")
+                local ready=hub:IsScriptAvailable(hub.SelectedGameId,item.Id)
+                row.PlayOwner.Disabled=not ready or hub._pendingScripts[hub.SelectedGameId.."/"..item.Id]~=nil
+                row.Play.Active=not row.PlayOwner.Disabled; row.Play.TextTransparency=row.Play.Active and 0 or .15
+            end
+            hub.ScriptDetails=scripts:AddLabel(opts("script-details","",{Height=106,Persist=false}))
+            hub.PlayButton=scripts:AddButton(opts("play","Play",{Icon="bolt",Callback=function()
+                local handle,err=hub:RunScript(hub.SelectedGameId,hub.ScriptList:GetValue()); if not handle and err~="confirmation pending" then window:Notify({Content=tostring(err),Kind="error"}) end
+            end}))
+            hub.Scope:Add(self:GetFlagState(hub.GameList.Id):Subscribe(function(value)
+                if value then hub:SelectGame(value)
+                elseif not hub._selectionQueued then
+                    hub._selectionQueued=true
+                    local thread=task.defer(function()
+                        hub.Scope:Remove("selection-refresh",true); hub._selectionQueued=false
+                        if not hub.Destroyed and not hub.GameList:GetValue() then hub:_afterCatalog() end
+                    end)
+                    hub.Scope:Add(thread,function(t) if coroutine.status(t)~="dead" then pcall(task.cancel,t) end end,"selection-refresh")
+                end
+            end),"Disconnect")
+            hub.Scope:Add(self:GetFlagState(hub.Favorites.Id):Subscribe(function() if not hub._refreshingGames then hub:_refreshGames(); local selected=hub.GameList:GetValue(); if selected then hub:SelectGame(selected) end end end),"Disconnect")
+            hub.Scope:Add(self:GetFlagState(hub.Sort.Id):Subscribe(function() hub:_refreshGames() end),"Disconnect")
+            hub.Scope:Add(self:GetFlagState(hub.GameSearch.Id):Subscribe(function() hub:_refreshGames() end),"Disconnect")
+            hub.Scope:Add(self:GetFlagState(hub.ScriptSearch.Id):Subscribe(function() hub:_filterScripts() end),"Disconnect")
+            hub.Scope:Add(self:GetFlagState(hub.ScriptList.Id):Subscribe(function() hub:_refreshScriptDetails() end),"Disconnect")
+            local teleport=optionalService("TeleportService")
+            if teleport and teleport.TeleportInitFailed then hub.Scope:Add(teleport.TeleportInitFailed:Connect(function(player,_,message,placeId)
+                if not hub.Destroyed and player==Players.LocalPlayer and hub._teleportPending and hub._teleportPending.PlaceId==placeId then hub:_endTeleport("Failed",message) end
+            end),"Disconnect") end
+            hub:_refreshGames()
+            local selected=hub.AutoDetectGame and hub:DetectCurrentGame() or nil
+            if selected then hub:SelectGame(selected) else hub:_afterCatalog() end
+            hub.Tab:Select()
+        end)
+        if not ok then
+            if hub.Tab then hub:Destroy() else hub.Scope:Destroy(); self._scriptHubs[id]=nil end
+            error(reason,2)
+        end
+        self:Manage(hub,"Destroy","script-hub:"..id); return hub
+    end
+    function Library:CreateScriptHub(options)
+        assert(type(options)=="table","Script Hub options must be a table"); normalizeGames(options.Games)
+        local settings={}; for name,value in pairs(options) do settings[name]=value end
+        settings.Id=options.WindowId or options.Id or "RetroBox-ScriptHub"; settings.Title=options.Title or "Script Hub"
+        local window=self:CreateWindow(settings)
+        local hubOptions={}; for name,value in pairs(options) do hubOptions[name]=value end
+        hubOptions.Id=options.HubId or options.Id or "script-hub"
+        local ok,hub=pcall(window.CreateScriptHub,window,hubOptions)
+        if not ok then window:Destroy(); error(hub,2) end
+        hub.OwnsWindow=true; return hub
+    end
+end
+-- END RETRO190 SCRIPT HUB
 
 return Library

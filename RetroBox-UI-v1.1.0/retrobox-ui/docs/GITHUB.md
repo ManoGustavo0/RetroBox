@@ -54,3 +54,6 @@ Use `Loader.lua` para receber mensagens distintas para falha de download, compil
 
 
 A 1.8.0 acrescenta seis temas oficiais e a galeria `examples/themes-gallery.lua`. A galeria requer a 1.8.0 ou posterior; antes do merge, substitua `main` pelo hash da PR no raw. O diretório histórico é preservado. Consulte [RELEASE-1.8.md](RELEASE-1.8.md).
+
+
+A 1.9.0 mantém o mesmo artefato independente e o raw histórico. Loader.lua verifica a versão esperada; antes do merge, substitua main pelo commit confirmado da 1.9, nunca por um arquivo local obrigatório. Consulte [DISTRIBUTION.md](DISTRIBUTION.md), [RELEASE-1.9.md](RELEASE-1.9.md) e o prompt entregue, fixado no commit efetivamente verificado.

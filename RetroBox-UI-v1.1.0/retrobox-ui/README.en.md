@@ -8,6 +8,12 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 *Illustrative concept, not an in-game screenshot. The library renders native Roblox GUI objects.*
 
+## Version 1.9
+
+Optional [Script Hub Mode](docs/SCRIPT-HUB.md) reuses the same window, recycled lists, flags, profiles, scopes and action runtime. Game/script catalogs, thumbnails, search, favorites, explicit Play/teleport and game selection are available. Detection and profile loading never execute scripts or teleport.
+
+The command palette now activates real rows, preserves tab targets and navigates with focus. Theme Studio has a close button, previous-tab restoration and save/discard/cancel choices. The [remote distribution contract](docs/DISTRIBUTION.md) preserves HTTP/loadstring as the primary loader. See [RELEASE-1.9.md](docs/RELEASE-1.9.md).
+
 ## Version 1.8 themes
 
 Six new official palettes: **Hacker, Dracula, Nord, Sakura, Ocean and Amber**, bringing the total to twelve. Select one in Settings or call `window:SetTheme("Hacker")`. Existing widgets update in place; profiles and editable Theme Studio copies support the new palettes.
@@ -132,6 +138,6 @@ print(window.StorageMode) -- file, memory or custom
 
 [Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), [runtime integration](examples/runtime-integration.lua), and [contrast showcase](examples/contrast-showcase.lua), [advanced datasets](examples/advanced-components.lua), [Theme Studio](examples/theme-studio.lua), [Runtime Inspector](examples/runtime-inspector.lua), [Dashboard Builder](examples/dashboard-builder.lua), [Command Palette](examples/command-palette.lua), [help/accessibility](examples/help-accessibility.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use the existing source path. Dashboard/integration require version 1.6.0 there; use the PR commit before merge or adjust URLs if you move the source.
 
-190 local logic tests passed, including 17 examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+221 local logic tests passed, including 19 examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

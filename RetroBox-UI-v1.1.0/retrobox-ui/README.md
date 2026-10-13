@@ -8,6 +8,14 @@ Library de GUI em Luau para desenvolvedores de scripts executados no cliente Rob
 
 *A imagem é um conceito visual, com perfil ilustrativo. A GUI usa objetos nativos do Roblox; a renderização em executor ainda precisa ser conferida.*
 
+## Versão 1.9
+
+[Script Hub Mode](docs/SCRIPT-HUB.md) opcional com catálogo, pesquisa, miniaturas, favoritos, metadados, Play e teleporte explícito. Usa as mesmas listas virtuais, flags, perfis, scopes e ações. A detecção automática seleciona o jogo cadastrado sem executar scripts.
+
+A Command Palette tem clique/toque funcionais, alvos de aba estáveis, navegação com foco e feedback de comandos. O Theme Studio pode ser fechado, retorna à aba anterior e oferece salvar/descartar/cancelar alterações. O [contrato de distribuição remota](docs/DISTRIBUTION.md) é permanente: a library é carregada pelo raw, sem arquivo local obrigatório.
+
+Veja [RELEASE-1.9.md](docs/RELEASE-1.9.md), [script-hub.lua](examples/script-hub.lua) e [remote-loader.lua](examples/remote-loader.lua).
+
 ## Temas da 1.8
 
 A 1.8 adiciona **Hacker, Dracula, Nord, Sakura, Ocean e Amber**, totalizando doze paletas oficiais. Escolha o tema em Configurações ou use `window:SetTheme("Hacker")`. Os temas acompanham os componentes existentes, os saves e as cópias editáveis do Theme Studio.
@@ -268,6 +276,8 @@ Use `ConfigVersion=2` e `Migrations={[1]=function(profile) ... end}` em CreateWi
 | [icons.lua](examples/icons.lua) | Catálogo, troca de ícones, temas e registro de pixel art própria |
 | [dashboard.lua](examples/dashboard.lua) | Dados simulados, cards/gráficos, estados, tarefas, dependências e ações canceláveis |
 | [runtime-integration.lua](examples/runtime-integration.lua) | Grupo compartilhado, Await, status, BindTask e migração de perfil com dados simulados |
+| [script-hub.lua](examples/script-hub.lua) | Hub opcional, catálogo desta sessão e ações de demonstração |
+| [remote-loader.lua](examples/remote-loader.lua) | Loader remoto e sequência tradicional, com diagnóstico |
 | [themes-gallery.lua](examples/themes-gallery.lua) | Seis paletas novas em cards, gráficos, console e tabela |
 | [contrast-showcase.lua](examples/contrast-showcase.lua) | Cards das capturas, todos os temas, gráficos, legendas e medidas de contraste |
 | [advanced-components.lua](examples/advanced-components.lua) | Lista com 2.000 itens, tabela, filtros, árvore e menu de linha |
@@ -286,6 +296,6 @@ Os sete exemplos novos requerem `RetroBox.lua` 1.7.0. Loader e exemplos usam o r
 
 ## Validação e licença
 
-190 testes locais passaram, incluindo carregamento simulado do código raw, os 17 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+221 testes locais passaram, incluindo carregamento simulado do código raw, os 19 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026
