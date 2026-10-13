@@ -102,7 +102,8 @@ UDim2={}
 function UDim2.new(xs,xo,ys,yo) return { X=UDim.new(xs or 0,xo or 0),Y=UDim.new(ys or 0,yo or 0) } end
 function UDim2.fromOffset(x,y) return UDim2.new(0,x,0,y) end
 function UDim2.fromScale(x,y) return UDim2.new(x,0,y,0) end
-local colorMT={ __type="Color3" }
+local colorMT={ __type="Color3" }; colorMT.__index=colorMT
+function colorMT:Lerp(other,t) return Color3.new(self.R+(other.R-self.R)*t,self.G+(other.G-self.G)*t,self.B+(other.B-self.B)*t) end
 colorMT.__eq=function(a,b) return a.R==b.R and a.G==b.G and a.B==b.B end
 colorMT.__index=colorMT
 Color3={}

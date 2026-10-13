@@ -3,7 +3,7 @@ return function(Mock,Library,test)
     local sequence=0
     local function fixture(options)
         sequence=sequence+1
-        local window=Library:CreateWindow({Id="tooltip-test-"..sequence})
+        local window=Library:CreateWindow({Id="tooltip-test-"..sequence,TooltipDelay=.4})
         local tab=window:CreateTab("Help"); local section=tab:CreateSection("Help")
         options=options or {Title="Demo",Tooltip="Explicação do recurso."}
         local control=section:AddToggle(options)

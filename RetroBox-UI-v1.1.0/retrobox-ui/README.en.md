@@ -2,7 +2,7 @@
 
 A standalone Luau GUI library for scripts running through Roblox client executors. Load the raw GitHub source, create components, and connect callbacks to your script.
 
-[Português](README.md) · [API](docs/API.md) · [Runtime integration](docs/INTEGRATION.md) · [GitHub publishing](docs/GITHUB.md) · [Validation](docs/VALIDATION.md)
+[Português](README.md) · [API](docs/API.md) · [Runtime integration](docs/INTEGRATION.md) · [Advanced components and tools](docs/ADVANCED.md) · [GitHub publishing](docs/GITHUB.md) · [Validation](docs/VALIDATION.md)
 
 ![RetroBox visual concept](docs/visual-concept.png)
 
@@ -71,9 +71,19 @@ CreateWindow accepts a script-specific ConfigVersion and sequential Migrations, 
 
 Window dragging directly follows mouse/touch deltas. The UI launcher is draggable by its body or :: handle, with click suppression after movement. Hide/show and minimize/restore preserve tabs, Settings and scroll; the body immediately hides all content, including the search icon, while minimized. Editable fields share 12 px horizontal padding.
 
+## Version 1.7
+
+Styles now retain native Instance references until explicit cleanup; backgrounds update before ink is resolved against each actual surface. Cards, plot captions, consoles, help and wide tables follow theme changes. Progress percentages use aligned clipped copies over the filled/unfilled regions. Official themes remain distinct.
+
+AddVirtualList, AddDataTable and AddTreeView share recycled rows with bounded allocation. Context menus support keyboard, submenus and long touch. CreateDashboard moves/resizes existing widgets, with optional layout editing and profile persistence. Theme Studio offers real previews, protected official palettes and a local JSON/profile catalog. LoadThemeCatalog changes themes without replaying script flags.
+
+The optional Runtime Inspector subscribes to existing status, uses a low-frequency clock and requires explicit permission plus confirmation for cancellation. Command Palette (F4 by default) reuses search/navigation and runs only explicitly registered commands. Descriptions reflow, tooltips have an info button and .2 s default delay, and Settings adds help/text-scale/key preferences and confirmed profile deletion.
+
+See [ADVANCED.md](docs/ADVANCED.md) for the exact API and limits. The seven new examples require 1.7.0 at the source URL or a pinned PR commit.
+
 ## Tooltips
 
-Pass `Tooltip = "Your explanation"` or `{Title = "Help", Text = "Your explanation", Delay = 0.4, MaxWidth = 320}` to a control. `Tip` is an alias. Hover opens the tip after 0.4 seconds by default. On touch devices, long-press the title or description, then tap the tip or elsewhere to dismiss it. Reading a tip does not run the control's callback.
+Pass `Tooltip = "Your explanation"` or `{Title = "Help", Text = "Your explanation", Delay = 0.4, MaxWidth = 320}` to a control. `Tip` is an alias. Hover opens the tip after 0.2 seconds by default. On touch devices, long-press the title or description, then tap the tip or elsewhere to dismiss it. Reading a tip does not run the control's callback.
 
 Use `control:SetTooltip(...)` to change it, `GetTooltip()` to read a copy, `ShowTooltip()` / `HideTooltip()` to open or close it, and `SetTooltip(nil)` to remove it. Tips follow the theme and fit within the viewport. See the [tooltip example](examples/tooltips.lua) and [API options](docs/API.md#tooltip).
 
@@ -114,8 +124,8 @@ print(window.StorageMode) -- file, memory or custom
 
 ## Examples and testing
 
-[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), [runtime integration](examples/runtime-integration.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use the existing source path. Dashboard/integration require version 1.6.0 there; use the PR commit before merge or adjust URLs if you move the source.
+[Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), [runtime integration](examples/runtime-integration.lua), and [contrast showcase](examples/contrast-showcase.lua), [advanced datasets](examples/advanced-components.lua), [Theme Studio](examples/theme-studio.lua), [Runtime Inspector](examples/runtime-inspector.lua), [Dashboard Builder](examples/dashboard-builder.lua), [Command Palette](examples/command-palette.lua), [help/accessibility](examples/help-accessibility.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use the existing source path. Dashboard/integration require version 1.6.0 there; use the PR commit before merge or adjust URLs if you move the source.
 
-151 local logic tests passed, including nine examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+187 local logic tests passed, including 16 examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

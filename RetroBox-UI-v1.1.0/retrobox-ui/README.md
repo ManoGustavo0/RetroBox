@@ -2,7 +2,7 @@
 
 Library de GUI em Luau para desenvolvedores de scripts executados no cliente Roblox por executores. Um arquivo independente, carregado pelo link **raw do GitHub**, com visual retrô e API para conectar componentes às funções do seu script.
 
-[English](README.en.md) · [API completa](docs/API.md) · [Runtime](docs/RUNTIME.md) · [Integração 1.6](docs/INTEGRATION.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
+[English](README.en.md) · [API completa](docs/API.md) · [Runtime](docs/RUNTIME.md) · [Integração de runtime](docs/INTEGRATION.md) · [Componentes e ferramentas 1.7](docs/ADVANCED.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
 
 ![Conceito visual da RetroBox UI](docs/visual-concept.png)
 
@@ -63,7 +63,7 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Identidade em pixel art: 46 ícones embutidos, símbolo de caixa próprio, detalhes discretos e desenhos que acompanham os temas.
 - Bordas em relevo, fonte monoespaçada, cores de destaque e linhas CRT opcionais.
 - Abas, categorias, busca e colunas que se empilham em telas menores.
-- Aba Configurações automática, com lista de saves nomeados, salvar/carregar e confirmação antes de sobrescrever.
+- Aba Configurações com saves nomeados, salvar/carregar/excluir e confirmações de sobrescrita/exclusão.
 - Pesquisa com resultados que levam à aba e ao controle escolhido, sem executar sua ação.
 - Toggle, Slider, Button, Input, Dropdown simples/múltiplo, Keybind, ColorPicker, Progress, Console, Label, Separator e Image.
 - Tooltip opcional em todos os controles: explicação ao passar o mouse ou segurar o título/descrição no celular.
@@ -74,6 +74,11 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Atalhos flutuantes para toque, com arraste, tamanho/opacidade e posições salvas.
 - JSON, perfis e salvamento automático opcional.
 - Limpeza de eventos ao destruir controles ou a janela; `OnDestroy` para limpar eventos do seu próprio script.
+- Contraste relativo à superfície, fundos acompanhando o tema e textos/legendas legíveis sem recriar os componentes.
+- Listas virtuais, DataTable com ordenação/filtros/scroll horizontal, TreeView, menus de contexto e dashboards responsivos/editáveis.
+- Theme Studio com paletas locais, preview real, JSON, catálogo em perfis e proteção dos temas oficiais.
+- Runtime Inspector opcional e Command Palette (F4), com navegação e comandos explicitamente registrados.
+- Descrições opcionais com refluxo, ajuda por regiões/botão de informação, teclado e escala de texto.
 - Cards de estatísticas ao vivo e gráficos Line/Bar/Progress/Sparkline com histórico limitado, escala automática/manual e elementos reaproveitados.
 - Scopes de recursos, tarefas periódicas idempotentes, ações com progresso/cancelamento e grupos Reject/Ignore/Queue/Replace.
 - Esperas de ações por evento, timeout e cancelamento independente; tarefas periódicas nos mesmos grupos, status observável e vínculo Toggle↔Task.
@@ -137,7 +142,7 @@ Veja [o guia de ícones](docs/ICONS.md), [a API](docs/API.md#ícones-em-pixel-ar
 
 ## Dicas ao passar o mouse
 
-Cada controle aceita `Tooltip` com o texto que o desenvolvedor escrever. `Description` permanece visível abaixo do título; a dica só abre quando solicitada. Por padrão, aparece após 0.4 s com o mouse sobre o controle. No celular, segure o título ou a descrição e toque na dica ou em outro lugar para fechar.
+Cada controle aceita `Tooltip` com o texto que o desenvolvedor escrever. `Description` permanece visível abaixo do título; a dica só abre quando solicitada. Por padrão, aparece após 0.2 s com o mouse sobre o controle. No celular, segure o título ou a descrição e toque na dica ou em outro lugar para fechar.
 
 ```lua
 local control = category:AddToggle({
@@ -156,7 +161,7 @@ control:SetTooltip("Você pode mudar a explicação depois.")
 -- control:SetTooltip(nil) remove a dica.
 ```
 
-`Tip` também é aceito como nome da opção. A dica acompanha o tema, quebra linhas e ajusta sua posição aos limites da tela. Ler uma dica não chama o callback do controle. Veja [tooltips.lua](examples/tooltips.lua) e [as opções completas](docs/API.md#tooltip).
+`Tip` também é aceito como nome da opção. A dica tem um botão de informação e acompanha o tema, quebra linhas e ajusta sua posição aos limites da tela. Ler uma dica não chama o callback do controle. Veja [tooltips.lua](examples/tooltips.lua) e [as opções completas](docs/API.md#tooltip).
 
 ## Toggle com tecla ao lado e atalho no celular
 
@@ -257,12 +262,23 @@ Use `ConfigVersion=2` e `Migrations={[1]=function(profile) ... end}` em CreateWi
 | [icons.lua](examples/icons.lua) | Catálogo, troca de ícones, temas e registro de pixel art própria |
 | [dashboard.lua](examples/dashboard.lua) | Dados simulados, cards/gráficos, estados, tarefas, dependências e ações canceláveis |
 | [runtime-integration.lua](examples/runtime-integration.lua) | Grupo compartilhado, Await, status, BindTask e migração de perfil com dados simulados |
+| [contrast-showcase.lua](examples/contrast-showcase.lua) | Cards das capturas, seis temas, gráficos, legendas e medidas de contraste |
+| [advanced-components.lua](examples/advanced-components.lua) | Lista com 2.000 itens, tabela, filtros, árvore e menu de linha |
+| [theme-studio.lua](examples/theme-studio.lua) | Editor e catálogo de paletas com armazenamento de perfis |
+| [runtime-inspector.lua](examples/runtime-inspector.lua) | Diagnóstico de tarefas/ações/grupos, dados simulados e cancelamento confirmado |
+| [dashboard-builder.lua](examples/dashboard-builder.lua) | Grid responsiva, ordem, spans, alturas e layout salvo |
+| [command-palette.lua](examples/command-palette.lua) | Busca/navegação e comandos registrados |
+| [help-accessibility.lua](examples/help-accessibility.lua) | Descrições, ajuda contextual, foco e texto |
 | [executor-smoke.lua](tests/executor-smoke.lua) | Conferência na engine pelo executor |
 
-Loader e exemplos usam o raw deste repositório. Dashboard e integração requerem `RetroBox.lua` 1.6.0 ou posterior nesse caminho; ícones requerem 1.4.0. Uma PR só atualiza main após o merge; use o commit da PR para testar antes. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
+Os sete exemplos novos requerem `RetroBox.lua` 1.7.0. Loader e exemplos usam o raw deste repositório. Dashboard e integração requerem `RetroBox.lua` 1.6.0 ou posterior nesse caminho; ícones requerem 1.4.0. Uma PR só atualiza main após o merge; use o commit da PR para testar antes. Se mover a fonte, atualize as URLs conforme [GITHUB.md](docs/GITHUB.md).
+
+## Componentes e ferramentas da 1.7
+
+[ADVANCED.md](docs/ADVANCED.md) reúne os contratos e exemplos. A 1.7 preserva a API de runtime da 1.6; perfis antigos continuam aceitos. `DeleteConfig` requer Delete no adapter ou delfile no executor. Carregar um catálogo pelo Theme Studio usa `LoadThemeCatalog`, que mantém as flags do script.
 
 ## Validação e licença
 
-151 testes locais passaram, incluindo carregamento simulado do código raw, os nove exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+187 testes locais passaram, incluindo carregamento simulado do código raw, os 16 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026

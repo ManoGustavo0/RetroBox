@@ -1,4 +1,4 @@
--- RetroBox UI 1.6.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.7.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.6.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.7.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -288,6 +288,8 @@ end
 
 local translations = {
     ["pt-BR"] = {
+        delete="Excluir",deleteProfile="Excluir configuração?",deleteWarning="Esta ação não poderá ser desfeita.",deleted="Configuração excluída",
+        descriptions="Mostrar descrições",tooltips="Dicas de ajuda",tooltipDelay="Atraso das dicas",textScale="Escala do texto",themeStudio="Theme Studio",commandPalette="Central de comandos",
         search="Pesquisar funções...", settings="Configurações", theme="Tema", accent="Cor de destaque",
         scale="Escala da interface", motion="Reduzir animações", lines="Linhas CRT", launcher="Botão de reabrir",
         notices="Notificações", appearance="Aparência", accessibility="Interface e acessibilidade",
@@ -305,6 +307,8 @@ local translations = {
         launcherText="Texto do botão de reabrir", memoryProfiles="Saves disponíveis enquanto esta janela estiver aberta.", fileProfiles="Saves gravados podem ser carregados em outra execução.",
     },
     ["en-US"] = {
+        delete="Delete",deleteProfile="Delete configuration?",deleteWarning="This action cannot be undone.",deleted="Configuration deleted",
+        descriptions="Show descriptions",tooltips="Help tooltips",tooltipDelay="Tooltip delay",textScale="Text scale",themeStudio="Theme Studio",commandPalette="Command palette",
         search="Search features...", settings="Settings", theme="Theme", accent="Accent color",
         scale="Interface scale", motion="Reduce animations", lines="CRT scanlines", launcher="Reopen button",
         notices="Notifications", appearance="Appearance", accessibility="Interface and accessibility",
@@ -340,10 +344,67 @@ function Library:GetThemeNames()
     return result
 end
 
+-- Context-aware ink and explicit style ownership. Native Instance proxies must
+-- not disappear from this registry while their widgets are alive.
+do
+    local function luminance(color)
+        local function linear(value) return value<=.04045 and value/12.92 or ((value+.055)/1.055)^2.4 end
+        return .2126*linear(color.R)+.7152*linear(color.G)+.0722*linear(color.B)
+    end
+    function Library:ContrastRatio(a,b)
+        a,b=parseColor(a),parseColor(b); local x,y=luminance(a),luminance(b)
+        return (math.max(x,y)+.05)/(math.min(x,y)+.05)
+    end
+    function Library:ReadableColor(color,background,minimum)
+        color,background=parseColor(color),parseColor(background); minimum=minimum or 4.5
+        assert(finite(minimum) and minimum>=1 and minimum<=21,"Contrast target must be 1–21")
+        if self:ContrastRatio(color,background)>=minimum then return color end
+        local dark,light=RGB(0,0,0),RGB(255,255,255)
+        local target=self:ContrastRatio(dark,background)>self:ContrastRatio(light,background) and dark or light
+        local low,high=0,1
+        for _=1,20 do
+            local mid=(low+high)/2; local candidate=color:Lerp(target,mid)
+            if self:ContrastRatio(candidate,background)>=minimum then high=mid else low=mid end
+        end
+        return color:Lerp(target,high)
+    end
+    function Window:_surfaceColor(object)
+        local override=self._inkSurfaces and self._inkSurfaces[object]
+        if override then return type(override)=="string" and self.Palette[override] or override end
+        local current=object
+        while current do
+            if current:IsA("GuiObject") and (current.BackgroundTransparency or 0)<1 then return current.BackgroundColor3 or self.Palette.Background end
+            current=current.Parent
+        end
+        return self.Palette.Background
+    end
+    function Window:_ink(role,object,minimum,background)
+        local color=type(role)=="string" and assert(self.Palette[role],"Unknown color role: "..role) or role
+        return Library:ReadableColor(color,background or self:_surfaceColor(object),minimum or 4.5)
+    end
+    function Window:_refreshInk(object)
+        for property,role in pairs(self._skin[object] or {}) do
+            if property=="TextColor3" or property=="PlaceholderColor3" then object[property]=self:_ink(role,object) end
+        end
+    end
+    function Window:_forgetSkin(root)
+        local objects={root}; for _,object in ipairs(root:GetDescendants()) do objects[#objects+1]=object end
+        for _,object in ipairs(objects) do
+            self._skin[object]=nil
+            if self._inkSurfaces then self._inkSurfaces[object]=nil end
+            if self._textSizes then self._textSizes[object]=nil end
+            if self._focusTargets then self._focusTargets[object]=nil end
+            if self._keyboardFocus==object then self._keyboardFocus=nil; if self._focusRing then self._focusRing.Visible=false end end
+            if self._focusRing==object then self._focusRing=nil end
+        end
+    end
+end
+
 function Window:_text(key) return self._locale[key] or key end
 function Window:_bind(object, roles)
-    self._skin[object] = roles
-    for property, role in pairs(roles) do object[property] = self.Palette[role] end
+    local registered=self._skin[object] or {}; self._skin[object]=registered
+    for property,role in pairs(roles) do registered[property]=role; object[property]=self.Palette[role] end
+    self:_refreshInk(object)
 end
 local function ui(window, class, properties, roles)
     local object = Instance.new(class)
@@ -351,6 +412,10 @@ local function ui(window, class, properties, roles)
     for property, value in pairs(properties) do if property ~= "Parent" then object[property] = value end end
     if roles then window:_bind(object, roles) end
     object.Parent = parent
+    if roles then window:_refreshInk(object) end
+    if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+        window._textSizes[object]=object.TextSize or 14; object.TextSize=(object.TextSize or 14)*(window.TextScale or 1)
+    end
     return object
 end
 local function frame(window, parent, props, role)
@@ -384,7 +449,15 @@ local function button(window, owner, parent, text, props, pressed)
         local function tone(role)
             if window.Destroyed or owner.Destroyed or owner.Disabled then return end
             if owner.Sections and window.ActiveTab==owner then role="Accent" end
-            window:_animate(object,{BackgroundColor3=window.Palette[role]},.08,"button",owner)
+            if role=="Surface" then role=(window._skin[object] or {}).BackgroundColor3 or role end
+            local background=window.Palette[role]
+            local foreground=(window._skin[object] or {}).TextColor3 or "Text"
+            if owner.Sections and window.ActiveTab==owner then foreground="AccentText" end
+            window:_animate(object,{BackgroundColor3=background,TextColor3=window:_ink(foreground,object,4.5,background)},.08,"button",owner)
+            for _,child in ipairs(object:GetDescendants()) do
+                local bound=window._skin[child]
+                if bound and bound.TextColor3 then child.TextColor3=window:_ink(bound.TextColor3,child,4.5,background) end
+            end
         end
         connect(owner,object.MouseEnter,function() tone("Highlight") end)
         connect(owner,object.MouseLeave,function() tone("Surface") end)
@@ -392,17 +465,30 @@ local function button(window, owner, parent, text, props, pressed)
         connect(owner,object.InputEnded,function(input) if pointer(input) then tone("Surface") end end)
     end
     if pressed then
-        connect(owner, object.Activated, function(...)
+        local function activate(...)
             local blocked=false; local ancestor=object.Parent
             while ancestor do if ancestor==window.Main and window._shown==false then blocked=true; break end; ancestor=ancestor.Parent end
             local section=owner._section and (owner._section._parentSection or owner._section)
             if section and (section._collapsed or not section._visible) then blocked=true end
             if window._dialog and owner~=window._dialog then blocked=true end
+            if window._interactionAllowed and not window:_interactionAllowed(object) then blocked=true end
             if not window.Destroyed and not owner.Destroyed and not owner.Disabled and not blocked then pressed(...) end
-        end)
+        end
+        connect(owner,object.Activated,activate)
+        if window._registerFocus then window:_registerFocus(object,function() activate() end) end
     end
     return object
 end
+local function padButton(window,object,left,right)
+    ui(window,"UIPadding",{Name="TextPadding",Parent=object,PaddingLeft=UDim.new(0,left),PaddingRight=UDim.new(0,right)})
+    local top,bottom=object:FindFirstChild("BevelTop"),object:FindFirstChild("BevelBottom")
+    local l,r=object:FindFirstChild("BevelLeft"),object:FindFirstChild("BevelRight")
+    if top then top.Position=U2(-left,0); top.Size=UDim2.new(1,left+right,0,1) end
+    if bottom then bottom.Position=UDim2.new(0,-left,1,-1); bottom.Size=UDim2.new(1,left+right,0,1) end
+    if l then l.Position=U2(-left,0) end
+    if r then r.Position=UDim2.new(1,right-1,0,0) end
+end
+
 local function textbox(window, parent, text, props)
     local properties = { Parent=parent, Text=tostring(text or ""), Font=window.Font, TextSize=14,
         BorderSizePixel=1, ClearTextOnFocus=false, TextXAlignment=Enum.TextXAlignment.Left,
@@ -410,6 +496,7 @@ local function textbox(window, parent, text, props)
     for k, v in pairs(props or {}) do properties[k] = v end
     local object = ui(window, "TextBox", properties, { BackgroundColor3="Inset", TextColor3="Text", BorderColor3="Border", PlaceholderColor3="Muted" })
     ui(window, "UIPadding", { Name="TextPadding",Parent=object, PaddingLeft=UDim.new(0,FIELD_PADDING), PaddingRight=UDim.new(0,FIELD_PADDING) })
+    if window._registerFocus then window:_registerFocus(object,function() object:CaptureFocus() end) end
     return object
 end
 local function list(window, parent, gap, horizontal)
@@ -527,8 +614,8 @@ do
         assert(type(callback)=="function","OnError expects a function")
         local listener={Connected=true,Callback=callback}; self._errorListeners[listener]=true
         local owner=self
-        function listener:Disconnect() self.Connected=false; owner._errorListeners[self]=nil end
-        self._resources:Add(listener,"Disconnect"); return listener
+        function listener:Disconnect() self.Connected=false; owner._errorListeners[self]=nil; owner._resources:Remove(self,true) end
+        self._resources:Add(listener,"Disconnect",listener); return listener
     end
     function Window:_diagnose(context,message,traceback)
         if message==cancelSignal then return end
@@ -544,6 +631,7 @@ do
             elseif action then record.State={Status=action._status.Status,Progress=action._status.Progress}
             elseif job then record.State={Running=job.Requested,Iteration=job.Iterations} end
         end
+        self._diagnosticSeq=(self._diagnosticSeq or 0)+1; record.Id="diagnostic/"..self._diagnosticSeq
         self._diagnostics[#self._diagnostics+1]=record
         while #self._diagnostics>64 do table.remove(self._diagnostics,1) end
         local key=record.Phase..":"..tostring(record.ControlId or record.Operation or ""):sub(1,128)
@@ -1471,7 +1559,7 @@ function Window:_hideTooltip()
     if self.TooltipFrame then self.TooltipFrame.Visible=false end
 end
 function Window:_tooltipEligible(control,position)
-    if self._shown==false then return false end
+    if self._shown==false or self.TooltipsEnabled==false or UserInputService:GetFocusedTextBox() then return false end
     local section=control._section and (control._section._parentSection or control._section)
     if section and section._collapsed then return false end
     if self.Destroyed or control.Destroyed or not control.Tooltip or not self.Main.Visible or self.Minimized or self._drag or self._binding or self._dialog then return false end
@@ -1523,7 +1611,7 @@ function Window:_showTooltip(control,anchor,mode)
     self._tooltipOwner=control; self._tooltipAnchor=anchor; self._tooltipMode=mode
     local tip=control.Tooltip
     local width=math.min(tip.MaxWidth or self.TooltipMaxWidth,view.X-16)
-    local textSize=clamp(math.floor(13*self.UserScale+.5),10,20)
+    local textSize=clamp(math.floor(13*self.UserScale*(self.TextScale or 1)+.5),10,24)
     local ok,bounds=pcall(TextService.GetTextSize,TextService,tip.Text,textSize,self.Font,Vector2.new(width-24,100000))
     local bodyHeight=ok and typeof(bounds)=="Vector2" and finite(bounds.Y) and bounds.Y+4 or math.ceil(#tip.Text*textSize*.6/(width-24))*(textSize+2)
     local headerHeight=textSize+6
@@ -1539,6 +1627,7 @@ function Window:_showTooltip(control,anchor,mode)
 end
 function Window:_queueTooltip(control,anchor)
     if not self:_tooltipEligible(control,anchor) then return end
+    if self._pendingTooltip==control or self._tooltipOwner==control then self._tooltipAnchor=anchor; return end
     self:_hideTooltip()
     self._pendingTooltip=control; self._tooltipAnchor=anchor; self._tooltipMode="hover"
     local token=self._tooltipToken
@@ -1568,7 +1657,7 @@ function Control:_connectTooltip()
     end)
     connect(self,self.Frame.MouseLeave,function()
         local window=self._window
-        if window._tooltipMode=="hover" and (window._tooltipOwner==self or window._pendingTooltip==self) then window:_hideTooltip() end
+        if window._tooltipMode=="hover" and (window._tooltipOwner==self or window._pendingTooltip==self) and not window:_tooltipEligible(self,UserInputService:GetMouseLocation()) then window:_hideTooltip() end
     end)
     local function touch(positions,state)
         if state==Enum.UserInputState.Begin and positions[1] and self.Tooltip then
@@ -1577,11 +1666,18 @@ function Control:_connectTooltip()
     end
     connect(self,self.TitleLabel.TouchLongPress,touch)
     connect(self,self.DescriptionLabel.TouchLongPress,touch)
+    for _,object in ipairs({self.TitleLabel,self.DescriptionLabel}) do
+        connect(self,object.MouseEnter,function(x,y) if self.Tooltip then self._window:_queueTooltip(self,Vector2.new(x,y)) end end)
+    end
 end
 function Control:SetTooltip(value)
     assert(not self.Destroyed,"This control has been destroyed")
     self.Tooltip=tooltipValue(value)
-    if self.Tooltip then self:_connectTooltip() end
+    if self.Tooltip then self:_connectTooltip(); self:_syncHelpBadge()
+    elseif self.InfoButton then
+        self._window:_forgetSkin(self.InfoButton); self.InfoButton:Destroy(); self.InfoButton=nil
+        self.TitleLabel.Size=UDim2.new(self.TitleLabel.Size.X.Scale,self.TitleLabel.Size.X.Offset+22,self.TitleLabel.Size.Y.Scale,self.TitleLabel.Size.Y.Offset)
+    end
     local window=self._window
     if window._tooltipOwner==self then
         if self.Tooltip then window:_showTooltip(self,window._tooltipAnchor,window._tooltipMode) else window:_hideTooltip() end
@@ -1704,7 +1800,7 @@ function Control:SetDisabled(disabled)
     if disabled == true and self.Type == "Keybind" and self.Mode == "Hold" and self.Active then self:Trigger(false) end
     if disabled == true and self._window._binding == self then self._window._binding = nil end
     self.Disabled = disabled == true
-    self.TitleLabel.TextTransparency = self.Disabled and .5 or 0
+    self.TitleLabel.TextTransparency = self.Disabled and .15 or 0
     if self._titleIcon then self._titleIcon:SetOpacity(self.Disabled and .5 or 0) end
     if self._render then self:_render() end
     if self.Keybind then self.Keybind:SetDisabled(self.Disabled) end
@@ -1743,7 +1839,7 @@ end
 function Control:SetDescription(text)
     self.Description = tostring(text or "")
     self.DescriptionLabel.Text = self.Description
-    self.DescriptionLabel.Visible = #self.Description > 0
+    self:_layoutDescription()
     return self
 end
 function Control:Destroy()
@@ -1774,7 +1870,7 @@ function Control:Destroy()
     self._window._touchToggles[self]=nil
     for listener in pairs(self._listeners) do listener.Connected = false end
     self._listeners = {}
-    self.Frame:Destroy()
+    self._window:_forgetSkin(self.Frame); self.Frame:Destroy()
     local index = table.find(self._section.Controls, self)
     if index then table.remove(self._section.Controls, index) end
     if self._section._parentSection then
@@ -1783,6 +1879,7 @@ function Control:Destroy()
         self._section:_layout()
     end
     self._window:_updateRGB()
+    if self._window._refreshRuntime then self._window:_refreshRuntime() end
 end
 
 local function base(section, kind, options, height)
@@ -1795,8 +1892,8 @@ local function base(section, kind, options, height)
     local tip=options.Tooltip
     if tip==nil then tip=options.Tip end
     local tooltip=tooltipValue(tip)
-    local self = setmetatable({ Type=kind, Title=tostring(options.Title or kind), Description=tostring(options.Description or ""),
-        Tooltip=tooltip,_window=window, _section=section, _connections={},_callbackEpoch=0, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
+    local self = setmetatable({ Type=kind, Title=tostring(options.Title or kind), Description=tostring(options.Description or ""),_explicitHeight=options.Height~=nil,
+        Tooltip=tooltip,_descriptionEnabled=options.ShowDescription~=false,_window=window, _section=section, _connections={},_callbackEpoch=0, _visible=options.Visible ~= false, Disabled=options.Disabled == true }, Control)
     window:_register(self, options)
     self._resources=window:CreateScope(); self._resources._owner=self
     section._count = section._count + 1
@@ -1832,6 +1929,7 @@ local function init(control, options, default)
     control._hasDefault = true
     control:SetDisabled(control.Disabled)
     control:SetIcon(options.Icon)
+    control:_captureDescriptionLayout()
     if options.State then control:BindState(options.State,{TwoWay=options.TwoWay~=false,FireCallback=options.FireOnState==true,Transform=options.Transform}) end
     if options.DependsOn then control:DependsOn(options.DependsOn) end
     if options.FireOnInit then local epoch=control._callbackEpoch; task.defer(function() if not control.Destroyed and control._callbackEpoch==epoch then control:_emit() end end) end
@@ -1852,7 +1950,7 @@ function Section:AddToggle(options)
     function self:_render()
         box.Text = self.Value and (self._window.PixelIcons and "" or "X") or ""
         box.TextColor3 = self._window.Palette[self.Value and "Accent" or "Text"]
-        box.Active = not self.Disabled; box.TextTransparency = self.Disabled and .5 or 0
+        box.Active = not self.Disabled; box.TextTransparency = self.Disabled and .15 or 0
         if self._hasDefault then self._window:_animate(box,{BackgroundColor3=self._window.Palette[self.Value and "Inset" or "Surface"]},.1,"toggle",self) end
         if self.Value and self._window.PixelIcons and not self._checkIcon then
             self._checkIcon=iconSlot(self._window,box,"check",nil,16,U2(7,6),"Accent")
@@ -1868,7 +1966,8 @@ function Section:AddToggle(options)
     end
     connect(self, self.Frame.InputBegan, function(input)
         if pointer(input) and not self.Disabled and self._window._shown~=false and not (self._section._parentSection or self._section)._collapsed and not self._window._binding and not self._window._dialog and not inside(box, point(input))
-            and (not self.Keybind or not inside(self.Keybind.Frame,point(input))) then
+            and (not self.Keybind or not inside(self.Keybind.Frame,point(input)))
+            and (not self.InfoButton or not inside(self.InfoButton,point(input))) and (not self._window._interactionAllowed or self._window:_interactionAllowed(self.Frame)) then
             if input.UserInputType==Enum.UserInputType.Touch then
                 self._touchWasLongPress=false; self._window._touchToggles[self]={Input=input,Position=point(input)}
             else self:SetValue(not self.Value) end
@@ -1960,7 +2059,7 @@ function Section:AddButton(options)
         action.Active = not self.Disabled and not self._busy
         local phase=self._busy and self._action and self._action:GetStatus().Status
         action.Text=self._busy and (phase=="Queued" and self._window:_text("queued") or phase=="Cancelling" and self._window:_text("cancelling") or options.BusyText or self._window:_text("running")) or self._normalText
-        action.TextTransparency = self.Disabled and .5 or 0
+        action.TextTransparency = self.Disabled and .15 or 0
     end
     function self:Press()
         if self.Disabled or self.Destroyed or self._busy then return false end
@@ -2010,6 +2109,7 @@ function Section:AddButton(options)
     function self:GetAction() return self._action end
     self:SetDisabled(self.Disabled)
     self:SetIcon(options.Icon)
+    self:_captureDescriptionLayout()
     if options.DependsOn then self:DependsOn(options.DependsOn) end
     if options.Floating then self:AddFloatingButton(type(options.Floating)=="table" and options.Floating or {}) end
     return self
@@ -2085,7 +2185,7 @@ function Section:AddDropdown(options)
     header = button(self._window,self,self.Frame,"",{
         Position=U2(0,44),Size=UDim2.new(1,0,0,30),TextXAlignment=Enum.TextXAlignment.Left,
     },function() self:SetOpen(not self.Open) end)
-    ui(self._window,"UIPadding",{Name="TextPadding",Parent=header,PaddingLeft=UDim.new(0,FIELD_PADDING),PaddingRight=UDim.new(0,24)})
+    padButton(self._window,header,FIELD_PADDING,24)
     local arrow=label(self._window,header,"v",{ Position=UDim2.new(1,-24,0,0),Size=U2(20,30),TextXAlignment=Enum.TextXAlignment.Center })
     iconSlot(self._window,arrow,nil,"chevron-down",12,UDim2.new(.5,-6,.5,-6),"Text",function(visible) arrow.Text=visible and "" or "v" end)
     local panel = frame(self._window,self.Frame,{ Position=U2(0,79),Size=UDim2.new(1,0,0,184),Visible=false },"Inset")
@@ -2093,7 +2193,7 @@ function Section:AddDropdown(options)
     local search = textbox(self._window,panel,"",{ Position=U2(6,6),Size=UDim2.new(1,-12,0,28),PlaceholderText=self._window:_text("search"),Visible=options.Searchable ~= false })
     local results = ui(self._window,"ScrollingFrame",{
         Parent=panel,Position=U2(6,options.Searchable == false and 6 or 40),
-        Size=UDim2.new(1,-12,1,options.Searchable == false and -12 or -46),
+        Size=UDim2.new(1,-12,1,options.Searchable == false and -12 or -46),ClipsDescendants=true,
         BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,
         CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
@@ -2123,29 +2223,33 @@ function Section:AddDropdown(options)
             or self.Value or self._window:_text("choose")
         header.Text = text
         header.TextTruncate = Enum.TextTruncate.AtEnd
-        header.TextTransparency = self.Disabled and .5 or 0
+        header.TextTransparency = self.Disabled and .15 or 0
         header.Active = not self.Disabled
         for name, item in pairs(self._rows or {}) do
             local selected = self.Multi and table.find(self.Value,name) ~= nil or not self.Multi and self.Value == name
             item.Text = (selected and "[X] " or "[ ] ") .. name
-            item.TextColor3 = self._window.Palette[selected and "Accent" or "Text"]
+            self._window:_bind(item,{TextColor3=selected and "Accent" or "Text"})
         end
         if self.Disabled and self.Open then self:SetOpen(false) end
     end
     function self:_rebuild()
         for _, c in ipairs(self._optionConnections) do c:Disconnect() end
         self._optionConnections = {}
-        for _, object in ipairs(results:GetChildren()) do if object:IsA("GuiObject") then object:Destroy() end end
+        for _,owner in ipairs(self._rowOwners or {}) do owner.Destroyed=true; cleanup(owner) end
+        self._rowOwners={}
+        for _, object in ipairs(results:GetChildren()) do if object:IsA("GuiObject") then self._window:_forgetSkin(object); object:Destroy() end end
         self._rows = {}
         local query = search.Text:lower()
         local count = 0
         for index, name in ipairs(self.Options) do
             if query == "" or name:lower():find(query,1,true) then
                 count = count + 1
-                local item = button(self._window,self,results,"",{ LayoutOrder=index,Size=UDim2.new(1,-6,0,28),TextXAlignment=Enum.TextXAlignment.Left })
-                ui(self._window,"UIPadding",{Name="TextPadding",Parent=item,PaddingLeft=UDim.new(0,FIELD_PADDING),PaddingRight=UDim.new(0,FIELD_PADDING)})
+                local rowOwner={_connections={},_section=self._section}; self._rowOwners[#self._rowOwners+1]=rowOwner
+                local item = button(self._window,rowOwner,results,"",{ LayoutOrder=index,Size=UDim2.new(1,-6,0,28),TextXAlignment=Enum.TextXAlignment.Left })
+                padButton(self._window,item,FIELD_PADDING,FIELD_PADDING)
                 self._rows[name] = item
-                local connection = item.Activated:Connect(function()
+                local function activateOption()
+                    if self._window._interactionAllowed and not self._window:_interactionAllowed(item) then return end
                     if self.Disabled or self.Destroyed then return end
                     if self.Multi then
                         local value = self:GetValue()
@@ -2155,7 +2259,9 @@ function Section:AddDropdown(options)
                     else
                         self:SetValue(name); self:SetOpen(false)
                     end
-                end)
+                end
+                local connection=item.Activated:Connect(activateOption)
+                if self._window._registerFocus then self._window:_registerFocus(item,activateOption) end
                 table.insert(self._optionConnections,connection)
             end
         end
@@ -2168,7 +2274,7 @@ function Section:AddDropdown(options)
         if open and self._window._openDropdown and self._window._openDropdown ~= self then self._window._openDropdown:SetOpen(false) end
         self.Open = open
         panel.Visible = open
-        local target=UDim2.new(1,0,0,open and 272 or 80)
+        local target=UDim2.new(1,0,0,(open and 272 or 80)+(self._descriptionDelta or 0))
         if self._hasDefault then self._window:_animate(self.Frame,{Size=target},.12,"expand",self) else self.Frame.Size=target end
         if open then self._window._openDropdown = self
         elseif self._window._openDropdown == self then self._window._openDropdown = nil end
@@ -2190,7 +2296,8 @@ function Section:AddDropdown(options)
     local inheritedDestroy = self.Destroy
     function self:Destroy()
         for _, c in ipairs(self._optionConnections) do c:Disconnect() end
-        self._optionConnections = {}
+        for _,owner in ipairs(self._rowOwners or {}) do owner.Destroyed=true; cleanup(owner) end
+        self._rowOwners={}; self._optionConnections = {}
         inheritedDestroy(self)
     end
     connect(self,search:GetPropertyChangedSignal("Text"),function() self:_rebuild() end)
@@ -2225,7 +2332,7 @@ function Section:AddKeybind(options)
     function self:_normalize(value) return bindingValue(value,self.AllowMouse) end
     function self:_render()
         capture.Text = self._window._binding == self and "..." or bindingLabel(self.Value)
-        capture.TextTransparency = self.Disabled and .5 or 0
+        capture.TextTransparency = self.Disabled and .15 or 0
     end
     function self:_callbackNow() end
     function self:Trigger(active)
@@ -2325,7 +2432,7 @@ function Section:AddColorPicker(options)
         else window:_cancelTrack(swatch,"color",false); swatch.BackgroundColor3=self._currentColor end
         swatch.BackgroundTransparency = 1-state.Opacity
         caption.Text = hex(state.Color) .. (state.Rainbow and "  RGB" or "")
-        caption.TextTransparency = self.Disabled and .5 or 0
+        caption.TextTransparency = self.Disabled and .15 or 0
         for i,value in ipairs({state.Color.R,state.Color.G,state.Color.B}) do
             fields[i].Text = tostring(math.floor(value*255+.5)); fields[i].TextEditable = not self.Disabled and not state.Rainbow
         end
@@ -2351,7 +2458,7 @@ function Section:AddColorPicker(options)
     end
     function self:SetOpen(value)
         self.Open=value == true; panel.Visible=self.Open
-        local target=UDim2.new(1,0,0,self.Open and 334 or 80)
+        local target=UDim2.new(1,0,0,(self.Open and 334 or 80)+(self._descriptionDelta or 0))
         if self._hasDefault then window:_animate(self.Frame,{Size=target},.12,"expand",self) else self.Frame.Size=target end
         return self
     end
@@ -2514,7 +2621,7 @@ do
             node=frame(window,parent,{Name="ChartElement",AnchorPoint=Vector2.new(.5,.5),Visible=false},"Accent")
             pool[index]=node
         end
-        if color then window._skin[node]=nil; node.BackgroundColor3=color end
+        node.BackgroundColor3=window:_ink(color or "Accent",node,3,window:_surfaceColor(parent))
         node.Visible=true; return node
     end
     local function hideExtra(pool,wanted)
@@ -2558,11 +2665,11 @@ do
             self.ValueLabel.Text=content; self.SubtitleLabel.Text=self.Subtitle; self.UnitLabel.Text=self.Unit
             self.ValueLabel.Size=UDim2.new(1,self.Unit~="" and -108 or -20,0,34)
             self.TrendLabel.Text=self.TrendText or (self.Trend~=0 and (self.Trend>0 and "+" or "")..format(self.Trend,self.Format,self.Precision) or "")
-            self.TrendLabel.TextColor3=self._window.Palette[self.Trend>0 and "Success" or self.Trend<0 and "Danger" or "Muted"]
-            self.ValueLabel.TextColor3=self._window.Palette[(self.Loading or self.Unavailable) and "Muted" or "Text"]
+            self._window:_bind(self.TrendLabel,{TextColor3=self.Trend>0 and "Success" or self.Trend<0 and "Danger" or "Muted"})
+            self._window:_bind(self.ValueLabel,{TextColor3=(self.Loading or self.Unavailable) and "Muted" or "Text"})
             if options.Animated and self._window._animate and finite(self.Value) and finite(self._lastValue) and self.Value~=self._lastValue then
-                self.ValueLabel.TextColor3=self._window.Palette[self.Value>self._lastValue and "Success" or "Danger"]
-                self._window:_animate(self.ValueLabel,{TextColor3=self._window.Palette.Text},.25,"stat",self)
+                self.ValueLabel.TextColor3=self._window:_ink(self.Value>self._lastValue and "Success" or "Danger",self.ValueLabel)
+                self._window:_animate(self.ValueLabel,{TextColor3=self._window:_ink("Text",self.ValueLabel)},.25,"stat",self)
             end
             self._lastValue=self.Value
             if self._spark then
@@ -2625,7 +2732,12 @@ do
         self.MaxLabel=label(self._window,self.Frame,"",{Position=U2(0,top+legendHeight),Size=U2(56,16),TextSize=10,TextXAlignment=Enum.TextXAlignment.Right,Visible=self.ShowLabels},"Muted")
         self.FirstLabel=label(self._window,self.Frame,"",{Position=UDim2.new(0,left,1,-22),Size=UDim2.new(.5,-left,0,18),TextSize=10,TextTruncate=Enum.TextTruncate.AtEnd,Visible=self.ShowLabels},"Muted")
         self.LastLabel=label(self._window,self.Frame,"",{Position=UDim2.new(.5,0,1,-22),Size=UDim2.new(.5,-8,0,18),TextSize=10,TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Right,Visible=self.ShowLabels},"Muted")
-        if kind=="Progress" then self.ProgressLabel=label(self._window,self.Plot,"",{Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,TextSize=14,ZIndex=self.Plot.ZIndex+3},"Text") end
+        if kind=="Progress" then
+            self._progressInkLeft=frame(self._window,self.Plot,{Size=UDim2.fromScale(0,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=self.Plot.ZIndex+3})
+            self._progressInkRight=frame(self._window,self.Plot,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=self.Plot.ZIndex+3})
+            self.ProgressFillLabel=label(self._window,self._progressInkLeft,"",{Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,TextSize=14,ZIndex=self.Plot.ZIndex+4},"AccentText")
+            self.ProgressLabel=label(self._window,self._progressInkRight,"",{Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,TextSize=14,ZIndex=self.Plot.ZIndex+4},"Text")
+        end
         function self:_normalize(value) if self.ChartType=="Progress" then assert(finite(value),"Progress value must be finite"); return clamp(value,self.Min,self.Max) end; return points(value,self.MaxPoints) end
         function self:_bounds()
             if self.ChartType=="Progress" then return self.Min,self.Max end
@@ -2650,7 +2762,14 @@ do
                 node.AnchorPoint=Vector2.new(0,0); node.Position=U2(0,0); node.Rotation=0
                 local goals={Size=UDim2.new(ratio,0,1,0)}
                 if options.Animated and self._window._animate then self._window:_animate(node,goals,.12,"chart",self) else node.Size=goals.Size end
-                self.ProgressLabel.Text=format(ratio*100,"Percent",options.Precision); self.EmptyLabel.Visible=false
+                local logicalWidth=self.Plot.AbsoluteSize.X/math.max(.01,self._window._actualScale or 1)
+                self._progressInkLeft.Size=UDim2.new(ratio,0,1,0)
+                self._progressInkRight.Position=UDim2.new(ratio,0,0,0); self._progressInkRight.Size=UDim2.new(1-ratio,0,1,0)
+                self.ProgressFillLabel.Size=UDim2.new(0,logicalWidth,1,0)
+                self.ProgressLabel.Size=UDim2.new(0,logicalWidth,1,0); self.ProgressLabel.Position=U2(-ratio*logicalWidth,0)
+                self._window._inkSurfaces[self.ProgressFillLabel]=node.BackgroundColor3
+                self._window:_refreshInk(self.ProgressFillLabel); self._window:_refreshInk(self.ProgressLabel)
+                self.ProgressLabel.Text=format(ratio*100,"Percent",options.Precision); self.ProgressFillLabel.Text=self.ProgressLabel.Text; self.EmptyLabel.Visible=false
                 return
             end
             local n=#self.Value; self.EmptyLabel.Visible=n==0
@@ -2754,9 +2873,14 @@ function Window:_applyTheme()
         self.Palette.AccentText=(c.R*.2126+c.G*.7152+c.B*.0722)>.55 and RGB(20,25,28) or RGB(255,251,239)
     end
     for object,roles in pairs(self._skin) do
-        if object.Parent then for property,role in pairs(roles) do object[property]=self.Palette[role] end end
+        if object.Parent then
+            for property,role in pairs(roles) do if property~="TextColor3" and property~="PlaceholderColor3" then object[property]=self.Palette[role] end end
+        else self:_forgetSkin(object) end
     end
-    for _,control in pairs(self.Controls) do if not control.Destroyed and control._render and (control.Value~=nil or control.Type=="Button" or control.Type=="Dropdown") then control:_render() end end
+    for object in pairs(self._skin) do if object.Parent then self:_refreshInk(object) end end
+    for _,control in pairs(self.Controls) do if not control.Destroyed and control._render and (control.Value~=nil or control.Type=="Button" or control.Type=="Dropdown") then
+        if control._draw then self._visualQueue[control]=nil; self:_protected(function() control:_draw() end,{ControlId=control.Id,Phase="Theme"}) else control:_render() end
+    end end
     for _,tab in ipairs(self.Tabs) do tab:_renderSelection() end
     self:_syncSettings()
     self:_syncFloating()
@@ -3216,7 +3340,7 @@ do
     local rootFields={Library=true,Schema=true,Version=true,ConfigVersion=true,Flags=true,Appearance=true}
     local appearanceFields={Theme=true,ThemeColors=true,Accent=true,Scale=true,ReducedMotion=true,Scanlines=true,
         Notifications=true,Launcher=true,ToggleKey=true,PixelIcons=true,PixelDecorations=true,Animations=true,Drag=true,
-        Floating=true,LauncherText=true,LauncherPosition=true}
+        Floating=true,LauncherText=true,LauncherPosition=true,Advanced=true}
     local function version(value)
         assert(finite(value) and value%1==0 and value>=1 and value<=65535,"ConfigVersion must be an integer 1–65535")
         return value
@@ -3241,6 +3365,7 @@ do
         end
         seen[value]=nil; return result
     end
+    Library._copyConfigData=clone
     function Window:SetConfigVersion(value) self.ConfigVersion=version(value); return self end
     function Window:RegisterMigration(fromVersion,callback)
         version(fromVersion); assert(fromVersion<65535 and type(callback)=="function","Migration needs a source version and function")
@@ -3327,6 +3452,7 @@ function Window:ExportConfig(asTable)
     for id,position in pairs(self._floatingPositions) do result.Appearance.Floating.Positions[id]={X=position.X,Y=position.Y} end
     result.Appearance.LauncherText=self.LauncherText
     result.Appearance.LauncherPosition={X=self.LauncherPosition.X,Y=self.LauncherPosition.Y}
+    if self._exportAdvanced then result.Appearance.Advanced=self:_exportAdvanced() end
     self:_exportProfileExtras(result)
     if asTable then return result end
     return HttpService:JSONEncode(result)
@@ -3399,7 +3525,7 @@ function Window:ImportConfig(source,options)
                 appearance.Floating.Positions[id]=position(p)
             end
         end
-        return {Changes=changes,Appearance=appearance,Extras=extras}
+        return {Changes=changes,Appearance=appearance,Extras=extras,Advanced=self:_prepareAdvanced(look.Advanced)}
     end)
     if not ok then return false,tostring(prepared) end
     self._importing=true
@@ -3412,6 +3538,7 @@ function Window:ImportConfig(source,options)
     local look=prepared.Appearance
     Library:Batch(function()
     self._profileExtras=prepared.Extras
+    self:_applyAdvanced(prepared.Advanced,true)
     if look.Colors then self._themeOverrides[look.Theme]=look.Colors end
     self.Theme=look.Theme; self.Accent=look.Accent; self.UserScale=look.Scale; self.ToggleKey=look.ToggleKey
     if look.ReducedMotion~=nil then self.ReducedMotion=look.ReducedMotion end
@@ -3429,7 +3556,7 @@ function Window:ImportConfig(source,options)
         self._floatingPositions=look.Floating.Positions
     end
     for id,record in pairs(prepared.Changes) do self.Controls[id]:SetValue(record.Value,true) end
-    self:_applyTheme(); self:_layout()
+    self:_applyTheme(); self:_applyAdvancedUI(prepared.Advanced); self:_layout()
     self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
     self:SetPixelIcons(self.PixelIcons); self:SetPixelDecorations(self.PixelDecorations)
     end)
@@ -3462,7 +3589,7 @@ end
 function Library:GetCapabilities()
     return {
         GetHui=type(gethui)=="function",
-        ReadFile=type(readfile)=="function",WriteFile=type(writefile)=="function",
+        ReadFile=type(readfile)=="function",WriteFile=type(writefile)=="function",DeleteFile=type(delfile)=="function",
         MakeFolder=type(makefolder)=="function",IsFile=type(isfile)=="function",IsFolder=type(isfolder)=="function",ListFiles=type(listfiles)=="function",
         FileStorage=type(readfile)=="function" and type(writefile)=="function" and type(makefolder)=="function",
     }
@@ -3472,6 +3599,7 @@ function Library:CreateFileStorage(folder)
     if not self:GetCapabilities().FileStorage then return nil,"Executor does not expose readfile, writefile and makefolder" end
     -- Capture this executor's functions; no folder or file is created until Save.
     local read,write,mkdir=readfile,writefile,makefolder
+    local remove=type(delfile)=="function" and delfile or nil
     local hasFile=type(isfile)=="function" and isfile or nil
     local hasFolder=type(isfolder)=="function" and isfolder or nil
     local enumerate=type(listfiles)=="function" and listfiles or nil
@@ -3548,8 +3676,44 @@ function Library:CreateFileStorage(folder)
             return read(target)
         end,
         List=discovered,
+        Delete=remove and function(name)
+            local target=path(name); local exists=hasFile and hasFile(target)
+            if not hasFile then exists=pcall(read,target) end
+            assert(exists,"Profile was not found")
+            local known=discovered(); local remaining={}
+            for _,item in ipairs(known) do if item~=name then remaining[#remaining+1]=item end end
+            ensureFolders()
+            local indexed=write(indexPath,HttpService:JSONEncode({Schema=1,Names=remaining}))
+            assert(indexed~=false,"Executor refused to update the profile index")
+            local ok,reason=pcall(remove,target)
+            if not ok or reason==false then
+                local restored,value=pcall(write,indexPath,HttpService:JSONEncode({Schema=1,Names=known}))
+                error("Profile deletion failed: "..tostring(reason)..((not restored or value==false) and "; index restoration also failed" or ""))
+            end
+            return true
+        end or nil,
     }
 end
+function Window:DeleteConfig(name)
+    if self.Destroyed then return false,"Window has been destroyed" end
+    local ok,result=pcall(function()
+        profileName(name)
+        local known,err=self:GetConfigNames(); assert(not err,err)
+        assert(table.find(known,name),"Profile was not found")
+        if self.Storage then
+            assert(type(self.Storage.Delete)=="function","Storage does not support profile deletion")
+            local deleted,reason=self.Storage.Delete(name); assert(deleted==true,reason or "Storage refused deletion")
+        end
+        self._profiles[name]=nil
+        if self.LastConfigName==name then self.LastConfigName=nil end
+        if self.AutoSave==name then self.AutoSave=nil end
+        self._saveToken=self._saveToken+1
+        return true
+    end)
+    if ok and self._refreshProfiles then self:_refreshProfiles() end
+    return ok,ok and result or tostring(result)
+end
+
 function Window:SetStorage(adapter)
     assert(type(adapter)=="table" and type(adapter.Save)=="function" and type(adapter.Load)=="function","Storage requires Save and Load functions")
     self.Storage=adapter; self.StorageMode=adapter.Kind or "custom"; return self
@@ -3571,19 +3735,19 @@ function Window:SaveConfig(name)
     if ok and self._refreshProfiles then self:_refreshProfiles() end
     return ok,result
 end
+function Window:_readConfigSource(name)
+    profileName(name)
+    local value=self._profiles[name]
+    if self.Storage then
+        local loaded,err=self.Storage.Load(name); assert(loaded~=nil,err or "Profile was not found"); value=loaded
+    end
+    assert(type(value)=="string" or type(value)=="table","Profile was not found")
+    return value
+end
+
 function Window:LoadConfig(name,options)
     if self.Destroyed then return false,"Window has been destroyed" end
-    local ok,data=pcall(function()
-        profileName(name)
-        local value=self._profiles[name]
-        if self.Storage then
-            local loaded,err=self.Storage.Load(name)
-            assert(loaded~=nil,err or "Profile was not found")
-            value=loaded
-        end
-        assert(type(value)=="string" or type(value)=="table","Profile was not found")
-        return value
-    end)
+    local ok,data=pcall(self._readConfigSource,self,name)
     if not ok then return false,tostring(data) end
     local applied,err=self:ImportConfig(data,options)
     if applied then self.LastConfigName=name; self._profiles[name]=type(data)=="string" and data or HttpService:JSONEncode(data) end
@@ -3612,6 +3776,7 @@ function Window:Reset(silent)
     if self.Destroyed then self._importing=false; return self end
     Library:Batch(function()
     for _,control in pairs(self.Controls) do if control.Persist and control._hasDefault then control:SetValue(control._default,true) end end
+    if self._initial.Advanced then self:_applyAdvanced(self:_prepareAdvanced(self._initial.Advanced),true) end
     self.Theme=self._initial.Theme; self.Accent=self._initial.Accent; self.UserScale=self._initial.Scale
     self._themeOverrides[self._initial.Theme]=copy(self._initial.ThemeColors)
     self.ReducedMotion=self._initial.ReducedMotion; self.Scanlines=self._initial.Scanlines
@@ -3623,7 +3788,8 @@ function Window:Reset(silent)
     self.FloatSize=self._initial.FloatSize; self.FloatOpacity=self._initial.FloatOpacity; self.QuickActionsEnabled=self._initial.QuickActions
     self.LauncherText=self._initial.LauncherText; self.LauncherPosition=self._initial.LauncherPosition; self._floatingPositions={}
     for _,floating in pairs(self._floatingButtons) do floating.Position=floating._defaultPosition end
-    self:_applyTheme(); self:_layout(); self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
+    self:_applyTheme(); self:_applyAdvancedUI(self._initial.Advanced); self:_layout(); self:SetScanlines(self.Scanlines); self:SetLauncher(self.LauncherEnabled)
+    for _,dashboard in pairs(self._dashboards) do dashboard:ResetLayout() end
     self:SetPixelIcons(self.PixelIcons); self:SetPixelDecorations(self.PixelDecorations)
     end)
     if not silent then for _,control in pairs(self.Controls) do if control.Persist then control:_emit() end end end
@@ -3717,7 +3883,8 @@ function Window:_refreshProfiles()
     controls.Profiles:SetOptions(known,true)
     local selected=controls.Profiles:GetValue()
     if not selected then controls.Profiles:SetValue(known[1],true) end
-    controls.Load:SetDisabled(err~=nil)
+    controls.Load:SetDisabled(err~=nil or not controls.Profiles:GetValue())
+    if controls.Delete then controls.Delete:SetDisabled(err~=nil or not controls.Profiles:GetValue() or self.Storage and type(self.Storage.Delete)~="function") end
     controls.ProfileStatus:SetText(err or self:_text(self.StorageMode=="file" and "fileProfiles" or "memoryProfiles"))
     self._refreshingProfiles=false
     return known,err
@@ -3758,6 +3925,15 @@ function Window:_createSettings()
         if not name then self:Notify({Title=self:_text("error"),Content=self:_text("empty"),Kind="error"}); return end
         local ok,result=self:LoadConfig(name)
         self:Notify({Title=self:_text(ok and "loaded" or "error"),Content=ok and name or result,Kind=ok and "success" or "error"})
+    end}))
+    controls.Delete=actions:AddButton(opts("config-delete",self:_text("delete"),{Icon="close",Callback=function()
+        local name=controls.Profiles:GetValue()
+        if not name then self:Notify({Title=self:_text("error"),Content=self:_text("empty"),Kind="error"}); return end
+        self:Confirm({Title=self:_text("deleteProfile"),Content=name.."\n"..self:_text("deleteWarning"),OnConfirm=function()
+            local ok,reason=self:DeleteConfig(name)
+            if ok then profile:SetValue(controls.Profiles:GetValue() or "",true) end
+            self:Notify({Title=self:_text(ok and "deleted" or "error"),Content=ok and name or reason,Kind=ok and "success" or "error"})
+        end})
     end}))
     configs:AddButton(opts("config-refresh",self:_text("refresh"),{Callback=function()
         local _,err=self:_refreshProfiles()
@@ -4066,7 +4242,7 @@ function Window:Dialog(options)
         cleanup(self); self._window:_cancelAnimations(self.Frame,false)
         local function remove()
             if self._window._dialog==self then self._window._dialog=nil end
-            self._window:_cancelAnimations(self.Frame,false); self.Frame:Destroy()
+            self._window:_cancelAnimations(self.Frame,false); self._window:_forgetSkin(self.Frame); self.Frame:Destroy()
         end
         if reason=="destroyed" or reason=="hidden" or reason=="replaced" or self._window.Destroyed or self._window._closing then remove()
         else self._window:_animate(self.Frame,{BackgroundTransparency=1},.1,"dialog",self,remove) end
@@ -4270,7 +4446,7 @@ function Library:CreateWindow(options)
     local maxBytes=options.MaxConfigBytes or 262144
     assert(finite(maxBytes) and maxBytes>=1024 and maxBytes<=1048576,"MaxConfigBytes must be 1024–1048576")
     local tooltipDelay=options.TooltipDelay
-    if tooltipDelay==nil then tooltipDelay=.4 end
+    if tooltipDelay==nil then tooltipDelay=.2 end
     local tooltipWidth=options.TooltipMaxWidth
     if tooltipWidth==nil then tooltipWidth=320 end
     assert(finite(tooltipDelay) and tooltipDelay>=0 and tooltipDelay<=3,"TooltipDelay must be 0–3 seconds")
@@ -4281,6 +4457,8 @@ function Library:CreateWindow(options)
     local window=setmetatable({
         Id=id,Title=tostring(options.Title or "RetroBox UI"),Subtitle=tostring(options.Subtitle or "A little old-school. A lot configurable."),
         Theme=theme,Accent=options.Accent and parseColor(options.Accent) or nil,Palette=copy(self.Themes[theme]),
+        ShowDescriptions=options.ShowDescriptions~=false,TooltipsEnabled=options.Tooltips~=false,TextScale=options.TextScale or 1,
+        _customThemes={},_dashboards={},CommandKey=options.CommandKey and keycode(options.CommandKey) or Enum.KeyCode.F4,
         Font=font,UserScale=userScale,ToggleKey=toggle,MaxConfigBytes=maxBytes,TooltipDelay=tooltipDelay,TooltipMaxWidth=tooltipWidth,
         ReducedMotion=options.ReducedMotion == true,Scanlines=options.Scanlines == true,
         PixelIcons=options.PixelIcons~=false,PixelDecorations=options.PixelDecorations~=false,
@@ -4294,7 +4472,7 @@ function Library:CreateWindow(options)
         FloatSize=options.FloatSize or 64,FloatOpacity=options.FloatOpacity or 1,QuickActionsEnabled=options.QuickActions~=false,
         LauncherText=options.LauncherText or "UI",LauncherPosition=normalizedPosition(options.LauncherPosition or Vector2.new(.025,.1)),
         _locale=translations[options.Locale or "pt-BR"] or translations["pt-BR"],
-        _connections={},_skin=setmetatable({},{ __mode="k" }),_icons={},_themeOverrides={},_rainbows={},_keybinds={},_destroyListeners={},
+        _connections={},_skin={},_inkSurfaces={},_textSizes={},_focusTargets={},_icons={},_themeOverrides={},_rainbows={},_keybinds={},_destroyListeners={},
         _profiles={},_notifications={},_noticeCount=0,_nextId=0,_saveToken=0,_query="",
         ConfigVersion=configVersion,UnknownFlags=options.UnknownFlags or "Ignore",_migrations={},_profileExtras={Root={},Appearance={},Flags={}},
         _floatingButtons={},_floatingPositions={},_touchToggles={},
@@ -4302,6 +4480,7 @@ function Library:CreateWindow(options)
     },Window)
     assert(finite(window.DragResponsiveness) and window.DragResponsiveness>=8 and window.DragResponsiveness<=80,"DragResponsiveness must be 8–80")
     assert(window.CallbackExecutor==nil or type(window.CallbackExecutor)=="function","CallbackExecutor must be a function")
+    assert(finite(window.TextScale) and window.TextScale>=.8 and window.TextScale<=1.4,"TextScale must be .8–1.4")
     window._resources=self:CreateScope(); window._resources._window=window
     for from,callback in pairs(options.Migrations or {}) do window:RegisterMigration(from,callback) end
     if window.AutoSave~=nil then profileName(window.AutoSave) end
@@ -4524,5 +4703,1293 @@ function Library:DestroyAll()
     for window in pairs(self.Windows) do table.insert(windows,window) end
     for _,window in ipairs(windows) do window:Destroy() end
 end
+
+-- Description layout and help preferences share the existing control lifecycle.
+do
+    local compact={Toggle=true,Keybind=true,Button=true,StatCard=true,LineChart=true,BarChart=true,ProgressChart=true,SparklineChart=true}
+    function Control:_captureDescriptionLayout()
+        if self._descriptionLayout or self._inlineParent then return end
+        local reserve
+        if self.Type=="Toggle" then reserve=#self.Description>0 and 17 or 0
+        elseif self.Type=="Keybind" then reserve=#self.Description>0 and 16 or 0
+        elseif compact[self.Type] then reserve=#self.Description>0 and 20 or 0
+        elseif self.Type=="Console" or self.Type=="Image" then reserve=18
+        else reserve=20 end
+        local layout={Reserve=reserve,Height=self.Frame.Size.Y.Offset,Children={}}
+        for _,child in ipairs(self.Frame:GetChildren()) do
+            if child:IsA("GuiObject") and child~=self.TitleLabel and child~=self.DescriptionLabel and child~=self.Icon and child~=self.InfoButton then
+                layout.Children[child]={Position=child.Position,Size=child.Size}
+            end
+        end
+        self._descriptionLayout=layout
+        self.DescriptionLabel.TextWrapped=true; self.DescriptionLabel.TextTruncate=Enum.TextTruncate.None; self.DescriptionLabel.TextYAlignment=Enum.TextYAlignment.Top
+        connect(self,self.Frame:GetPropertyChangedSignal("AbsoluteSize"),function() self:_layoutDescription() end)
+        self:_layoutDescription()
+    end
+    function Control:_layoutDescription()
+        local layout=self._descriptionLayout
+        if not layout or self.Destroyed or self._describing or self.Type=="Separator" or self._inlineParent then return end
+        self._describing=true
+        local allowed=self._descriptionEnabled~=false and self._window.ShowDescriptions~=false and #self.Description>0
+        local width=self.Frame.AbsoluteSize.X/math.max(.01,self._window._actualScale or 1)
+        width=math.max(60,width+self.DescriptionLabel.Size.X.Offset)
+        local height=0
+        if allowed then
+            local ok,size=pcall(TextService.GetTextSize,TextService,self.Description,12*(self._window.TextScale or 1),self._window.Font,Vector2.new(width,100000))
+            height=ok and size.Y or 18; height=math.max(18,finite(height) and height+3 or 18)
+        end
+        local reserve=allowed and height+4 or 0; local delta=reserve-layout.Reserve
+        self.DescriptionLabel.Visible=allowed; self.DescriptionLabel.Size=UDim2.new(1,self.DescriptionLabel.Size.X.Offset,0,height)
+        local total=layout.Height+delta
+        if self.Type=="Label" then total=self._explicitHeight and math.max(layout.Height,allowed and 26+height or 0) or allowed and math.max(30,26+height) or math.min(layout.Height,42) end
+        if self.Type=="Dropdown" then total=(self.Open and 272 or 80)+delta end
+        if self.Type=="ColorPicker" then total=(self.Open and 334 or 80)+delta end
+        for object,data in pairs(layout.Children) do
+            if object.Parent and data.Position.Y.Offset>=22 then
+                object.Position=UDim2.new(data.Position.X.Scale,data.Position.X.Offset,data.Position.Y.Scale,data.Position.Y.Offset+delta)
+                if data.Size.Y.Scale~=0 then object.Size=UDim2.new(data.Size.X.Scale,data.Size.X.Offset,data.Size.Y.Scale,data.Size.Y.Offset-data.Size.Y.Scale*delta) end
+            end
+        end
+        self._descriptionDelta=delta
+        self.Frame.Size=UDim2.new(self.Frame.Size.X.Scale,self.Frame.Size.X.Offset,0,math.max(28,total))
+        self:_syncHelpBadge(); self._describing=false
+    end
+    function Control:SetDescriptionVisible(value)
+        assert(type(value)=="boolean","Description visibility must be boolean")
+        self._descriptionEnabled=value; self:_layoutDescription(); return self
+    end
+    function Control:_syncHelpBadge()
+        if not self.Tooltip or self._inlineParent then return end
+        if not self.InfoButton then
+            self.TitleLabel.Size=UDim2.new(self.TitleLabel.Size.X.Scale,self.TitleLabel.Size.X.Offset-22,self.TitleLabel.Size.Y.Scale,self.TitleLabel.Size.Y.Offset)
+            self.InfoButton=pixelButton(self._window,self,self.Frame,"?","info",{Size=U2(20,20),ZIndex=self.TitleLabel.ZIndex+2},function()
+                self._touchWasLongPress=true
+                if self._window._tooltipOwner==self then self:HideTooltip() else self:ShowTooltip() end
+            end)
+            connect(self,self.InfoButton.TouchLongPress,function(positions,state)
+                if state==Enum.UserInputState.Begin and positions[1] then self._touchWasLongPress=true; self._window:_showTooltip(self,positions[1],"touch") end
+            end)
+        end
+        self.InfoButton.Visible=self._window.TooltipsEnabled~=false
+        local p,s=self.TitleLabel.Position,self.TitleLabel.Size
+        self.InfoButton.Position=UDim2.new(p.X.Scale+s.X.Scale,p.X.Offset+s.X.Offset+2,0,1)
+    end
+    function Window:SetDescriptions(value)
+        assert(type(value)=="boolean","ShowDescriptions must be boolean")
+        self.ShowDescriptions=value
+        for _,control in pairs(self.Controls) do control:_layoutDescription() end
+        self:_syncSettings(); self:_scheduleSave(); return self
+    end
+    function Window:SetTooltips(options)
+        assert(type(options)=="table","Tooltip preferences must be a table")
+        local enabled=options.Enabled; local delay=options.Delay or self.TooltipDelay; local width=options.MaxWidth or self.TooltipMaxWidth
+        assert(enabled==nil or type(enabled)=="boolean","Tooltip Enabled must be boolean")
+        assert(finite(delay) and delay>=0 and delay<=3 and finite(width) and width>=160 and width<=640,"Invalid tooltip preferences")
+        if enabled~=nil then self.TooltipsEnabled=enabled end
+        self.TooltipDelay=delay; self.TooltipMaxWidth=width; self:_hideTooltip()
+        for _,control in pairs(self.Controls) do control:_syncHelpBadge() end
+        self:_syncSettings(); self:_scheduleSave(); return self
+    end
+    function Window:SetTextScale(value)
+        assert(finite(value) and value>=.8 and value<=1.4,"TextScale must be .8–1.4")
+        self.TextScale=value
+        for object,size in pairs(self._textSizes) do if object.Parent then object.TextSize=size*value else self._textSizes[object]=nil end end
+        for _,control in pairs(self.Controls) do control:_layoutDescription() end
+        self:_syncSettings(); self:_scheduleSave(); return self
+    end
+    function Window:_t17(pt,en) return self._locale==translations["en-US"] and en or pt end
+end
+
+-- BEGIN RETRO170 OVERLAYS
+-- One overlay owner for menus and the palette, plus predictable keyboard focus.
+do
+    local function within(object,root)
+        while object do if object==root then return true end; object=object.Parent end
+        return false
+    end
+    function Window:_interactionAllowed(object)
+        return not self._overlay or within(object,self._overlay.Frame)
+    end
+    function Window:_closeOverlay(reason)
+        if self._overlay then self._overlay:Close(reason or "closed") end
+    end
+    function Window:_newOverlay(kind)
+        assert(not self.Destroyed,"Window has been destroyed")
+        if self._dialog or self._binding then return nil,"Close the dialog or key capture first" end
+        self:_closeOverlay("replaced"); self:_hideTooltip(); self:_hideSearchResults()
+        if self._openDropdown then self._openDropdown:SetOpen(false) end
+        local window=self; local owner={Kind=kind,_connections={},Scope=self:CreateScope(),Panels={}}
+        owner.Frame=frame(self,self.Root,{Name=kind.."Overlay",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=200})
+        owner.Backdrop=ui(self,"TextButton",{Parent=owner.Frame,Size=UDim2.fromScale(1,1),Text="",BackgroundTransparency=1,BorderSizePixel=0,Active=true,AutoButtonColor=false,ZIndex=200})
+        connect(owner,owner.Backdrop.Activated,function() owner:Close("outside") end)
+        function owner:Close(reason)
+            if self.Destroyed then return end
+            self.Destroyed=true; self.Reason=reason
+            if window._overlay==self then window._overlay=nil end
+            local focused=UserInputService:GetFocusedTextBox(); if focused and within(focused,self.Frame) then focused:ReleaseFocus() end
+            self.Scope:Destroy()
+        end
+        owner.Scope:Add(function()
+            cleanup(owner); for _,panel in ipairs(owner.Panels) do if panel.Owner then cleanup(panel.Owner) end end
+            window:_forgetSkin(owner.Frame); owner.Frame:Destroy()
+            if window._overlay==owner then window._overlay=nil end
+        end)
+        self._overlay=owner; return owner
+    end
+    function Window:_registerFocus(object,activate)
+        self._focusSequence=(self._focusSequence or 0)+1
+        self._focusTargets[object]={Object=object,Activate=activate,Order=self._focusSequence}
+    end
+    function Window:_focusObject(object)
+        if not object or not object.Parent then return false end
+        self._keyboardFocus=object
+        if not self._focusRing then
+            self._focusRing=frame(self,object,{Name="KeyboardFocus",BackgroundTransparency=1,BorderSizePixel=2,Size=UDim2.fromScale(1,1),ZIndex=190})
+            self:_bind(self._focusRing,{BorderColor3="Accent"})
+        else self._focusRing.Parent=object; self._focusRing.Visible=true end
+        self._focusRing.BorderColor3=self:_ink("Accent",object,3)
+        return true
+    end
+    function Window:FocusNext(reverse)
+        local choices={}
+        for object,entry in pairs(self._focusTargets) do
+            local active=object.Parent and object.Active~=false and self:_interactionAllowed(object)
+            local parent=object
+            while active and parent and parent~=self.Gui do
+                if parent:IsA("GuiObject") and parent.Visible==false then active=false end
+                parent=parent.Parent
+            end
+            if active and parent==self.Gui then choices[#choices+1]=entry end
+        end
+        table.sort(choices,function(a,b) return a.Order<b.Order end)
+        if #choices==0 then return false end
+        local index=reverse and 1 or 0
+        for i,entry in ipairs(choices) do if entry.Object==self._keyboardFocus then index=i; break end end
+        index=(index-1+(reverse and -1 or 1))%#choices+1
+        return self:_focusObject(choices[index].Object)
+    end
+    function Window:SetCommandKey(value) self.CommandKey=keycode(value); self:_syncSettings(); self:_scheduleSave(); return self end
+    local function menuItems(items,depth,seen,budget)
+        assert(type(items)=="table" and #items<=64 and depth<=4,"Menus allow 64 entries per level and four levels")
+        assert(not seen[items],"Menu cannot contain a cycle"); seen[items]=true
+        local result={}
+        for _,item in ipairs(items) do
+            budget.Count=budget.Count+1; assert(budget.Count<=256,"Menu entry limit is 256")
+            assert(type(item)=="table","Menu entry must be a table")
+            local value={}; for k,v in pairs(item) do value[k]=v end
+            if not value.Separator then
+                assert(type(value.Text)=="string" and #value.Text>=1 and #value.Text<=256,"Menu entry requires Text")
+                assert(value.Callback==nil or type(value.Callback)=="function","Menu Callback must be a function")
+                assert(value.Disabled==nil or type(value.Disabled)=="boolean","Menu Disabled must be boolean")
+                resolveIcon(value.Icon)
+                if value.Items then value.Items=menuItems(value.Items,depth+1,seen,budget) end
+                assert(value.Confirm==nil or type(value.Confirm)=="string" and #value.Confirm<=4096,"Menu Confirm must be text")
+            end
+            result[#result+1]=value
+        end
+        seen[items]=nil; return result
+    end
+    function Window:ContextMenu(options,anchor)
+        assert(type(options)=="table","ContextMenu needs options")
+        local items=menuItems(options.Items or {},1,{}, {Count=0})
+        local window=self; local view=self.Root.AbsoluteSize
+        assert(options.Width==nil or finite(options.Width) and options.Width>=80 and options.Width<=420,"Menu Width must be 80–420")
+        assert(anchor==nil or typeof(anchor)=="Vector2" or typeof(anchor)=="Instance" and anchor:IsA("GuiObject"),"Menu anchor must be a point or GUI object")
+        local width=math.min(options.Width or 240,math.max(40,view.X-16))
+        local position
+        if typeof(anchor)=="Vector2" then position=anchor-self.Root.AbsolutePosition
+        elseif typeof(anchor)=="Instance" then position=anchor.AbsolutePosition+Vector2.new(0,anchor.AbsoluteSize.Y)-self.Root.AbsolutePosition
+        else position=UserInputService:GetMouseLocation()-self.Root.AbsolutePosition end
+        local owner,err=self:_newOverlay("ContextMenu"); if not owner then return nil,err end
+        local function trim(level)
+            while #owner.Panels>=level do local panel=table.remove(owner.Panels); if panel.Owner then panel.Owner.Destroyed=true; cleanup(panel.Owner) end; window:_forgetSkin(panel.Frame); panel.Frame:Destroy() end
+        end
+        local openPanel
+        local function choose(panel,index)
+            local item=panel.Items[index]; if not item or item.Separator or item.Disabled then return false end
+            if item.Items then
+                local p=panel.Frame.Position; local y=panel.Rows[index].AbsolutePosition.Y-window.Root.AbsolutePosition.Y
+                local x=p.X.Offset+width+4; if x+width>view.X-8 then x=p.X.Offset-width-4 end
+                openPanel(item.Items,Vector2.new(x,y),panel.Level+1); return true
+            end
+            owner:Close("selected")
+            local function run() call(window,item.Callback,item) end
+            if item.Confirm then window:Confirm({Title=item.Text,Content=item.Confirm,OnConfirm=run}) else run() end
+            return true
+        end
+        openPanel=function(entries,p,level)
+            trim(level)
+            local height=math.min(view.Y-16,#entries*32+12); height=math.max(44,height)
+            local panel={Items=entries,Rows={},Level=level,Selection=1,Owner={_connections={}}}
+            panel.Frame=frame(window,owner.Frame,{Name="ContextPanel",Position=U2(clamp(p.X,8,math.max(8,view.X-width-8)),clamp(p.Y,8,math.max(8,view.Y-height-8))),Size=U2(width,height),BorderSizePixel=1,ZIndex=210+level*3},"Surface")
+            window:_bind(panel.Frame,{BorderColor3="Border"}); bevel(window,panel.Frame,false)
+            local scroll=ui(window,"ScrollingFrame",{Parent=panel.Frame,Position=U2(6,6),Size=UDim2.new(1,-12,1,-12),CanvasSize=U2(0,#entries*32),ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0,ClipsDescendants=true,ZIndex=panel.Frame.ZIndex+1},{ScrollBarImageColor3="Border"})
+            if #entries==0 then label(window,scroll,window:_text("empty"),{Size=UDim2.new(1,0,0,28),ZIndex=scroll.ZIndex+1},"Muted") end
+            for index,item in ipairs(entries) do
+                if item.Separator then frame(window,scroll,{Position=U2(4,(index-1)*32+15),Size=UDim2.new(1,-8,0,1),ZIndex=scroll.ZIndex+1},"Border")
+                else
+                    local node=button(window,panel.Owner,scroll,item.Text..(item.Items and "  >" or ""),{Position=U2(0,(index-1)*32),Size=UDim2.new(1,-6,0,30),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=scroll.ZIndex+1},function() choose(panel,index) end)
+                    padButton(window,node,item.Icon and 32 or 10,10)
+                    if item.Icon then iconSlot(window,node,item.Icon,nil,16,U2(-24,7),"Text") end
+                    if item.Disabled then node.Active=false; window:_bind(node,{TextColor3="Muted"}) end
+                    panel.Rows[index]=node
+                end
+            end
+            owner.Panels[level]=panel
+        end
+        openPanel(items,position,1)
+        function owner:Select(index) local panel=self.Panels[#self.Panels]; return choose(panel,index) end
+        function owner:OnKey(key)
+            local panel=self.Panels[#self.Panels]; if not panel then return true end
+            if key=="Escape" then self:Close("escape")
+            elseif key=="Left" and #self.Panels>1 then trim(#self.Panels)
+            elseif key=="Enter" or key=="Return" or key=="Right" then choose(panel,panel.Selection)
+            elseif key=="Up" or key=="Down" then
+                for _=1,#panel.Items do
+                    panel.Selection=(panel.Selection-1+(key=="Up" and -1 or 1))%#panel.Items+1
+                    local item=panel.Items[panel.Selection]; if not item.Separator and not item.Disabled then window:_focusObject(panel.Rows[panel.Selection]); break end
+                end
+            else return false end
+            return true
+        end
+        return owner
+    end
+    function Control:SetContextMenu(items)
+        assert(type(items)=="table" or type(items)=="function","Context menu requires items or a provider")
+        self._contextItems=items
+        if self._contextConnected then return self end
+        self._contextConnected=true
+        local function show(position)
+            if self.Disabled or self.Destroyed then return end
+            local value=self._contextItems; if type(value)=="function" then value=value(self) end
+            self._window:ContextMenu({Items=value},position)
+        end
+        connect(self,self.Frame.InputBegan,function(input) if input.UserInputType==Enum.UserInputType.MouseButton2 then show(point(input)) end end)
+        connect(self,self.TitleLabel.TouchLongPress,function(positions,state) if state==Enum.UserInputState.Begin and positions[1] then self._touchWasLongPress=true; show(positions[1]) end end)
+        return self
+    end
+    function Window:_advancedInput(input,processed)
+        if input.UserInputType~=Enum.UserInputType.Keyboard or self._binding then return false end
+        local key=input.KeyCode.Name
+        if key=="LeftShift" or key=="RightShift" then self._shiftDown=true end
+        if input.KeyCode==self.CommandKey and input.KeyCode~=Enum.KeyCode.Unknown and not processed and self.OpenCommandPalette then self:OpenCommandPalette(); return true end
+        if self._overlay and self._overlay.OnKey then return self._overlay:OnKey(key) end
+        if self._shown==false or self.Minimized or processed or self._dialog or UserInputService:GetFocusedTextBox() then return false end
+        if self._activeAdvanced and self._activeAdvanced._onKey and self._activeAdvanced:_onKey(key) then return true end
+        if key=="Tab" then self:FocusNext(self._shiftDown); return true end
+        if key=="Escape" and self._openDropdown then self._openDropdown:SetOpen(false); return true end
+        if key=="Enter" or key=="Return" or key=="Space" then
+            local entry=self._keyboardFocus and self._focusTargets[self._keyboardFocus]
+            if entry and entry.Object.Parent and entry.Object.Active~=false then entry.Activate(); return true end
+        end
+        return false
+    end
+    local inputBegan=Window._inputBegan
+    function Window:_inputBegan(input,processed) if self:_advancedInput(input,processed) then return end; return inputBegan(self,input,processed) end
+    local inputEnded=Window._inputEnded
+    function Window:_inputEnded(input)
+        if input.KeyCode and (input.KeyCode.Name=="LeftShift" or input.KeyCode.Name=="RightShift") then self._shiftDown=false end
+        return inputEnded(self,input)
+    end
+    for _,name in ipairs({"Hide","Minimize"}) do
+        local old=Window[name]; Window[name]=function(self,...) self:_closeOverlay(name); return old(self,...) end
+    end
+    local selectTab=Tab.Select
+    function Tab:Select(...)
+        self._window:_closeOverlay("tab"); self._window._activeAdvanced=nil; self._window._keyboardFocus=nil
+        if self._window._focusRing then self._window._focusRing.Visible=false end
+        return selectTab(self,...)
+    end
+    local dialog=Window.Dialog
+    function Window:Dialog(...) self:_closeOverlay("dialog"); return dialog(self,...) end
+    local destroy=Window.Destroy
+    function Window:Destroy(...) self:_closeOverlay("destroyed"); return destroy(self,...) end
+end
+
+-- END RETRO170 OVERLAYS
+
+-- BEGIN RETRO170 VIRTUAL
+-- A fixed-height recycled viewport backs lists, tables and tree rows.
+do
+    local function dense(value,limit)
+        assert(type(value)=="table" and #value<=limit,"Dataset exceeds its item limit")
+        for key in pairs(value) do assert(type(key)=="number" and key%1==0 and key>=1 and key<=#value,"Dataset must be a dense array") end
+        return Library._copyConfigData(value)
+    end
+    local function id(value)
+        assert(type(value)=="string" or finite(value),"Item key must be text or a finite number")
+        value=tostring(value); assert(#value>=1 and #value<=128,"Item key must be 1–128 bytes"); return value
+    end
+    local function columns(value)
+        assert(type(value)=="table" and #value>=1 and #value<=16,"Table needs 1–16 columns")
+        local result,seen={},{}
+        for _,column in ipairs(value) do
+            assert(type(column)=="table" and type(column.Key)=="string" and #column.Key>=1 and #column.Key<=64 and not seen[column.Key],"Column Key must be unique")
+            local width=column.Width; local weight=column.Weight or 1; local minimum=column.MinWidth or 88
+            assert(width==nil or finite(width) and width>=48 and width<=1200,"Column Width must be 48–1200 pixels")
+            assert(finite(weight) and weight>0 and weight<=100 and finite(minimum) and minimum>=48 and minimum<=600,"Invalid column Weight/MinWidth")
+            assert(column.Format==nil or type(column.Format)=="function","Column Format must be a function")
+            assert(column.Sortable==nil or type(column.Sortable)=="boolean","Column Sortable must be boolean")
+            seen[column.Key]=true; result[#result+1]={Key=column.Key,Title=tostring(column.Title or column.Key),Width=width,Weight=weight,MinWidth=minimum,Format=column.Format,Sortable=column.Sortable~=false}
+        end
+        return result
+    end
+    local function build(section,options,kind)
+        options=options or {}; local height=options.Height or 280; local rowHeight=options.RowHeight or 32
+        assert(finite(height) and height>=120 and height<=900,"View Height must be 120–900")
+        assert(finite(rowHeight) and rowHeight>=28 and rowHeight<=80,"RowHeight must be 28–80")
+        assert(options.Format==nil or type(options.Format)=="function","List Format must be a function")
+        assert(options.GetKey==nil or type(options.GetKey)=="function","GetKey must be a function")
+        local schema=kind=="DataTable" and columns(options.Columns) or nil
+        assert(options.DataState==nil or Library:_isState(options.DataState),"DataState must be a RetroBox State")
+        local initial=dense(options.DataState and options.DataState:Get() or options.Items or options.Rows or {},20000)
+        local self=base(section,kind,options,height); self.Persist=options.Persist==true; self.Items={}; self.Keys={}; self._indices={}; self._pool={}; self._query=""; self.RowHeight=rowHeight
+        self.Columns=schema; self._loading=false; self._top=26; self._sorting=nil
+        local window=self._window; local searchHeight=options.Searchable==false and 0 or 34; local headerHeight=schema and 32 or 0
+        self.SearchInput=textbox(window,self.Frame,"",{Position=U2(0,26),Size=UDim2.new(1,0,0,30),PlaceholderText=window:_text("search"),Visible=searchHeight>0})
+        self.Header=frame(window,self.Frame,{Position=U2(0,26+searchHeight),Size=UDim2.new(1,0,0,headerHeight),BackgroundTransparency=1,Visible=schema~=nil,ClipsDescendants=true})
+        self.HeaderContent=frame(window,self.Header,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1})
+        self._headers={}
+        self.Viewport=ui(window,"ScrollingFrame",{Parent=self.Frame,Position=U2(0,26+searchHeight+headerHeight),Size=UDim2.new(1,0,1,-34-searchHeight-headerHeight),CanvasSize=U2(0,0),CanvasPosition=Vector2.new(0,0),AutomaticCanvasSize=Enum.AutomaticSize.None,ScrollingDirection=schema and Enum.ScrollingDirection.XY or Enum.ScrollingDirection.Y,ScrollBarThickness=6,BackgroundTransparency=0,BorderSizePixel=1,ClipsDescendants=true,Active=true},{BackgroundColor3="Inset",BorderColor3="Border",ScrollBarImageColor3="Border"})
+        self.EmptyLabel=label(window,self.Viewport,options.EmptyText or window:_text("noData"),{Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,TextWrapped=true},"Muted")
+        local function keyFor(item,index)
+            local key=options.GetKey and options.GetKey(item,index) or type(item)=="table" and (item.Id or item.Key) or index
+            return id(key)
+        end
+        local function display(item,index,column)
+            local callback=column and column.Format or options.Format
+            local value=item; if column then value=type(item)=="table" and item[column.Key] or nil end
+            if callback then
+                local ok,text=window:_protected(callback,{ControlId=self.Id,Phase="Format"},value,item,index)
+                return ok and tostring(text or "") or window:_text("unavailable")
+            end
+            if column then return value==nil and "—" or tostring(value) end
+            return type(item)=="table" and tostring(item.Text or item.Title or item.Name or self.Keys[index]) or tostring(item)
+        end
+        function self:_normalize(value)
+            if value==nil then return nil end
+            value=id(value); assert(self._keyIndex[value],"Unknown item key: "..value); return value
+        end
+        function self:_selectIndex(position,activate)
+            local index=self._indices[position]; if not index or self.Disabled or self._loading then return false end
+            self._cursor=position; self:SetValue(self.Keys[index]); window._activeAdvanced=self
+            if activate and self._activateNode then self:_activateNode(index) end
+            call(window,options.OnSelect,Library._copyConfigData(self.Items[index]),self.Keys[index],index)
+            return true
+        end
+        function self:_row()
+            local row={_connections={},Labels={}}; row._section=self._section
+            row.Button=button(window,row,self.Viewport,"",{Size=UDim2.new(1,-8,0,rowHeight-2),TextXAlignment=Enum.TextXAlignment.Left},function()
+                if not row._longConsumed then self:_selectIndex(row.Position,true) end
+            end)
+            local function context(position)
+                if not row.Index or not self._contextItems then return end
+                row._longConsumed=true; self:_selectIndex(row.Position,false)
+                local items=self._contextItems
+                if type(items)=="function" then items=items(Library._copyConfigData(self.Items[row.Index]),self.Keys[row.Index],self) end
+                window:ContextMenu({Items=items},position)
+            end
+            connect(row,row.Button.InputBegan,function(input)
+                if pointer(input) then row._longConsumed=false; window._activeAdvanced=self end
+                if input.UserInputType==Enum.UserInputType.MouseButton2 then context(point(input)) end
+            end)
+            connect(row,row.Button.TouchLongPress,function(positions,state) if state==Enum.UserInputState.Begin and positions[1] then context(positions[1]) end end)
+            for index=1,schema and #schema or 1 do row.Labels[index]=label(window,row.Button,"",{Position=U2(10,0),Size=UDim2.new(1,-20,1,0),TextTruncate=Enum.TextTruncate.AtEnd,TextSize=13}) end
+            return row
+        end
+        function self:_columnLayout()
+            local available=math.max(1,self.Viewport.AbsoluteSize.X/math.max(.01,window._actualScale or 1)-8)
+            self._columnWidths={}
+            if not schema then self._contentWidth=available; self._columnWidths[1]=available; return end
+            local fixed,weight=0,0
+            for _,column in ipairs(schema) do if column.Width then fixed=fixed+column.Width else weight=weight+column.Weight end end
+            local x=0
+            for index,column in ipairs(schema) do
+                local width=column.Width or math.max(column.MinWidth,(available-fixed)*column.Weight/math.max(1,weight))
+                self._columnWidths[index]=width
+                if self._headers[index] then self._headers[index].Position=U2(x,0); self._headers[index].Size=U2(width-3,headerHeight-2) end
+                x=x+width
+            end
+            self._contentWidth=x; self.HeaderContent.Position=U2(-self.Viewport.CanvasPosition.X,0); self.HeaderContent.Size=U2(x,headerHeight)
+        end
+        function self:_layoutColumns(row)
+            local x=0
+            for index,width in ipairs(self._columnWidths) do row.Labels[index].Position=U2(x+10,0); row.Labels[index].Size=UDim2.new(0,width-20,1,0); x=x+width end
+        end
+        function self:_render()
+            if self.Destroyed or self._renderingView or self._updatingItems then return end
+            self._renderingView=true
+            local scale=math.max(.01,window._actualScale or 1)
+            local visibleHeight=math.max(1,self.Viewport.AbsoluteSize.Y/scale)
+            local first=math.floor(self.Viewport.CanvasPosition.Y/self.RowHeight)+1
+            local count=math.min(64,math.ceil(visibleHeight/self.RowHeight)+2,#self._indices)
+            self:_columnLayout()
+            self.Viewport.CanvasSize=U2(schema and self._contentWidth+8 or 0,#self._indices*self.RowHeight)
+            self.EmptyLabel.Visible=self._loading or #self._indices==0
+            self.EmptyLabel.Text=self._loading and window:_text("loading") or options.EmptyText or window:_text("noData")
+            for slot=1,count do
+                local row=self._pool[slot]; if not row then row=self:_row(); self._pool[slot]=row end
+                local position=first+slot-1; local index=self._indices[position]
+                row.Position=position; row.Index=index; row.Disabled=self.Disabled or self._loading
+                row.Button.Visible=index~=nil and not self._loading; row.Button.Active=not row.Disabled
+                if index then
+                    row.Button.Position=U2(0,(position-1)*self.RowHeight); row.Button.Size=UDim2.new(0,self._contentWidth,0,self.RowHeight-2)
+                    self:_layoutColumns(row)
+                    for column,labelObject in ipairs(row.Labels) do labelObject.Text=display(self.Items[index],index,schema and schema[column] or nil) end
+                    local selected=self.Value==self.Keys[index]
+                    window:_bind(row.Button,{BackgroundColor3=selected and "Accent" or "Inset"})
+                    for _,labelObject in ipairs(row.Labels) do window:_bind(labelObject,{TextColor3=selected and "AccentText" or "Text"}) end
+                    if self._renderNode then self:_renderNode(row,index) end
+                end
+            end
+            for slot=count+1,#self._pool do self._pool[slot].Button.Visible=false; self._pool[slot].Index=nil end
+            self._renderingView=false
+        end
+        function self:_reindex(reset)
+            local indices={}
+            for index,item in ipairs(self.Items) do
+                local text={}
+                for _,column in ipairs(schema or {false}) do text[#text+1]=display(item,index,column or nil) end
+                local matches=self._query=="" or table.concat(text," "):lower():find(self._query,1,true)~=nil
+                if matches and self._filter then local ok,value=window:_protected(self._filter,{ControlId=self.Id,Phase="Filter"},Library._copyConfigData(item),self.Keys[index]); matches=ok and value==true end
+                if matches then indices[#indices+1]=index end
+            end
+            if self._sorting then
+                local sort=self._sorting
+                table.sort(indices,function(a,b)
+                    local x,y=self.Items[a][sort.Key],self.Items[b][sort.Key]
+                    if x==y then return a<b end
+                    if type(x)=="number" and type(y)=="number" then return sort.Descending and x>y or not sort.Descending and x<y end
+                    x,y=tostring(x or ""),tostring(y or ""); return sort.Descending and x>y or not sort.Descending and x<y
+                end)
+            end
+            self._indices=indices; self._cursor=nil
+            for position,index in ipairs(indices) do if self.Value==self.Keys[index] then self._cursor=position; break end end
+            local maximum=math.max(0,#indices*self.RowHeight-self.Viewport.AbsoluteSize.Y/math.max(.01,window._actualScale or 1))
+            if reset or self.Viewport.CanvasPosition.Y>maximum then self.Viewport.CanvasPosition=Vector2.new(self.Viewport.CanvasPosition.X,reset and 0 or maximum) end
+            self:_render()
+        end
+        function self:SetItems(items)
+            local values=dense(items,20000); local keys,lookup={},{}
+            for index,item in ipairs(values) do
+                if schema then assert(type(item)=="table","Table rows must be records") end
+                local key=keyFor(item,index); assert(not lookup[key],"Duplicate item key: "..key)
+                keys[index]=key; lookup[key]=index
+            end
+            local top=math.floor(self.Viewport.CanvasPosition.Y/self.RowHeight)+1
+            local anchor=self._indices[top] and self.Keys[self._indices[top]]; local offset=self.Viewport.CanvasPosition.Y%self.RowHeight
+            self._updatingItems=true
+            self.Items,self.Keys,self._keyIndex=values,keys,lookup
+            if self.Value and not lookup[self.Value] then self:SetValue(nil,true) end
+            self._updatingItems=false; self:_reindex(false)
+            if anchor then
+                for position,index in ipairs(self._indices) do if self.Keys[index]==anchor then
+                    local maximum=math.max(0,#self._indices*self.RowHeight-self.Viewport.AbsoluteSize.Y/math.max(.01,window._actualScale or 1))
+                    local y=clamp((position-1)*self.RowHeight+offset,0,maximum)
+                    if self.Viewport.CanvasPosition.Y~=y then self.Viewport.CanvasPosition=Vector2.new(self.Viewport.CanvasPosition.X,y) end
+                    break
+                end end
+            end
+            self:_render(); return self
+        end
+        self.SetRows=self.SetItems
+        function self:SetContextMenu(items) assert(type(items)=="table" or type(items)=="function","Context menu needs items or provider"); self._contextItems=items; return self end
+        function self:GetItems() return Library._copyConfigData(self.Items) end
+        function self:GetSelected() local index=self.Value and self._keyIndex[self.Value]; return index and Library._copyConfigData(self.Items[index]) or nil,self.Value end
+        function self:SetFilter(callback) assert(callback==nil or type(callback)=="function","Filter must be a function or nil"); self._filter=callback; self:_reindex(true); return self end
+        function self:SetQuery(query) assert(type(query)=="string" and #query<=256,"Query must be up to 256 bytes"); self._query=query:lower(); self:_reindex(true); return self end
+        function self:Sort(key,descending)
+            assert(schema,"Sort is only supported by DataTable")
+            local found=false; for _,column in ipairs(schema) do if column.Key==key and column.Sortable then found=true end end
+            assert(found,"Column is not sortable: "..tostring(key)); assert(descending==nil or type(descending)=="boolean","Descending must be boolean")
+            self._sorting={Key=key,Descending=descending==true}; self:_reindex(true); return self
+        end
+        function self:SetLoading(value) assert(type(value)=="boolean","Loading must be boolean"); self._loading=value; self:_render(); return self end
+        function self:ScrollToKey(key)
+            key=id(key); local found
+            for position,index in ipairs(self._indices) do if self.Keys[index]==key then found=position; break end end
+            if not found then return false end
+            local height=self.Viewport.AbsoluteSize.Y/math.max(.01,window._actualScale or 1)
+            self.Viewport.CanvasPosition=Vector2.new(self.Viewport.CanvasPosition.X,clamp((found-1)*self.RowHeight,0,math.max(0,#self._indices*self.RowHeight-height)))
+            self:_render(); return true
+        end
+        function self:GetViewStats() return {Items=#self.Items,Filtered=#self._indices,AllocatedRows=#self._pool,RowHeight=self.RowHeight} end
+        function self:_onKey(key)
+            if not self.Frame.Visible or self.Destroyed or self.Disabled then return false end
+            local parent=self.Frame.Parent; while parent and parent~=window.Gui do if parent:IsA("GuiObject") and parent.Visible==false then return false end; parent=parent.Parent end
+            if key=="Up" or key=="Down" or key=="Home" or key=="End" or key=="PageUp" or key=="PageDown" then
+                local index=self._cursor or 1
+                if key=="Up" then index=index-1 elseif key=="Down" then index=index+1 elseif key=="Home" then index=1 elseif key=="End" then index=#self._indices else index=index+(key=="PageUp" and -5 or 5) end
+                index=clamp(index,1,math.max(1,#self._indices)); self:_selectIndex(index,false)
+                local source=self._indices[index]; if source then self:ScrollToKey(self.Keys[source]) end
+                return true
+            elseif key=="Enter" or key=="Return" then return self:_selectIndex(self._cursor or 1,true) end
+            return false
+        end
+        if schema then
+            for index,column in ipairs(schema) do
+                local node=button(window,self,self.HeaderContent,column.Title,{Position=U2(0,0),Size=U2(100,headerHeight-2),TextTruncate=Enum.TextTruncate.AtEnd,TextSize=12},function()
+                    if column.Sortable then self:Sort(column.Key,self._sorting and self._sorting.Key==column.Key and not self._sorting.Descending or false) end
+                end)
+                self._headers[index]=node; if not column.Sortable then node.Active=false end
+            end
+        end
+        connect(self,self.Viewport:GetPropertyChangedSignal("CanvasPosition"),function() self:_render() end)
+        connect(self,self.Viewport:GetPropertyChangedSignal("AbsoluteSize"),function() self:_render() end)
+        connect(self,self.SearchInput:GetPropertyChangedSignal("Text"),function() self:SetQuery(self.SearchInput.Text:sub(1,256)) end)
+        self:Manage(function() for _,row in ipairs(self._pool) do row.Destroyed=true; cleanup(row) end; if window._activeAdvanced==self then window._activeAdvanced=nil end end)
+        self._callback=options.Callback; self._listeners={}; self._keyIndex={}
+        local loaded,loadError=pcall(self.SetItems,self,initial)
+        if not loaded then self:Destroy(); error(loadError,2) end
+        local value=options.Default; init(self,options,value)
+        -- Data updates have a separate source; selection stays a normal flag.
+        if options.DataState then
+            assert(Library:_isState(options.DataState),"DataState must be a RetroBox State")
+            self:Manage(options.DataState:Subscribe(function(value) self:SetItems(value) end,true),"Disconnect")
+        end
+        return self
+    end
+    function Section:AddVirtualList(options) return build(self,options,"VirtualList") end
+    function Section:AddDataTable(options) return build(self,options,"DataTable") end
+    function Section:AddTreeView(options)
+        options=options or {}; assert(options.NodesState==nil or Library:_isState(options.NodesState),"NodesState must be a RetroBox State"); local parameters={}; for k,v in pairs(options) do parameters[k]=v end
+        parameters.Items={}; parameters.Rows=nil; parameters.Default=nil; parameters.State=nil; parameters.DataState=nil; parameters.Format=function(item) return string.rep("  ",item.Depth)..item.Text end
+        parameters.GetKey=function(item) return item.Id end
+        local self=build(self,parameters,"TreeView"); self.Nodes={}; self._expanded={}; self._nodesById={}; self._allNodes={}
+        local function flatten(nodes,expanded,query)
+            local result={}
+            local function visit(node,depth)
+                local match=query=="" or node.Text:lower():find(query,1,true)~=nil
+                local children={}; if expanded[node.Id] or query~="" then for _,child in ipairs(node.Children) do
+                    local before=#result; visit(child,depth+1)
+                    if #result>before then for i=before+1,#result do children[#children+1]=result[i] end; for i=#result,before+1,-1 do result[i]=nil end end
+                end end
+                if match or #children>0 then result[#result+1]={Id=node.Id,Text=node.Text,Depth=depth,HasChildren=#node.Children>0,Expanded=expanded[node.Id]==true,Icon=node.Icon}; for _,child in ipairs(children) do result[#result+1]=child end end
+            end
+            for _,node in ipairs(nodes) do visit(node,0) end
+            return result
+        end
+        function self:_rebuildTree()
+            local selected=self.Value
+            self:SetItems(flatten(self.Nodes,self._expanded,self._treeQuery or ""))
+            if selected and self._keyIndex[selected] then self:SetValue(selected,true) end
+        end
+        function self:SetNodes(value)
+            value=dense(value,5000); local map,all={},{}; local count=0
+            local function normalize(nodes,parent,depth)
+                assert(depth<=16,"Tree depth limit is 16")
+                local result={}
+                for _,node in ipairs(nodes) do
+                    count=count+1; assert(count<=5000 and type(node)=="table","Tree node limit is 5000")
+                    local key=id(node.Id); assert(not map[key],"Duplicate node Id: "..key); resolveIcon(node.Icon)
+                    local text=tostring(node.Text or node.Title or key); assert(#text<=2048,"Node text is too long")
+                    local item={Id=key,Text=text,Icon=node.Icon,Parent=parent}; map[key]=item; all[#all+1]=item
+                    item.Children=normalize(node.Children or {},key,depth+1); result[#result+1]=item
+                end
+                return result
+            end
+            local nodes=normalize(value,nil,0); self.Nodes,self._nodesById,self._allNodes=nodes,map,all
+            for key in pairs(self._expanded) do if not map[key] then self._expanded[key]=nil end end
+            self:_rebuildTree(); return self
+        end
+        function self:SetExpanded(key,value)
+            key=id(key); assert(self._nodesById[key],"Unknown tree node")
+            assert(type(value)=="boolean","Expanded must be boolean"); self._expanded[key]=value; self:_rebuildTree(); return self
+        end
+        function self:IsExpanded(key) return self._expanded[id(key)]==true end
+        function self:ExpandAll(value) value=value~=false; for _,node in ipairs(self._allNodes) do self._expanded[node.Id]=value end; self:_rebuildTree(); return self end
+        function self:SetQuery(query) assert(type(query)=="string" and #query<=256,"Tree query must be up to 256 bytes"); self._treeQuery=query:lower(); self:_rebuildTree(); return self end
+        function self:_activateNode(index) local item=self.Items[index]; if item and item.HasChildren then self:SetExpanded(item.Id,not self:IsExpanded(item.Id)) end end
+        function self:_renderNode(row,index)
+            local item=self.Items[index]
+            if not row.NodeIcon then row.NodeIcon=iconSlot(self._window,row.Button,false,nil,16,U2(10,7),"Text") end
+            row.NodeIcon.Frame.Position=U2(10+item.Depth*12,7)
+            row.NodeIcon:Set(item.Icon or (item.HasChildren and (item.Expanded and "chevron-down" or "chevron-right") or false))
+            row.NodeIcon:SetRole(self.Value==item.Id and "AccentText" or "Text")
+            row.Labels[1].Position=U2(32+item.Depth*12,0); row.Labels[1].Size=UDim2.new(1,-42-item.Depth*12,1,0); row.Labels[1].Text=item.Text
+        end
+        local onKey=self._onKey
+        function self:_onKey(key)
+            local item=self.Value and self._nodesById[self.Value]
+            if item and key=="Right" and #item.Children>0 then self:SetExpanded(item.Id,true); return true end
+            if item and key=="Left" then if self:IsExpanded(item.Id) then self:SetExpanded(item.Id,false) elseif item.Parent and self._keyIndex[item.Parent] then self:SetValue(item.Parent); self:ScrollToKey(item.Parent) end; return true end
+            return onKey(self,key)
+        end
+        local ready,reason=pcall(function()
+            self:SetNodes(options.Nodes or {}); if options.Default then self:SetValue(options.Default,true) end
+            if options.State then self:BindState(options.State,{TwoWay=options.TwoWay~=false}) end
+        end)
+        if not ready then self:Destroy(); error(reason,2) end
+        if options.NodesState then self:Manage(options.NodesState:Subscribe(function(value) self:SetNodes(value) end,true),"Disconnect") end
+        return self
+    end
+end
+
+-- END RETRO170 VIRTUAL
+
+-- BEGIN RETRO170 THEMES
+-- Local editable theme catalogs persist in the normal profile envelope.
+do
+    local official={Retro98=true,Terminal=true,GameBoy=true,Paper=true,Midnight=true,Monokai=true}
+    local function themeName(name)
+        assert(type(name)=="string" and #name>=1 and #name<=48 and not name:find("[%c]") and not name:match("^__retrobox/"),"Theme name must be 1–48 bytes without control characters")
+        return name
+    end
+    local function colors(value)
+        assert(type(value)=="table","Theme colors must be a table")
+        local result={}
+        for _,role in ipairs(roleNames) do assert(value[role]~=nil,"Missing theme color: "..role); result[role]=parseColor(value[role]) end
+        for role in pairs(value) do assert(result[role],"Unknown theme color: "..tostring(role)) end
+        return result
+    end
+    local function encodeColors(value)
+        local result={}; for _,role in ipairs(roleNames) do result[role]=hex(value[role]) end; return result
+    end
+    function Window:GetThemeRoles() return copy(roleNames) end
+    function Window:GetThemeColors(name)
+        local value=self._themeOverrides[name] or Library.Themes[name]; assert(value,"Unknown theme: "..tostring(name)); return copy(value)
+    end
+    function Window:CreateTheme(name,baseName)
+        themeName(name); baseName=baseName or self.Theme
+        assert(not official[name] and not self._customThemes[name] and not Library.Themes[name] and not self._themeOverrides[name],"Theme name already exists or is official")
+        local count=0; for _ in pairs(self._customThemes) do count=count+1 end; assert(count<32,"Custom theme limit is 32")
+        local value=self:GetThemeColors(baseName)
+        self._customThemes[name]={Base=baseName,Colors=copy(value),Original=copy(value)}; self._themeOverrides[name]=copy(value)
+        self:_syncSettings(); self:_scheduleSave(); return name
+    end
+    function Window:DuplicateTheme(source,name) return self:CreateTheme(name,source) end
+    function Window:SetThemeColor(name,role,color)
+        local theme=self._customThemes[name]; assert(theme and not official[name],"Only local custom themes can be edited")
+        assert(theme.Colors[role],"Unknown theme role: "..tostring(role)); color=parseColor(color)
+        theme.Colors[role]=color; self._themeOverrides[name][role]=color
+        if self.Theme==name then if role=="Accent" then self.Accent=nil end; self:_applyTheme() end
+        self:_scheduleSave(); if self._themeStudio then self._themeStudio:Refresh() end; return self
+    end
+    function Window:RestoreTheme(name)
+        local theme=self._customThemes[name]; assert(theme,"Only local custom themes can be restored")
+        theme.Colors=copy(theme.Original); self._themeOverrides[name]=copy(theme.Original)
+        if self.Theme==name then self:_applyTheme() end
+        self:_scheduleSave(); if self._themeStudio then self._themeStudio:Refresh() end; return self
+    end
+    function Window:DeleteTheme(name)
+        local theme=self._customThemes[name]; assert(theme and not official[name],"Official or unknown themes cannot be deleted")
+        if self.Theme==name then self:SetTheme((self._themeOverrides[theme.Base] or Library.Themes[theme.Base]) and theme.Base or "Retro98") end
+        self._customThemes[name]=nil; self._themeOverrides[name]=nil
+        self:_syncSettings(); self:_scheduleSave(); if self._themeStudio then self._themeStudio:Refresh() end; return self
+    end
+    function Window:ExportTheme(name)
+        name=name or self.Theme; themeName(name)
+        local record=self._customThemes[name]
+        return HttpService:JSONEncode({Library="RetroBox Theme",Schema=1,Name=name,Base=record and record.Base or name,Colors=encodeColors(self:GetThemeColors(name))})
+    end
+    function Window:ImportTheme(source,options)
+        options=options or {}
+        local ok,result=pcall(function()
+            assert(type(options)=="table","ImportTheme options must be a table")
+            assert(type(source)~="string" or #source<=16384,"Theme payload exceeds 16 KiB")
+            local data=Library._copyConfigData(type(source)=="string" and HttpService:JSONDecode(source) or source)
+            assert(type(data)=="table" and data.Library=="RetroBox Theme" and data.Schema==1,"Unsupported theme format")
+            assert(#HttpService:JSONEncode(data)<=16384,"Theme payload exceeds 16 KiB")
+            local name=themeName(options.Name or data.Name); assert(not official[name] and not Library.Themes[name],"Imported themes cannot overwrite registered or official themes")
+            assert(options.Replace==nil or type(options.Replace)=="boolean","Replace must be boolean")
+            local existing=self._customThemes[name]; assert(not existing or options.Replace,"Custom theme already exists")
+            local value=colors(data.Colors)
+            local count=0; for _ in pairs(self._customThemes) do count=count+1 end; assert(existing or count<32,"Custom theme limit is 32")
+            local base=type(data.Base)=="string" and data.Base or "Retro98"; themeName(base)
+            self._customThemes[name]={Base=base,Colors=copy(value),Original=copy(value)}; self._themeOverrides[name]=copy(value)
+            self:_syncSettings(); if self.Theme==name then self:_applyTheme() end
+            self:_scheduleSave(); return name
+        end)
+        return ok,result
+    end
+    function Window:CheckThemeContrast(name)
+        local value=self:GetThemeColors(name or self.Theme); local results={}
+        for _,background in ipairs({"Background","Surface","Inset","Highlight"}) do
+            for _,role in ipairs({"Text","Muted"}) do local ratio=Library:ContrastRatio(value[role],value[background]); results[#results+1]={Role=role,Surface=background,Ratio=ratio,Target=4.5,Pass=ratio>=4.5} end
+        end
+        for _,role in ipairs({"Success","Danger","Accent"}) do local ratio=Library:ContrastRatio(value[role],value.Inset); results[#results+1]={Role=role,Surface="Inset",Ratio=ratio,Target=role=="Accent" and 3 or 4.5,Pass=ratio>=(role=="Accent" and 3 or 4.5)} end
+        local ratio=Library:ContrastRatio(value.AccentText,value.Accent); results[#results+1]={Role="AccentText",Surface="Accent",Ratio=ratio,Target=4.5,Pass=ratio>=4.5}
+        return results
+    end
+    function Window:_exportAdvanced()
+        local themes={}
+        for name,record in pairs(self._customThemes) do themes[name]={Base=record.Base,Colors=encodeColors(record.Colors),Original=encodeColors(record.Original)} end
+        local dashboards={}; for name,widget in pairs(self._dashboards) do if not widget.Destroyed then dashboards[name]=widget:GetLayout() end end
+        return {ShowDescriptions=self.ShowDescriptions,TextScale=self.TextScale,Tooltips={Enabled=self.TooltipsEnabled,Delay=self.TooltipDelay,MaxWidth=self.TooltipMaxWidth},CommandKey=self.CommandKey.Name,Themes=themes,Dashboards=dashboards}
+    end
+    function Window:_prepareAdvanced(value)
+        if value==nil then return nil end
+        value=Library._copyConfigData(value); assert(type(value)=="table","Advanced appearance must be a table")
+        local result={}
+        if value.ShowDescriptions~=nil then assert(type(value.ShowDescriptions)=="boolean","Invalid description preference"); result.ShowDescriptions=value.ShowDescriptions end
+        if value.TextScale~=nil then assert(finite(value.TextScale) and value.TextScale>=.8 and value.TextScale<=1.4,"Invalid TextScale"); result.TextScale=value.TextScale end
+        if value.Tooltips~=nil then
+            local t=value.Tooltips; assert(type(t)=="table" and type(t.Enabled)=="boolean" and finite(t.Delay) and t.Delay>=0 and t.Delay<=3 and finite(t.MaxWidth) and t.MaxWidth>=160 and t.MaxWidth<=640,"Invalid tooltip preference")
+            result.Tooltips=t
+        end
+        if value.CommandKey~=nil then result.CommandKey=keycode(value.CommandKey) end
+        if value.Themes~=nil then
+            assert(type(value.Themes)=="table","Custom themes must be a map"); result.Themes={}; local count=0
+            for name,record in pairs(value.Themes) do
+                themeName(name); count=count+1; assert(count<=32 and not official[name] and not Library.Themes[name],"Invalid or protected custom theme")
+                assert(type(record)=="table","Theme record must be a table"); themeName(record.Base)
+                result.Themes[name]={Base=record.Base,Colors=colors(record.Colors),Original=colors(record.Original or record.Colors)}
+            end
+        end
+        if value.Dashboards~=nil then
+            assert(type(value.Dashboards)=="table","Dashboard layouts must be a map"); result.Dashboards={}; local count=0
+            for name,layout in pairs(value.Dashboards) do
+                count=count+1; assert(count<=128 and type(name)=="string" and #name<=128,"Invalid dashboard Id")
+                assert(type(layout)=="table" and type(layout.Order)=="table" and type(layout.Widgets)=="table","Invalid dashboard layout")
+                if self._dashboards[name] then result.Dashboards[name]=self._dashboards[name]:ValidateLayout(layout)
+                else result.Dashboards[name]=Library._copyConfigData(layout) end
+            end
+        end
+        return result
+    end
+    function Window:_applyAdvanced(value,deferUI)
+        if not value then return end
+        if value.Themes then
+            for name in pairs(self._customThemes) do self._themeOverrides[name]=nil end
+            self._customThemes=copy(value.Themes); for name,record in pairs(value.Themes) do self._themeOverrides[name]=copy(record.Colors) end
+        end
+        if value.ShowDescriptions~=nil then self.ShowDescriptions=value.ShowDescriptions end
+        if value.TextScale then self.TextScale=value.TextScale end
+        if value.Tooltips then self.TooltipsEnabled=value.Tooltips.Enabled; self.TooltipDelay=value.Tooltips.Delay; self.TooltipMaxWidth=value.Tooltips.MaxWidth end
+        if value.CommandKey then self.CommandKey=value.CommandKey end
+        for name,layout in pairs(value.Dashboards or {}) do if self._dashboards[name] then self._dashboards[name]:SetLayout(layout) end end
+        if not deferUI then self:_applyAdvancedUI(value) end
+    end
+    function Window:_applyAdvancedUI(value)
+        if not value then return end
+        if value.ShowDescriptions~=nil then self:SetDescriptions(value.ShowDescriptions) end
+        if value.TextScale then self:SetTextScale(value.TextScale) end
+        if value.Tooltips then self:SetTooltips(value.Tooltips) end
+    end
+    function Window:LoadThemeCatalog(name)
+        if self.Destroyed then return false,"Window has been destroyed" end
+        local ok,result=pcall(function()
+            local source=self:_readConfigSource(name)
+            local profile=self:_prepareProfile(source,{})
+            local appearance=profile.Appearance or {}; assert(type(appearance)=="table","Invalid theme profile appearance")
+            local advanced=self:_prepareAdvanced(appearance.Advanced)
+            assert(advanced and advanced.Themes,"Profile does not contain a theme catalog")
+            local target=appearance.Theme
+            assert(type(target)=="string" and (advanced.Themes[target] or Library.Themes[target] or self._themeOverrides[target]),"Profile theme is unknown")
+            self:_applyAdvanced({Themes=advanced.Themes},true)
+            self:SetTheme(target); if self._themeStudio then self._themeStudio:Refresh() end
+            return target
+        end)
+        return ok,result
+    end
+    function Window:OpenThemeStudio()
+        if self._themeStudio and not self._themeStudio.Destroyed then self._themeStudio.Tab:Select(); self._themeStudio:Refresh(); return self._themeStudio end
+        local window=self; local manager={_connections={},Scope=self:CreateScope(),Pickers={}}
+        local tab=self:CreateTab({Title=self:_text("themeStudio"),Icon="palette",Columns=2,Internal=true}); manager.Tab=tab; self._themeStudio=manager; tab._toolManager=manager
+        local function opts(key,title,extra)
+            local result={Id="__retrobox/theme-studio/"..key,Title=title,Internal=true,Persist=false}
+            for k,v in pairs(extra or {}) do result[k]=v end; return result
+        end
+        local choose=tab:CreateSection({Title=self:_t17("Temas","Themes"),Icon="palette"})
+        manager.Select=choose:AddDropdown(opts("select",self:_text("theme"),{Options=self:GetThemeNames(),Default=self.Theme,Callback=function(name) if name then window:SetTheme(name); manager:Refresh() end end}))
+        manager.Name=choose:AddInput(opts("name",self:_t17("Nome da variação","Variation name"),{Default=self:_t17("Meu tema","My theme"),MaxLength=48}))
+        local function notify(ok,value) window:Notify({Title=window:_text(ok and "success" or "error"),Content=tostring(value or ""),Kind=ok and "success" or "error"}) end
+        choose:AddButton(opts("create",self:_t17("Criar / duplicar variação","Create / duplicate variation"),{Callback=function()
+            local ok,name=pcall(window.DuplicateTheme,window,manager.Select:GetValue() or window.Theme,manager.Name:GetValue())
+            if ok then window:SetTheme(name); manager:Refresh() end; notify(ok,name)
+        end}))
+        local actions=choose:CreateRow()
+        actions:AddButton(opts("restore",self:_t17("Restaurar cores","Restore colors"),{Callback=function()
+            local ok,err=pcall(window.RestoreTheme,window,manager.Select:GetValue()); notify(ok,ok and window:_text("ready") or err)
+        end}))
+        actions:AddButton(opts("delete",self:_text("delete"),{Callback=function()
+            local name=manager.Select:GetValue(); if not window._customThemes[name] then notify(false,window:_t17("Temas oficiais são preservados.","Official themes are protected.")); return end
+            window:Confirm({Title=window:_text("delete"),Content=name,OnConfirm=function() window:DeleteTheme(name); manager:Refresh() end})
+        end}))
+        manager.Contrast=choose:AddLabel(opts("contrast",self:_t17("Contraste da paleta","Palette contrast"),{Height=72}))
+        local presets=tab:CreateSection({Title=self:_t17("Perfis e JSON","Profiles and JSON"),Icon="save"})
+        manager.Profile=presets:AddInput(opts("profile",self:_text("profile"),{Default="themes",MaxLength=64}))
+        local profiles=presets:CreateRow()
+        profiles:AddButton(opts("save",self:_t17("Salvar no perfil","Save in profile"),{Callback=function()
+            local name=manager.Profile:GetValue(); local known,listError=window:GetConfigNames()
+            if listError then notify(false,listError); return end
+            local function save() local ok,result=window:SaveConfig(name); notify(ok,ok and name or result) end
+            if table.find(known,name) then window:Confirm({Title=window:_text("overwrite"),Content=name,OnConfirm=save}) else save() end
+        end}))
+        profiles:AddButton(opts("load",self:_t17("Carregar temas do perfil","Load themes from profile"),{Callback=function() local ok,result=window:LoadThemeCatalog(manager.Profile:GetValue()); if ok then manager:Refresh() end; notify(ok,ok and window.Theme or result) end}))
+        manager.JSON=presets:AddInput(opts("json","JSON",{Multiline=true,MaxLength=16384}))
+        local transfer=presets:CreateRow()
+        transfer:AddButton(opts("export",self:_text("export"),{Callback=function() manager.JSON:SetValue(window:ExportTheme(manager.Select:GetValue()),true); manager.JSON.Input:CaptureFocus() end}))
+        transfer:AddButton(opts("import",self:_text("import"),{Callback=function() local ok,result=window:ImportTheme(manager.JSON:GetValue(),{Name=manager.Name:GetValue()}); if ok then window:SetTheme(result); manager:Refresh() end; notify(ok,result) end}))
+        local editor=tab:CreateSection({Title=self:_t17("Paleta editável","Editable palette"),Icon="sliders",Side="Right"})
+        for _,role in ipairs(roleNames) do manager.Pickers[role]=editor:AddColorPicker(opts("color-"..role,role,{Default=window.Palette[role],AllowRainbow=false,AllowOpacity=false,Callback=function(color)
+            if manager._refreshing then return end
+            local name=manager.Select:GetValue(); if window._customThemes[name] then window:SetThemeColor(name,role,color) end
+        end})) end
+        local preview=tab:CreateSection({Title=self:_t17("Prévia com componentes reais","Preview with real components"),Icon="eye",Side="Right"})
+        preview:AddButton(opts("preview-button",self:_t17("Botão de exemplo","Example button"),{Tooltip=window:_t17("Esta dica usa o mesmo estilo das demais.","This tooltip uses the real shared renderer."),Callback=function() window:Notify({Content=window:_text("ready")}) end}))
+        preview:AddToggle(opts("preview-toggle","Toggle",{Default=true,Description=window:_t17("Texto secundário e estado ativo.","Secondary text and active state.")}))
+        preview:AddSlider(opts("preview-slider","Slider",{Default=45}))
+        preview:AddDropdown(opts("preview-dropdown","Dropdown",{Options={"Normal","Subtle","Off"}}))
+        preview:AddInput(opts("preview-input","Input",{Default="RetroBox"}))
+        preview:AddStatCard(opts("preview-card",self:_t17("Valor principal","Primary value"),{Value=1284,Subtitle=window:_t17("Texto sobre a superfície interna","Text over the inner surface"),Trend=12}))
+        preview:AddLineChart(opts("preview-chart",self:_t17("Gráfico real","Real chart"),{Data={3,8,4,10},ShowLegend=true,Legend="Series"}))
+        function manager:Refresh()
+            if self.Destroyed or self._refreshing then return end
+            self._refreshing=true; self.Select:SetOptions(window:GetThemeNames(),true); self.Select:SetValue(window.Theme,true)
+            for role,picker in pairs(self.Pickers) do picker:SetValue(window.Palette[role],true); picker:SetDisabled(not window._customThemes[window.Theme]) end
+            local bad=0; for _,entry in ipairs(window:CheckThemeContrast()) do if not entry.Pass then bad=bad+1 end end
+            self.Contrast:SetText(bad==0 and window:_t17("Paleta com bom contraste.","Palette contrast passed.") or window:_t17("Combinações que merecem revisão: ","Combinations to review: ")..bad..window:_t17(". O texto se ajusta à superfície real.",". Ink adapts to the actual surface."))
+            self._refreshing=false
+        end
+        function manager:Destroy()
+            if self.Destroyed then return end; self.Destroyed=true; self.Scope:Destroy(); if window._themeStudio==self then window._themeStudio=nil end
+            window._resources:Remove("theme-studio",true)
+            if not self.Tab.Destroyed then self.Tab:Destroy() end
+        end
+        manager.Scope:Add(function() cleanup(manager) end); self:Manage(manager,"Destroy","theme-studio")
+        manager:Refresh(); tab:Select(); return manager
+    end
+end
+
+-- END RETRO170 THEMES
+
+-- BEGIN RETRO170 DASHBOARDS
+-- Widgets keep their real controls/bindings; layout changes only move/size them.
+do
+    local methods={"AddStatCard","AddChart","AddLineChart","AddBarChart","AddProgressChart","AddSparkline","AddProgress","AddLabel"}
+    function Section:CreateDashboard(options)
+        local section=self
+        options=options or {}; local count=options.Columns or 2; local gap=options.Gap or 12; local stack=options.StackAt or 480
+        assert(finite(count) and count%1==0 and count>=1 and count<=4,"Dashboard Columns must be 1–4")
+        assert(finite(gap) and gap>=0 and gap<=32 and finite(stack) and stack>=200 and stack<=1200,"Invalid dashboard Gap/StackAt")
+        local self=base(self,"Dashboard",options,30); self.Persist=false; self._count=0; self.Controls={}; self._parentSection=section; self._tab=section._tab
+        self.Columns=count; self.Gap=gap; self.StackAt=stack; self.Content=frame(self._window,self.Frame,{Position=U2(0,26),Size=UDim2.new(1,0,1,-26),BackgroundTransparency=1})
+        self._widgets={}; self._order={}; self._defaults={Order={},Widgets={}}; self._editable=options.Editable==true
+        local window=self._window; window._dashboards[self.Id]=self
+        function self:_layoutWidgets()
+            if self.Destroyed or self._layingDashboard then return end
+            self._layingDashboard=true
+            local width=self.Content.AbsoluteSize.X/math.max(.01,window._actualScale or 1)
+            local columns=width<self.StackAt and 1 or self.Columns; local column,rowY,rowHeight=0,0,0
+            for _,key in ipairs(self._order) do
+                local entry=self._widgets[key]; local widget=entry.Control
+                if not widget.Destroyed and widget.Frame.Visible then
+                    local span=math.min(columns,entry.Span)
+                    if column+span>columns then rowY=rowY+rowHeight+self.Gap; column=0; rowHeight=0 end
+                    local height=entry.Height+(widget._descriptionDelta or 0)
+                    widget.Frame.Position=UDim2.new(column/columns,self.Gap*column/columns,0,rowY)
+                    widget.Frame.Size=UDim2.new(span/columns,-self.Gap*(columns-span)/columns,0,height)
+                    rowHeight=math.max(rowHeight,height); column=column+span
+                    if column==columns then rowY=rowY+rowHeight+self.Gap; column=0; rowHeight=0 end
+                end
+            end
+            local height=math.max(0,rowY+rowHeight-(column==0 and self.Gap or 0))
+            self.Frame.Size=UDim2.new(1,0,0,height+30); self.Stacked=columns==1; self._layingDashboard=false
+        end
+        self._layout=self._layoutWidgets
+        function self:GetLayout()
+            local result={Order=copy(self._order),Widgets={}}
+            for key,entry in pairs(self._widgets) do result.Widgets[key]={Span=entry.Span,Height=entry.Height} end
+            return result
+        end
+        function self:ValidateLayout(value)
+            value=Library._copyConfigData(value)
+            assert(type(value)=="table" and type(value.Order)=="table" and #value.Order<=256 and type(value.Widgets)=="table","Invalid dashboard layout")
+            local result={Order={},Widgets={}}; local seen={}
+            for _,key in ipairs(value.Order) do
+                assert(type(key)=="string" and #key>=1 and #key<=128 and not seen[key],"Invalid or duplicate dashboard widget Id")
+                seen[key]=true; if self._widgets[key] then result.Order[#result.Order+1]=key end
+            end
+            for _,key in ipairs(self._order) do if not seen[key] then result.Order[#result.Order+1]=key end end
+            for key,layout in pairs(value.Widgets) do
+                assert(type(key)=="string" and type(layout)=="table" and finite(layout.Span) and layout.Span%1==0 and layout.Span>=1 and layout.Span<=4 and finite(layout.Height) and layout.Height>=28 and layout.Height<=900,"Invalid widget layout")
+                local widget=self._widgets[key]
+                if widget then assert(layout.Height>=widget.Minimum,"Widget height is too small"); result.Widgets[key]={Span=math.min(self.Columns,layout.Span),Height=layout.Height} end
+            end
+            for key,entry in pairs(self._widgets) do if not result.Widgets[key] then result.Widgets[key]={Span=entry.Span,Height=entry.Height} end end
+            return result
+        end
+        function self:SetLayout(value)
+            local prepared=self:ValidateLayout(value)
+            self._order=prepared.Order
+            for key,layout in pairs(prepared.Widgets) do
+                local entry=self._widgets[key]; entry.Span=layout.Span; entry.Height=layout.Height
+                if entry.Control._descriptionLayout then entry.Control._descriptionLayout.Height=layout.Height end
+            end
+            self:_layoutWidgets(); window:_scheduleSave(); return self
+        end
+        function self:SetOrder(value)
+            assert(type(value)=="table" and #value==#self._order,"Order must include every widget")
+            for _,key in ipairs(value) do assert(self._widgets[key],"Unknown widget in Order") end
+            local layout=self:GetLayout(); layout.Order=value; return self:SetLayout(layout)
+        end
+        function self:SetWidgetLayout(key,layout)
+            assert(self._widgets[key] and type(layout)=="table","Unknown dashboard widget")
+            local value=self:GetLayout(); local old=value.Widgets[key]
+            value.Widgets[key]={Span=layout.Span or old.Span,Height=layout.Height or old.Height}; return self:SetLayout(value)
+        end
+        function self:ResetLayout() return self:SetLayout(self._defaults) end
+        local function add(method,parameters)
+            parameters=parameters or {}; local span=parameters.Span or 1
+            assert(finite(span) and span%1==0 and span>=1 and span<=count,"Widget Span must fit the grid")
+            assert(#self._order<256,"Dashboard widget limit is 256")
+            local aliases={AddLineChart="Line",AddBarChart="Bar",AddProgressChart="Progress",AddSparkline="Sparkline"}
+            local widget
+            if aliases[method] then
+                local values={}; for k,v in pairs(parameters) do values[k]=v end; values.Type=aliases[method]
+                widget=Section.AddChart(self,values)
+            else widget=Section[method](self,parameters) end
+            local key=widget.Id
+            local minimum=widget.Type=="StatCard" and 116 or widget.Type:match("Chart$") and 64 or 28
+            self._widgets[key]={Control=widget,Span=span,Height=widget.Frame.Size.Y.Offset-(widget._descriptionDelta or 0),Minimum=minimum}
+            self._order[#self._order+1]=key; self._defaults.Order[#self._defaults.Order+1]=key
+            self._defaults.Widgets[key]={Span=span,Height=self._widgets[key].Height}
+            local destroy=widget.Destroy
+            function widget:Destroy(...)
+                if self.Destroyed then return end
+                destroy(self,...); local entry=self
+                if not self._dashboardOwner.Destroyed then
+                    local dashboard=self._dashboardOwner; dashboard._widgets[self.Id]=nil
+                    local index=table.find(dashboard._order,self.Id); if index then table.remove(dashboard._order,index) end
+                    dashboard._defaults.Widgets[self.Id]=nil; local initial=table.find(dashboard._defaults.Order,self.Id); if initial then table.remove(dashboard._defaults.Order,initial) end
+                    dashboard:_layoutWidgets()
+                end
+            end
+            widget._dashboardOwner=self
+            connect(widget,widget.Frame:GetPropertyChangedSignal("Visible"),function() self:_layoutWidgets() end)
+            if self._editable then
+                widget.TitleLabel.Size=UDim2.new(widget.TitleLabel.Size.X.Scale,widget.TitleLabel.Size.X.Offset-26,widget.TitleLabel.Size.Y.Scale,widget.TitleLabel.Size.Y.Offset)
+                local function menu()
+                    local position=table.find(self._order,key); local entries={}
+                    entries[#entries+1]={Text=window:_t17("Mover antes","Move earlier"),Disabled=position==1,Callback=function()
+                        local order=copy(self._order); order[position],order[position-1]=order[position-1],order[position]; self:SetOrder(order)
+                    end}
+                    entries[#entries+1]={Text=window:_t17("Mover depois","Move later"),Disabled=position==#self._order,Callback=function()
+                        local order=copy(self._order); order[position],order[position+1]=order[position+1],order[position]; self:SetOrder(order)
+                    end}
+                    entries[#entries+1]={Separator=true}
+                    for width=1,count do entries[#entries+1]={Text=window:_t17("Largura ","Width ")..width,Callback=function() self:SetWidgetLayout(key,{Span=width}) end} end
+                    for _,height in ipairs({140,220,300}) do if height>=minimum then entries[#entries+1]={Text=window:_t17("Altura ","Height ")..height,Callback=function() self:SetWidgetLayout(key,{Height=height}) end} end end
+                    entries[#entries+1]={Text=window:_t17("Restaurar layout","Restore layout"),Callback=function() self:ResetLayout() end}
+                    return entries
+                end
+                local handle=pixelButton(window,widget,widget.Frame,"::","sliders",{Position=UDim2.new(1,-24,0,0),Size=U2(24,22)},function() window:ContextMenu({Items=menu()},widget.Frame.AbsolutePosition) end)
+                widget:SetContextMenu(menu); widget.LayoutButton=handle
+            end
+            self:_layoutWidgets(); return widget
+        end
+        for _,method in ipairs(methods) do self[method]=function(_,parameters) return add(method,parameters) end end
+        self:Manage(function()
+            if window._dashboards[self.Id]==self then window._dashboards[self.Id]=nil end
+            local children={}; for _,entry in pairs(self._widgets) do children[#children+1]=entry.Control end
+            for _,child in ipairs(children) do child:Destroy() end
+        end)
+        connect(self,self.Content:GetPropertyChangedSignal("AbsoluteSize"),function() self:_layoutWidgets() end)
+        self._listeners={}; self._callback=options.Callback
+        function self:_normalize(value) return value end
+        function self:_render() self:_layoutWidgets() end
+        self:_captureDescriptionLayout(); return self
+    end
+    local search=Window.SetSearch
+    function Window:SetSearch(...)
+        search(self,...)
+        for _,dashboard in pairs(self._dashboards or {}) do
+            local visible=false
+            for _,entry in pairs(dashboard._widgets) do if not entry.Control.Destroyed and entry.Control.Frame.Visible then visible=true; break end end
+            dashboard.Frame.Visible=dashboard._visible and (self._query=="" or visible); dashboard:_layoutWidgets()
+        end
+    end
+end
+
+-- END RETRO170 DASHBOARDS
+
+-- BEGIN RETRO170 INSPECTOR
+-- Developer-only inspector: status subscriptions for lifecycle, a slow clock
+-- for deadlines/resource counts, bounded tables, explicit cancellation permission.
+do
+    local function summary(value)
+        if value==nil then return "—" end
+        if type(value)~="table" then return tostring(value):sub(1,256) end
+        local ok,text=pcall(HttpService.JSONEncode,HttpService,value); return ok and text:sub(1,256) or "[nonserializable result]"
+    end
+    function Window:GetRuntimeSnapshot()
+        local result={Stats=self:GetRuntimeStats(),Tasks={},Actions={},Groups={},Resources={},Diagnostics=self:GetDiagnostics()}
+        for _,job in pairs(self.Tasks) do
+            local status=job:GetStatus()
+            result.Tasks[#result.Tasks+1]={Id=job.Id,Status=status.Status,Requested=status.Requested,Running=status.Running,Remaining=status.Remaining,Interval=status.Interval,Result=summary(job.LastResult),Error=status.LastError or "",Reason=status.StopReason or "",ControlId=job.Options.ControlId or ""}
+        end
+        local seen={}
+        local function action(handle)
+            if seen[handle] then return end; seen[handle]=true
+            local status=handle:GetStatus()
+            result.Actions[#result.Actions+1]={Id=handle.Id,Group=handle.Group,Status=status.Status,Progress=status.Progress,Message=status.Message,Result=summary(handle.Result),Error=handle.Error and tostring(handle.Error) or "",ControlId=handle.Options.ControlId or ""}
+        end
+        for _,handle in pairs(self._actions) do action(handle) end
+        for _,handle in ipairs(self._actionHistory) do action(handle) end
+        for key,group in pairs(self._groups) do result.Groups[#result.Groups+1]={Id=key,Active=group.Active and group.Active.Id or "",Queued=#group.Queue} end
+        local count=0
+        for record in pairs(self._resources._records) do
+            count=count+1; if count>256 then break end
+            result.Resources[#result.Resources+1]={Id=tostring(record.Id or count),Kind=typeof(record.Resource),Method=tostring(record.Method or "cleanup"),Key=type(record.Key)=="string" and record.Key or ""}
+        end
+        for _,rows in ipairs({result.Tasks,result.Actions,result.Groups,result.Resources}) do table.sort(rows,function(a,b) return a.Id<b.Id end) end
+        return result
+    end
+    function Window:OpenRuntimeInspector(options)
+        options=options or {}
+        assert(type(options)=="table" and (options.AllowCancel==nil or type(options.AllowCancel)=="boolean"),"Inspector AllowCancel must be boolean")
+        local interval=options.Interval or 1; assert(finite(interval) and interval>=.25 and interval<=10,"Inspector Interval must be .25–10 seconds")
+        if self._inspector and not self._inspector.Destroyed then self._inspector.Tab:Select(); self._inspector:Refresh(); self._inspector.Clock:Start(); return self._inspector end
+        local window=self; local manager={Scope=self:CreateScope(),AllowCancel=options.AllowCancel==true,_connections={},_jobs={},_actions={}}
+        local tab=self:CreateTab({Title="Runtime Inspector",Icon="terminal",Internal=true,Columns=2}); manager.Tab=tab; tab._toolManager=manager; self._inspector=manager
+        local function opts(key,title,extra)
+            local value={Id="__retrobox/inspector/"..key,Title=title,Internal=true,Persist=false}; for k,v in pairs(extra or {}) do value[k]=v end; return value
+        end
+        local overview=tab:CreateSection({Title="Overview",Icon="grid"})
+        local row=overview:CreateRow()
+        manager.TaskCount=row:AddStatCard(opts("task-count","Tasks",{Value=0}))
+        manager.ActionCount=row:AddStatCard(opts("action-count","Actions",{Value=0}))
+        manager.ResourceCount=overview:AddStatCard(opts("resources-count","Resources",{Value=0,Subtitle=window:_t17("Recursos da raiz; detalhes limitados a 256 entradas.","Root resources; detail list limited to 256 entries.")}))
+        local tasks=tab:CreateSection({Title="Tasks",Icon="refresh"})
+        manager.Tasks=tasks:AddDataTable(opts("tasks","Tasks",{Columns={{Key="Id",Width=160},{Key="Status",Width=140},{Key="Requested",Width=100},{Key="Remaining",Width=110,Format=function(value) return value and string.format("%.1f s",value) or "—" end},{Key="Error",Width=240}},Rows={},Height=250}))
+        local controls=tasks:CreateRow()
+        controls:AddButton(opts("task-details",window:_t17("Detalhes da tarefa","Task details"),{Callback=function()
+            local selected=manager.Tasks:GetSelected(); if selected then manager.Details:SetValue(HttpService:JSONEncode(selected),true); manager.Details.Input:CaptureFocus() end
+        end}))
+        manager.Cancel=controls:AddButton(opts("cancel-task",window:_t17("Parar selecionada","Stop selected"),{Disabled=not manager.AllowCancel,Callback=function()
+            if not manager.AllowCancel then return end
+            local selected=manager.Tasks:GetSelected(); if not selected then return end
+            window:Confirm({Title=window:_t17("Parar tarefa?","Stop task?"),Content=selected.Id,OnConfirm=function() local job=window.Tasks[selected.Id]; if job then job:Stop("runtime inspector") end; manager:Refresh() end})
+        end}))
+        local actions=tab:CreateSection({Title="Actions / Groups",Icon="bolt",Side="Right"})
+        manager.Actions=actions:AddDataTable(opts("actions","Actions",{Columns={{Key="Id",Width=150},{Key="Group",Width=130},{Key="Status",Width=130},{Key="Progress",Width=100},{Key="Error",Width=240}},Rows={},Height=240}))
+        actions:AddButton(opts("cancel-action",window:_t17("Cancelar ação selecionada","Cancel selected action"),{Disabled=not manager.AllowCancel,Callback=function()
+            if not manager.AllowCancel then return end; local selected=manager.Actions:GetSelected(); if not selected then return end
+            window:Confirm({Title=window:_t17("Cancelar ação?","Cancel action?"),Content=selected.Id,OnConfirm=function() local action=window._actions[selected.Id]; if action then action:Cancel("runtime inspector") end; manager:Refresh() end})
+        end}))
+        manager.Groups=actions:AddDataTable(opts("groups","Groups",{Columns={{Key="Id",Width=130},{Key="Active",Width=170},{Key="Queued",Width=80}},Rows={},Height=180}))
+        local resources=tab:CreateSection({Title="Resources",Icon="folder",Side="Right"})
+        manager.Resources=resources:AddDataTable(opts("resources","Resources",{Columns={{Key="Id",Width=80},{Key="Kind",Width=100},{Key="Method",Width=100},{Key="Key",Width=180}},Rows={},Height=200}))
+        local diagnostics=tab:CreateSection({Title="Diagnostics",Icon="warning"})
+        manager.Diagnostics=diagnostics:AddDataTable(opts("diagnostics","Diagnostics",{Columns={{Key="Phase",Width=120},{Key="ControlId",Width=140},{Key="Message",Width=300}},Rows={},Height=240,GetKey=function(record,index) return record.Id or "diagnostic/"..index end}))
+        manager.Details=diagnostics:AddInput(opts("details",window:_t17("Detalhes / JSON para copiar","Details / JSON to copy"),{Multiline=true,MaxLength=32768}))
+        diagnostics:AddButton(opts("copy",window:_t17("Mostrar / copiar diagnóstico","Show / copy diagnostic"),{Callback=function()
+            local selected=manager.Diagnostics:GetSelected(); local text=HttpService:JSONEncode(selected or manager.Snapshot.Stats)
+            manager.Details:SetValue(text,true); manager.Details.Input:CaptureFocus()
+            if type(setclipboard)=="function" then local ok,err=pcall(setclipboard,text); if not ok then window:Notify({Content=tostring(err),Kind="error"}) end end
+        end}))
+        diagnostics:AddButton(opts("focus",window:_t17("Localizar componente","Find component"),{Callback=function()
+            local selected=manager.Diagnostics:GetSelected(); if selected and selected.ControlId then window:FocusControl(selected.ControlId) end
+        end}))
+        function manager:Refresh()
+            if self.Destroyed or self._refreshing then return end
+            self._refreshing=true; local snapshot=window:GetRuntimeSnapshot(); self.Snapshot=snapshot
+            self.TaskCount:SetValue(snapshot.Stats.RunningTasks,true); self.ActionCount:SetValue(snapshot.Stats.Actions,true); self.ResourceCount:SetValue(snapshot.Stats.Resources,true)
+            self.Tasks:SetRows(snapshot.Tasks); self.Actions:SetRows(snapshot.Actions); self.Groups:SetRows(snapshot.Groups); self.Resources:SetRows(snapshot.Resources); self.Diagnostics:SetRows(snapshot.Diagnostics)
+            self._refreshing=false
+        end
+        function manager:RequestRefresh()
+            if self.Destroyed or self._queued then return end; self._queued=true
+            task.defer(function() self._queued=false; if not self.Destroyed and not window.Destroyed then self:Refresh() end end)
+        end
+        function manager:ObserveJob(job)
+            if job.Id=="__retrobox/inspector-clock" or self._jobs[job.Id]==job then return end
+            self._jobs[job.Id]=job
+            self.Scope:Add(job:Subscribe(function(status)
+                self:RequestRefresh()
+                if status.Status=="Destroyed" then self._jobs[job.Id]=nil; self.Scope:Remove("job:"..job.Id) end
+            end),"Disconnect","job:"..job.Id)
+        end
+        function manager:ObserveAction(action)
+            if action.Finished or self._actions[action.Id]==action then self:RequestRefresh(); return end
+            self._actions[action.Id]=action
+            self.Scope:Add(action:Subscribe(function()
+                self:RequestRefresh()
+                if action.Finished then self._actions[action.Id]=nil; self.Scope:Remove("action:"..action.Id) end
+            end),"Disconnect","action:"..action.Id)
+        end
+        function manager:Destroy()
+            if self.Destroyed then return end; self.Destroyed=true
+            self.Scope:Destroy(); if window._inspector==self then window._inspector=nil end
+            window._resources:Remove("runtime-inspector",true)
+            if not self.Tab.Destroyed then self.Tab:Destroy() end
+        end
+        for _,job in pairs(self.Tasks) do manager:ObserveJob(job) end
+        for _,action in pairs(self._actions) do manager:ObserveAction(action) end
+        manager.Scope:Add(self:OnError(function() manager:RequestRefresh() end),"Disconnect")
+        manager.Clock=self:CreateTask({Id="__retrobox/inspector-clock",Interval=interval,Immediate=false,Start=true,Callback=function(ctx)
+            ctx:ThrowIfCancelled(); if manager.Tab.Frame.Visible and window._shown~=false and not window.Minimized then manager:Refresh() end
+        end})
+        manager.Scope:Add(manager.Clock,"Destroy"); manager.Scope:Add(function() cleanup(manager) end)
+        self:Manage(manager,"Destroy","runtime-inspector"); manager:Refresh(); tab:Select(); return manager
+    end
+    local createTask=Window.CreateTask
+    function Window:CreateTask(options)
+        local job=createTask(self,options); if self._inspector then self._inspector:ObserveJob(job); self._inspector:RequestRefresh() end; return job
+    end
+    local runAction=Window.RunAction
+    function Window:RunAction(options)
+        local action,err=runAction(self,options); if self._inspector then if action then self._inspector:ObserveAction(action) end; self._inspector:RequestRefresh() end; return action,err
+    end
+end
+
+-- END RETRO170 INSPECTOR
+
+-- BEGIN RETRO170 COMMANDS
+-- Navigation reuses SearchControls/FocusControl; only explicitly registered
+-- commands execute code. Selecting a result never silently runs another action.
+do
+    function Window:RegisterCommand(options)
+        assert(type(options)=="table" and type(options.Id)=="string" and #options.Id>=1 and #options.Id<=128,"Command requires Id (1–128 bytes)")
+        assert(type(options.Title)=="string" and #options.Title>=1 and #options.Title<=256 and type(options.Callback)=="function","Command requires Title and Callback")
+        assert(options.Enabled==nil or type(options.Enabled)=="boolean" or type(options.Enabled)=="function","Command Enabled must be boolean or predicate")
+        assert(options.Confirm==nil or type(options.Confirm)=="string" and #options.Confirm<=4096,"Command Confirm must be text")
+        assert(options.Group==nil or type(options.Group)=="string" and #options.Group>=1 and #options.Group<=128,"Invalid command Group")
+        assert(options.Policy==nil or options.Policy=="Queue" or options.Policy=="Ignore" or options.Policy=="Reject" or options.Policy=="Replace","Invalid command Policy")
+        resolveIcon(options.Icon)
+        self._commands=self._commands or {}; assert(not self._commands[options.Id],"Command Id already registered")
+        local count=0; for _ in pairs(self._commands) do count=count+1 end; assert(count<128,"Command limit is 128")
+        local window=self; local command={Id=options.Id,Title=options.Title,Description=tostring(options.Description or ""),Options=options}
+        function command:Destroy()
+            if self.Destroyed then return end; self.Destroyed=true
+            if window._commands[self.Id]==self then window._commands[self.Id]=nil end
+            window._resources:Remove("command:"..self.Id,true)
+        end
+        self._commands[command.Id]=command; self:Manage(command,"Destroy","command:"..command.Id); return command
+    end
+    function Window:ExecuteCommand(id)
+        local command=self._commands and self._commands[id]; if not command or command.Destroyed then return nil,"Unknown command" end
+        local enabled=command.Options.Enabled
+        if type(enabled)=="function" then local ok,value=self:_protected(enabled,{Operation=id,Phase="CommandAvailability"},self); enabled=ok and value==true end
+        if enabled==false then return nil,"Command is disabled" end
+        local function run()
+            return self:RunAction({Group=command.Options.Group or command.Id,Policy=command.Options.Policy or "Reject",Callback=function(ctx) return command.Options.Callback(ctx,self,command) end})
+        end
+        if command.Options.Confirm then self:Confirm({Title=command.Title,Content=command.Options.Confirm,OnConfirm=run}); return nil,"confirmation pending" end
+        return run()
+    end
+    function Window:GetCommandResults(query)
+        assert(type(query)=="string" and #query<=256,"Command query must be up to 256 bytes")
+        query=query:lower(); local results={}
+        for _,match in ipairs(self:SearchControls(query)) do results[#results+1]={Kind="Control",TargetId=match.Control.Id,Title=match.Control.Title,Description=match.Tab.Title.." / "..match.Section.Title} end
+        for index,tab in ipairs(self.Tabs) do if not tab.Hidden and not tab.Destroyed and (query=="" or tab.Title:lower():find(query,1,true)) then results[#results+1]={Kind="Tab",TargetId=tostring(index),Title=tab.Title,Description=self:_t17("Abrir aba","Open tab")} end end
+        for _,command in pairs(self._commands or {}) do
+            if query=="" or (command.Title.." "..command.Description):lower():find(query,1,true) then results[#results+1]={Kind="Command",TargetId=command.Id,Title=command.Title,Description=command.Description} end
+        end
+        table.sort(results,function(a,b) if a.Kind==b.Kind then return a.Title<b.Title end; return a.Kind<b.Kind end)
+        while #results>100 do table.remove(results) end
+        for index,record in ipairs(results) do record.Id="result/"..index; record.Text=record.Title.."  · "..record.Description end
+        return results
+    end
+    function Window:OpenCommandPalette(options)
+        options=options or {}; assert(type(options)=="table","Palette options must be a table")
+        if self._shown==false then self:Show() end; if self.Minimized then self:Minimize(false) end
+        local owner,err=self:_newOverlay("CommandPalette"); if not owner then return nil,err end
+        local window=self; local view=self.Root.AbsoluteSize
+        local width=math.min(600,math.max(80,view.X-24)); local height=math.min(430,math.max(120,view.Y-32))
+        owner.Panel=frame(self,owner.Frame,{Position=U2(math.max(8,(view.X-width)/2),clamp(view.Y*.18,8,math.max(8,view.Y-height-8))),Size=U2(width,height),BorderSizePixel=1,ZIndex=220,ClipsDescendants=true},"Surface")
+        self:_bind(owner.Panel,{BorderColor3="Border"}); bevel(self,owner.Panel,false)
+        owner.Header=label(self,owner.Panel,self:_text("commandPalette"),{Position=U2(12,8),Size=UDim2.new(1,-24,0,24),ZIndex=221})
+        owner.Search=textbox(self,owner.Panel,"",{Position=U2(12,40),Size=UDim2.new(1,-24,0,32),PlaceholderText=self:_text("search"),ZIndex=221})
+        -- This host uses the same Section/base/viewport renderer as ordinary lists.
+        local host={_window=self,_tab=nil,_count=0,Controls={},Content=owner.Panel}
+        owner.Rows=Section.AddVirtualList(host,{Id="__retrobox/palette-results",Internal=true,Persist=false,Title="",Searchable=false,Items={},Height=math.max(120,height-78),RowHeight=34})
+        owner.Rows.Frame.Position=U2(12,54); owner.Rows.Frame.Size=UDim2.new(1,-24,0,height-64); owner.Rows.TitleLabel.Visible=false
+        owner.Rows.Viewport.ZIndex=221; owner.Rows.EmptyLabel.ZIndex=222
+        owner.Scope:Add(owner.Rows,"Destroy")
+        function owner:Choose(index)
+            local row=self.Results[index]; if not row then return false end
+            self:Close("selected")
+            if row.Kind=="Control" then return window:FocusControl(row.TargetId)
+            elseif row.Kind=="Tab" then local tab=window.Tabs[tonumber(row.TargetId)]; if tab and not tab.Destroyed then tab:Select(); return true end; return false
+            else
+                local handle,reason=window:ExecuteCommand(row.TargetId)
+                if not handle and reason~="confirmation pending" and reason~="ignored" then window:Notify({Title=window:_text("error"),Content=reason,Kind="error"}) end
+                return handle~=nil or reason=="confirmation pending"
+            end
+        end
+        function owner:Refresh()
+            self.Results=window:GetCommandResults(self.Search.Text:sub(1,256)); self.Selection=1
+            self.Rows:SetItems(self.Results)
+            for _,row in ipairs(self.Rows._pool) do row.Button.ZIndex=222; for _,object in ipairs(row.Button:GetDescendants()) do if object:IsA("GuiObject") then object.ZIndex=223 end end end
+            if self.Results[1] then self.Rows:SetValue(self.Results[1].Id,true) end
+        end
+        owner.Rows._activateNode=function(_,index) owner:Choose(index) end
+        function owner:OnKey(key)
+            if key=="Escape" then self:Close("escape"); return true end
+            if key=="Enter" or key=="Return" then self:Choose(self.Selection); return true end
+            if key=="Up" or key=="Down" then
+                self.Selection=clamp(self.Selection+(key=="Up" and -1 or 1),1,math.max(1,#self.Results))
+                local item=self.Results[self.Selection]; if item then self.Rows:SetValue(item.Id,true); self.Rows:ScrollToKey(item.Id) end
+                return true
+            end
+            return false
+        end
+        connect(owner,owner.Search:GetPropertyChangedSignal("Text"),function() owner:Refresh() end)
+        owner:Refresh(); owner.Search:CaptureFocus(); return owner
+    end
+end
+
+-- END RETRO170 COMMANDS
+
+-- BEGIN RETRO170 PREFERENCES
+-- Preferences extend Settings/profile services; tools remain opt-in.
+do
+    local settings=Window._createSettings
+    function Window:_createSettings()
+        settings(self)
+        if self._preferences17 then return end; self._preferences17=true
+        local access=self._settingsControls.Scale._section; local window=self
+        local function opts(key,title,extra)
+            local value={Id="__retrobox/"..key,Title=title,Internal=true,Persist=false}; for k,v in pairs(extra or {}) do value[k]=v end; return value
+        end
+        local controls=self._settingsControls
+        controls.Descriptions=access:AddToggle(opts("show-descriptions",self:_text("descriptions"),{Default=self.ShowDescriptions,Callback=function(value) window:SetDescriptions(value) end}))
+        controls.Tooltips=access:AddToggle(opts("tooltips",self:_text("tooltips"),{Default=self.TooltipsEnabled,Callback=function(value) window:SetTooltips({Enabled=value}) end}))
+        controls.TooltipDelay=access:AddSlider(opts("tooltip-delay",self:_text("tooltipDelay"),{Default=self.TooltipDelay,Min=0,Max=3,Step=.05,Suffix=" s",Callback=function(value) window:SetTooltips({Delay=value}) end}))
+        controls.TextScale=access:AddSlider(opts("text-scale",self:_text("textScale"),{Default=self.TextScale,Min=.8,Max=1.4,Step=.05,Suffix="x",Callback=function(value) window:SetTextScale(value) end}))
+        controls.CommandKey=access:AddKeybind(opts("command-key",self:_text("commandPalette"),{Default=self.CommandKey,CaptureOnly=true,AllowMouse=false}))
+        controls.CommandKey:Manage(controls.CommandKey:OnChanged(function(value) window:SetCommandKey(value) end),"Disconnect")
+        local tools=self._settingsTab:CreateSection({Title=self:_t17("Personalização e ferramentas","Customization and tools"),Icon="sliders"})
+        tools:AddButton(opts("open-theme-studio",self:_text("themeStudio"),{Icon="palette",Callback=function() window:OpenThemeStudio() end}))
+        tools:AddButton(opts("open-palette",self:_text("commandPalette"),{Icon="search",Callback=function() window:OpenCommandPalette() end}))
+        if self.Debug then tools:AddButton(opts("open-inspector","Runtime Inspector",{Icon="terminal",Callback=function() window:OpenRuntimeInspector() end})) end
+        self:_syncSettings()
+    end
+    local sync=Window._syncSettings
+    function Window:_syncSettings()
+        sync(self)
+        local controls=self._settingsControls
+        if self._syncingAdvanced or not controls or not controls.Descriptions then return end
+        self._syncingAdvanced=true
+        controls.Descriptions:SetValue(self.ShowDescriptions,true); controls.Tooltips:SetValue(self.TooltipsEnabled,true)
+        controls.TooltipDelay:SetValue(self.TooltipDelay,true); controls.TextScale:SetValue(self.TextScale,true); controls.CommandKey:SetValue(self.CommandKey,true)
+        self._syncingAdvanced=false
+        if self._themeStudio and not self._themeStudio._refreshing then self._themeStudio:Refresh() end
+    end
+    local factory=Library.CreateWindow
+    function Library:CreateWindow(options)
+        options=options or {}
+        assert(options.RuntimeInspector==nil or type(options.RuntimeInspector)=="boolean" or type(options.RuntimeInspector)=="table","RuntimeInspector must be boolean or options")
+        local window=factory(self,options); window._initial.Advanced=window:_exportAdvanced()
+        if options.ThemeStudio==true then window:OpenThemeStudio() end
+        if options.RuntimeInspector then window:OpenRuntimeInspector(type(options.RuntimeInspector)=="table" and options.RuntimeInspector or {}) end
+        return window
+    end
+    for _,prototype in ipairs({Tab,Section,Row}) do
+        local destroy=prototype.Destroy
+        prototype.Destroy=function(self,...)
+            if self._toolManager and not self._toolManager.Destroyed then self._toolManager:Destroy() end
+            if self.Frame then self._window:_forgetSkin(self.Frame) end
+            if self.Button then self._window:_forgetSkin(self.Button) end
+            return destroy(self,...)
+        end
+    end
+    local layout=Window._layout
+    function Window:_layout(...) self:_closeOverlay("layout"); return layout(self,...) end
+end
+
+-- END RETRO170 PREFERENCES
 
 return Library
