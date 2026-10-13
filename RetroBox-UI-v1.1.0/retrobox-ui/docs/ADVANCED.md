@@ -1,4 +1,4 @@
-# Componentes e ferramentas · RetroBox 1.8.0
+# Componentes e ferramentas · RetroBox 1.9.0
 
 A 1.7 mantém o arquivo raw independente e a API da 1.6. Os exemplos usam dados simulados. [VALIDATION.md](VALIDATION.md) separa os testes locais da conferência pendente no executor real.
 
@@ -169,3 +169,16 @@ A API de armazenamento acrescenta `Delete(name) -> true | false,reason`. Sem Del
 ![Contraste nos doze temas](contrast-themes.png)
 
 Composição ilustrativa das propriedades reais exportadas pelo código, não uma captura de jogo. Para reconstruí-la: `python3 tests/run_headless.py tools/export_contrast.lua`, depois `python3 tools/build_contrast_preview.py`. O fixture tests/fixtures/contrast-regression.json descreve a combinação ruim das capturas e é exercitado pela suíte.
+
+
+## Fechamento do Theme Studio · 1.9
+
+Use o botão Fechar editor ou `window:CloseThemeStudio()`. Sem alterações pendentes, a categoria temporária é removida e a aba anterior é restaurada quando disponível. Com edições no catálogo, o diálogo oferece salvar no perfil, descartar para o catálogo de abertura/último save ou cancelar. Se o tema selecionado ainda existir, o nome aplicado é preservado; descartar uma variação criada na sessão retorna ao tema da abertura/último save. Salvar um perfil atualiza a base do editor. Falha de escrita mantém o editor aberto. Reabrir cria uma única view e seus recursos são limpos ao fechar.
+
+`studio:Close("Save", "perfil")`, `Close("Discard")`, `Close("Cancel")`, `IsDirty()` e `Destroy()` são APIs reais. Destroy remove a view sem descartar o catálogo e é usado na limpeza da janela.
+
+## Navegação e comandos · 1.9
+
+O host da palette tem visibilidade explícita, e as linhas virtuais aceitam a ativação real do botão. Resultados de abas capturam a referência durante a busca, evitando navegar a outro índice após remoções. FocusControl não aciona callbacks: expande a seção, seleciona a aba, rola, destaca e aplica foco apropriado. Um ajuste único no próximo frame absorve o layout nativo. Resultados removidos/ocultos e comandos indisponíveis retornam erro; falhas de ações mostram feedback após sua conclusão real.
+
+O [Script Hub](SCRIPT-HUB.md) reutiliza esses mesmos componentes e serviços; nenhuma modalidade adicional é obrigatória para a API tradicional.

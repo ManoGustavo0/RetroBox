@@ -1,10 +1,10 @@
-# Validação · RetroBox UI 1.8.0
+# Validação · RetroBox UI 1.9.0
 
 ## Executado
 
 - Compilação sintática de todos os arquivos Lua pelo subconjunto compatível com Lua 5.4.
-- **190 testes de lógica** com sinais, instâncias e serviços simulados; os 151 testes da 1.6 continuam na suíte.
-- Carregamento dos 17 exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; dashboard inicia simulação/conclui ação, e runtime-integration carrega um perfil antigo, sincroniza toggles e executa coleta/venda no grupo compartilhado.
+- **221 testes de lógica** com sinais, instâncias e serviços simulados; os 151 testes da 1.6 continuam na suíte.
+- Carregamento dos 19 exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; dashboard inicia simulação/conclui ação, e runtime-integration carrega um perfil antigo, sincroniza toggles e executa coleta/venda no grupo compartilhado.
 - Loader com respostas inválidas, falha de download e erro de compilação.
 - GUI por gethui/CoreGui/PlayerGui: preferência, fallback quando falta permissão, Parent explícito, falhas e limpeza ao executar de novo.
 - Arquivos: detecção parcial, fallback para memória, pastas criadas sob demanda, restauração em outra instância da library, JSON inválido, falha de escrita, nomes sem colisões, caminhos inválidos, funções opcionais e debounce do AutoSave.
@@ -44,7 +44,7 @@ O double de Destroying também testa entrega adiada após remover a ancestralida
 
 ## Conferir no executor
 
-1. Publique a fonte 1.8.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo ou use um commit fixado para testar uma PR.
+1. Publique a fonte 1.9.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo ou use um commit fixado para testar uma PR.
 2. Execute o showcase e confira perfil, temas, textos, rolagem, arraste, redimensionamento, minimizar/maximizar e RightShift.
 3. Confira HSV, R/G/B, HEX, opacidade, RGB e velocidade. O círculo do showcase é um exemplo de ligação por callback.
 4. Na aba Configurações, crie saves com nomes próprios, selecione/carregue e confira callbacks/valores. Confirme e cancele sobrescritas. Execute de novo com os mesmos IDs/ConfigFolder e confira a lista de saves e os arquivos restaurados.
@@ -86,3 +86,21 @@ A suíte Lua 5.4 não reproduz a coleta de proxies nativos de Instance; o teste 
 3. No Theme Studio, duplique cada paleta nova, edite a cópia e restaure. Confira que a paleta oficial permanece preservada.
 4. Teste o slider de progresso em 0/25/50/75/100 e confira percentuais sobre preenchimento e vazio, legendas, escalas e avisos.
 5. As prévias de `contrast-themes.png` e `themes-new.png` são composições das cores dos widgets no simulador; não substituem esta conferência nativa.
+
+
+## Regressões da 1.9
+
+- Dez testes de navegação: eventos Activated reais, caminho touch, Enter com foco no campo da palette, alvo de aba após remoção, controles removidos/ocultos/desabilitados, comandos confirmados e falhas, fechar/reabrir, salvar/descartar/cancelar, recursos e scroll/foco com escala.
+- Dezenove testes do hub: opcionalidade, catálogo vazio, PlaceId/UniverseId, nenhuma ação na detecção, configuração/CRUD inválidos atômicos, pesquisa/case/sort, perfis silenciosos, URI/cache/falha/retry, limites de pool/cache/concurrency, Play registrado, exclusão mútua, capacidades/confirm/cancelamento, erro real, teleportes solicitados/negados/assíncronos/timeout/adapter, teclado e recriação com o mesmo ID, repintura dos temas.
+- Dois testes de distribuição: loader HTTP completo sem funções de arquivo do executor e rejeição de capacidades ausentes/versão antiga. Os testes anteriores de rede/compilação/inicialização continuam.
+- O exemplo do prompt é compilado/executado separadamente com a fonte efetivamente publicada; o validator estático confere commit, versão, caminho, APIs, ordem e ausência de arquivo local obrigatório.
+
+A fonte do raw e o Git tree são verificados na publicação. Sinais, serviços, imagens e teleportes dos testes são simulados; isso não confirma um cliente Roblox real. A suíte não renderiza GUI nem realiza teleportes reais.
+
+## Conferência nativa da 1.9
+
+1. Execute remote-loader.lua pelo raw confirmado, sem RetroBox.lua no workspace do executor. Teste HTTP/loadstring ausentes e erros de rede separadamente.
+2. Na palette, selecione por mouse/toque/Enter, inclusive campos fora do viewport e seções recolhidas. Confira foco, destaque e scroll nas escalas .75/1/1.5. Navegação não deve disparar callbacks.
+3. Abra o Theme Studio, duplique/edite, feche salvando/descartando/cancelando e reabra. Confira retorno à aba e ausência de tabs/objetos duplicados.
+4. Execute script-hub.lua. Confira imagens com e sem UniverseId, fallback em assets negados, busca, teclado, favoritos, perfis, ocultar/reabrir e todos os temas.
+5. Para testar teleporte, cadastre destinos reais e permitidos; confirme manualmente. Confira TeleportInitFailed e o adapter da experiência. O método cliente legado pode ser rejeitado, e TeleportAsync exige servidor. Não use os registros vazios de demonstração como destinos reais.

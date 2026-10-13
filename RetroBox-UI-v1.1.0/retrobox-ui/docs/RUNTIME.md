@@ -1,4 +1,4 @@
-# Runtime e componentes dinâmicos · 1.8.0
+# Runtime e componentes dinâmicos · 1.9.0
 
 A RetroBox continua em um único `RetroBox.lua`, com blocos internos para recursos, estados, tarefas, animações e componentes de dados. Os exemplos usam apenas dados simulados; a library não implementa lógica de jogos. [dashboard.lua](../examples/dashboard.lua) reúne os recursos abaixo.
 
@@ -178,3 +178,6 @@ Debug=false não coleta traceback ou snapshots. SetDebug(true) acrescenta Traceb
 `CallbackExecutor=function(callback,args,context) return callback(table.unpack(args,1,args.n)) end` é um adaptador opcional para instrumentar o contexto. Pode dar yield em workers, mas precisa executar e devolver os resultados do callback dentro da chamada; não agende a execução separadamente. SetCallbackExecutor(nil) restaura a execução padrão. A proteção xpcall, erros e tokens continuam na library. Não há API de um executor específico obrigatória.
 
 GetRuntimeStats retorna Tasks, RunningTasks, Actions, WaitingActions (esperas de conclusão), Animations, QueuedVisuals, Resources (registros diretos da janela) e FrameConnection. As contagens descrevem o runtime gerenciado, não todas as conexões da engine. Veja [VALIDATION.md](VALIDATION.md) para resultados e limites dos testes.
+
+
+Na 1.9, [Script Hub Mode](SCRIPT-HUB.md) reutiliza flags, scopes e RunAction: Play é registrado em código, usa grupo exclusivo e exige cancelamento cooperativo. Catálogos/callbacks, imagens e dados de execução não são salvos. Favoritos, ordenação e seleção usam flags normais; construa o catálogo antes de LoadConfig. Detecção e restauração de perfis não acionam Play ou teleporte.

@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.8.0
+# RetroBox UI API · 1.9.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -388,3 +388,12 @@ O [guia avançado](ADVANCED.md) contém contratos, exemplos, limites, padrões, 
 ## Temas oficiais da 1.8
 
 `Hacker`, `Dracula`, `Nord`, `Sakura`, `Ocean` e `Amber` somam-se a `Retro98`, `Terminal`, `GameBoy`, `Paper`, `Midnight` e `Monokai`. Use `CreateWindow({Theme = "Hacker"})`, `window:SetTheme("Ocean")` ou o seletor de Configurações. Os nomes são persistidos pelos perfis; duplique uma paleta para editar no Theme Studio. Veja [THEMES.md](THEMES.md) e [themes-gallery.lua](../examples/themes-gallery.lua).
+
+
+## Adições 1.9
+
+- `Library:CreateScriptHub(options)` cria uma janela/hub; `window:CreateScriptHub(options)` anexa um catálogo à janela existente. Ambos retornam manager com `Window`, `Tab`, `Id`. [SCRIPT-HUB.md](SCRIPT-HUB.md) contém campos, limites, callbacks e métodos reais de CRUD, pesquisa, seleção, favoritos, miniaturas, status, Play e teleporte.
+- `window:CloseThemeStudio(choice?, profileName?)` delega ao editor, retornando bool/motivo. Choices: `"Save"`, `"Discard"`, `"Cancel"`; sem choice, fecha quando limpo e abre um diálogo quando há alterações. `studio:Close`, `studio:IsDirty`, `studio:Destroy` completam o ciclo. Destroy é descarte da view, preservando o catálogo em memória; Close oferece o fluxo de edição.
+- A Command Palette mantém GetCommandResults/Choose/RegisterCommand/ExecuteCommand. Clique/toque percorrem o mesmo fluxo de Enter; alvos removidos/ocultos são rejeitados, e os comandos revalidam disponibilidade/confirmam/mostram o resultado da ação. Navegar a um controle não executa seu callback.
+- `FocusControl` expande, seleciona, rola e destaca; aplica foco quando possível e faz ajuste único após o frame de layout.
+- [DISTRIBUTION.md](DISTRIBUTION.md) fixa o contrato do raw. O loader principal e o prompt não exigem readfile ou ModuleScript no Workspace.

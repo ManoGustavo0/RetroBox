@@ -1,4 +1,4 @@
-# Temas · RetroBox 1.8.0
+# Temas · RetroBox 1.9.0
 
 A 1.8 acrescenta seis paletas oficiais. Os doze temas aparecem em Configurações e podem ser selecionados por código, salvos em perfis ou duplicados no Theme Studio.
 
@@ -33,3 +33,6 @@ Execute [themes-gallery.lua](../examples/themes-gallery.lua) para comparar as se
 ![Composição das seis paletas novas](themes-new.png)
 
 A imagem é uma composição ilustrativa das propriedades de cor obtidas dos widgets em testes, sem renderizador Roblox. Não representa uma captura de jogo. A inspeção nativa de fonte, recortes, rolagem e entrada segue pendente, conforme [VALIDATION.md](VALIDATION.md).
+
+
+A 1.9 preserva as doze paletas. O Script Hub e as linhas recicladas acompanham a troca; o Theme Studio é fechável e limpa sua view temporária, sem apagar o catálogo aplicado. Veja [ADVANCED.md](ADVANCED.md).
