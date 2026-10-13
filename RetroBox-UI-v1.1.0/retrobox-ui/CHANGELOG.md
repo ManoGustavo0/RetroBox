@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.0 · 2026-10-13
+
+- Registro de estilos com ownership explícito; propriedades de binding combinadas; fundos repintados antes de resolver texto relativo à superfície. Corrige cards/gráficos presos nas cores anteriores. Contraste sRGB contextual, percentuais com duas regiões de tinta e atualização sem recriar widgets.
+- Dropdown mantém hover e corrige moldura afetada por padding; linhas descartadas liberam eventos. Terminal exercitado pela seleção, troca e restauração de perfil.
+- DeleteConfig, Delete no storage adapter e delfile opcional; confirmação na UI, lista atualizada, falhas preservadas/reportadas e AutoSave do perfil excluído interrompido.
+- Description System 2.0 com preferência global/per-component, medição/refluxo e layout compacto; Tooltip System 2.0 com regiões compartilhadas, botão de informação, toque, atraso .2 s e preferências persistentes.
+- Escala de texto independente, foco visível e teclado.
+- AddVirtualList e AddDataTable com pool limitado, busca/filtros/seleção, ordenação, scroll horizontal e atualizações de dados sem reconstruir linhas; AddTreeView com hierarquia, ícones, expansão, busca e teclado.
+- ContextMenu com ações, disabled/separadores/submenus, limites, confirmação e ownership comum de overlays.
+- CreateDashboard reutiliza cards/gráficos, grid responsiva, ordem, span/altura e editor opcional; só layout acompanha o perfil.
+- Theme Studio com preview real, paletas locais protegidas, edição/restauração/duplicação/exclusão, JSON e catálogo no save. LoadThemeCatalog não aplica flags do script.
+- Runtime Inspector opt-in com status/grupos/recursos/diagnósticos, filtros/detalhes/cópia e cancelamento confirmado apenas quando AllowCancel=true.
+- Command Palette (F4 configurável), busca/navegação existente e comandos registrados via RunAction, com disponibilidade/confirm.
+- Appearance.Advanced guarda preferências/catálogos/layouts; validação antes do lote, Schema=1 e ConfigVersion independente preservados. API 1.6 mantida.
+- Sete exemplos novos, smoke ampliado, guia avançado e regressões de contraste/lifetime/dados/perfis. Conferência real de renderização/input no executor permanece pendente.
+
 ## 1.6.0 · 2026-10-12
 
 - AwaitAction, handle:Await e ctx:AwaitAction por evento, com resultado original, falha, timeout, cancelamento separado da espera/ação e proteção contra corrida/deadlock. OnCancel e timers/observadores com limpeza; máximo 256 esperas por janela.

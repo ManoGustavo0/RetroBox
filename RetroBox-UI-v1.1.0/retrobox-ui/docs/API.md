@@ -1,8 +1,10 @@
-# RetroBox UI API · 1.6.0
+# RetroBox UI API · 1.7.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
 ## Library
+
+`ContrastRatio(color, background)` mede a razão sRGB. `ReadableColor(color, background, minimum=4.5)` resolve tinta legível sem alterar a paleta original.
 
 | Método / campo | Comportamento |
 | --- | --- |
@@ -33,7 +35,7 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | `Theme` | `"Retro98"` | Nome registrado |
 | `Accent` | Cor do tema | Color3 ou HEX |
 | `Font` | `Enum.Font.Code` | Fonte dos componentes |
-| `TooltipDelay` | `0.4` | Atraso padrão do hover, de 0 a 3 segundos |
+| `TooltipDelay` | `0.2` | Atraso padrão do hover, de 0 a 3 segundos |
 | `TooltipMaxWidth` | `320` | Largura máxima padrão da dica, de 160 a 640 pixels |
 | `Size` | `Vector2.new(790, 570)` | Tamanho; mínimo lógico de 300×300 |
 | `Scale` | `1` | De 0.75 a 1.5, com ajuste automático à tela |
@@ -59,6 +61,10 @@ O arquivo principal retorna Library ao ser carregado por `loadstring(game:HttpGe
 | `MaxConfigBytes` | `262144` | Limite; de 1024 a 1048576 bytes |
 | `ConfigVersion` | `1` | Esquema do script, independente da library; inteiro 1–65535 |
 | `Migrations` | `{}` | Mapa [versão de origem]=fn(profile, from, to); passos sequenciais |
+| `ShowDescriptions` / `Tooltips` | `true` | Ajuda opcional; preferência salva |
+| `TextScale` | `1` | .8–1.4; tamanho de texto separado de Scale |
+| `CommandKey` | `F4` | Tecla da Command Palette; Unknown desativa |
+| `ThemeStudio` / `RuntimeInspector` | nil | Ferramentas opt-in; Inspector aceita {AllowCancel=false,Interval=1} |
 | `UnknownFlags` | `"Ignore"` | Ignore/Preserve/Reject para IDs desconhecidos no load |
 
 O perfil mostra a pessoa que abriu o script. A personalização é da interface; não muda a identidade da conta Roblox.
@@ -66,6 +72,8 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 `window.Parent` é o container selecionado; `ParentMode` vale gethui/CoreGui/PlayerGui/custom. `window.StorageMode` vale file/memory/custom. `GetCapabilities()` verifica a presença das funções, sem garantir que permissões ou escrita funcionarão. Falhas de salvar/carregar retornam erro nos métodos correspondentes.
 
 ## Window
+
+[ADVANCED.md](ADVANCED.md) documenta integralmente as APIs da 1.7: listas/tabelas/árvore, menus, dashboards, catálogo de temas, inspector, palette, ajuda, teclado e contraste.
 
 | Método | Uso |
 | --- | --- |
@@ -100,6 +108,7 @@ O perfil mostra a pessoa que abriu o script. A personalização é da interface;
 | `OnError(callback)` / `GetDiagnostics()` / `GetRuntimeStats()` | Listener de falhas, cópia dos últimos 64 erros e contagens do runtime |
 | `ExportConfig(asTable?)` | Retorna JSON ou cópia de tabela |
 | `ImportConfig(source, {Silent?, Strict?})` | JSON/tabela; retorna ok, err |
+| `DeleteConfig(name)` | Exclui backend/cópia da sessão; retorna ok/erro e atualiza a lista |
 | `SaveConfig(name)` | Retorna ok, jsonOrError |
 | `LoadConfig(name, options?)` | Retorna ok, err |
 | `GetConfigNames()` | Perfis da sessão + Storage.List; retorna array, err opcional |
@@ -363,3 +372,14 @@ Use `window:OnDestroy(callback)` para desconectar eventos criados pelo seu scrip
 - [Color3](https://create.roblox.com/docs/reference/engine/datatypes/Color3)
 - [RunService](https://create.roblox.com/docs/reference/engine/classes/RunService)
 - [HttpService / JSON](https://create.roblox.com/docs/reference/engine/classes/HttpService)
+
+## Adições 1.7
+
+- Section: AddVirtualList, AddDataTable, AddTreeView e CreateDashboard.
+- Window: ContextMenu, OpenCommandPalette, RegisterCommand, ExecuteCommand e GetCommandResults.
+- Window: OpenThemeStudio, CreateTheme/DuplicateTheme, GetThemeRoles/GetThemeColors, SetThemeColor, RestoreTheme/DeleteTheme, ExportTheme/ImportTheme, CheckThemeContrast e LoadThemeCatalog.
+- Window: OpenRuntimeInspector e GetRuntimeSnapshot.
+- Window: SetDescriptions, SetTooltips, SetTextScale, FocusNext e SetCommandKey.
+- Control: SetDescriptionVisible e SetContextMenu.
+
+O [guia avançado](ADVANCED.md) contém contratos, exemplos, limites, padrões, fontes de dados e limpeza. Novas preferências/catálogos/layouts ficam em Appearance.Advanced, mantendo Schema=1 e ConfigVersion próprio do script.

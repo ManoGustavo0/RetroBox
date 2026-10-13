@@ -1,6 +1,8 @@
-# Runtime e componentes dinâmicos · 1.6.0
+# Runtime e componentes dinâmicos · 1.7.0
 
 A RetroBox continua em um único `RetroBox.lua`, com blocos internos para recursos, estados, tarefas, animações e componentes de dados. Os exemplos usam apenas dados simulados; a library não implementa lógica de jogos. [dashboard.lua](../examples/dashboard.lua) reúne os recursos abaixo.
+
+[ADVANCED.md](ADVANCED.md) documenta Runtime Inspector, Command Palette e componentes da 1.7, sem substituir esses serviços.
 
 Para esperas, tarefas dentro de grupos, status observável, BindTask e migrações, veja [INTEGRATION.md](INTEGRATION.md) e [runtime-integration.lua](../examples/runtime-integration.lua).
 

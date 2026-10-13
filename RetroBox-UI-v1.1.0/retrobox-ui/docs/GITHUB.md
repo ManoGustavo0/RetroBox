@@ -16,6 +16,8 @@ O runtime gerenciado, cards, gráficos, estados, dependências e animações con
 
 AwaitAction, tarefas dentro de grupos, status observável, BindTask e migrações ConfigVersion requerem 1.6.0. Os exemplos dashboard e runtime-integration deste pacote requerem essa versão. O caminho histórico `RetroBox-UI-v1.1.0/retrobox-ui` continua igual; não renomeie essa pasta apenas para atualizar a versão.
 
+A 1.7.0 acrescenta componentes virtuais, Theme Studio, inspector, dashboards, palette, ajuda/teclado e correção de contraste. Os sete novos exemplos e o smoke deste pacote requerem 1.7.0 no mesmo caminho. Use o hash da PR para testar antes do merge.
+
 ## Publicar em outro repositório
 
 1. Extraia o ZIP e abra a pasta `retrobox-ui`.

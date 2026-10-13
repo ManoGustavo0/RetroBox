@@ -1,0 +1,19 @@
+{
+  "source": "Capturas fornecidas pelo usuário: tema claro e Monokai com superfície clara retida",
+  "OldBackground": [
+    249,
+    247,
+    236
+  ],
+  "OldPrimary": [
+    248,
+    248,
+    242
+  ],
+  "OldSecondary": [
+    195,
+    198,
+    178
+  ],
+  "Expected": "surface and foreground update together; normal text contrast >= 4.5"
+}

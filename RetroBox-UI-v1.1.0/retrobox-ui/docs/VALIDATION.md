@@ -1,10 +1,10 @@
-# Validação · RetroBox UI 1.6.0
+# Validação · RetroBox UI 1.7.0
 
 ## Executado
 
 - Compilação sintática de todos os arquivos Lua pelo subconjunto compatível com Lua 5.4.
-- **151 testes de lógica** com sinais, instâncias e serviços simulados; os 120 testes anteriores continuam na suíte.
-- Carregamento dos nove exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; dashboard inicia simulação/conclui ação, e runtime-integration carrega um perfil antigo, sincroniza toggles e executa coleta/venda no grupo compartilhado.
+- **187 testes de lógica** com sinais, instâncias e serviços simulados; os 151 testes da 1.6 continuam na suíte.
+- Carregamento dos 16 exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; dashboard inicia simulação/conclui ação, e runtime-integration carrega um perfil antigo, sincroniza toggles e executa coleta/venda no grupo compartilhado.
 - Loader com respostas inválidas, falha de download e erro de compilação.
 - GUI por gethui/CoreGui/PlayerGui: preferência, fallback quando falta permissão, Parent explícito, falhas e limpeza ao executar de novo.
 - Arquivos: detecção parcial, fallback para memória, pastas criadas sob demanda, restauração em outra instância da library, JSON inválido, falha de escrita, nomes sem colisões, caminhos inválidos, funções opcionais e debounce do AutoSave.
@@ -18,6 +18,8 @@
 - Cinco regressões de interação: mouse/toque com origem/inset não zero e escalas .75/1/1.5, sem salto/inércia; launcher pelo corpo, limiar/clique, dedos independentes, save/reset/resize; aba/Configurações/scroll preservados; Body/lupa/auxiliares durante recolhimento; padding central.
 - 16 testes de integração: Await/resultados/falhas/Throw, timeout separado/CancelAction, contexto cancelável, conclusão anterior/destruição/deadlock, múltiplas esperas/timers, grupos/fila/políticas, próximo prazo após conclusão, status sem emissões por frame, toggles/paradas/erros/restarts/KeepRequested, listeners e scheduler com task.spawn imediato.
 - Dez testes de migração: renomear/converter em sequência, cópia/original/arquivo preservados em falha, passos ausentes/versão futura/corrupção/Migrate=false, flags desconhecidas/transitórias, valores/aparência atômicos, dados sem código/ciclos, rejeição de yield, saves antigos, BindTask após lote e limites de versões/payload.
+- 23 testes de componentes/contraste: registro forte de estilos, binding combinado, seis temas em cards/plots/legendas, superfícies mistas, Terminal via UI/save/load, molduras/padding, eventos de linhas descartadas, exclusão em memória/arquivos/falhas, descrição/refluxo/ajuda, virtualização/âncora/scroll horizontal, filtros/ordenação, construção inválida sem registro parcial, dados reativos, árvore e menus/submenus/toque.
+- 13 testes de ferramentas: temas locais/JSON/proteção/restauração, catálogos sem aplicar flags, aparência inválida atômica, preferências/Reset/saves antigos, preview real do editor, dashboards sem reconstrução e layouts inválidos, status/grupos/cancelamento confirmado do inspector, comandos/palette/foco, e abertura/destruição repetida com recursos/eventos retornando à contagem inicial.
 - Verificação dos links locais da documentação, fontes dentro do ZIP e integridade CRC.
 
 ```bash
@@ -42,7 +44,7 @@ O double de Destroying também testa entrega adiada após remover a ancestralida
 
 ## Conferir no executor
 
-1. Publique a fonte 1.6.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo ou use um commit fixado para testar uma PR.
+1. Publique a fonte 1.7.0 no caminho usado pelo raw; ajuste a URL se tiver movido o arquivo ou use um commit fixado para testar uma PR.
 2. Execute o showcase e confira perfil, temas, textos, rolagem, arraste, redimensionamento, minimizar/maximizar e RightShift.
 3. Confira HSV, R/G/B, HEX, opacidade, RGB e velocidade. O círculo do showcase é um exemplo de ligação por callback.
 4. Na aba Configurações, crie saves com nomes próprios, selecione/carregue e confira callbacks/valores. Confirme e cancele sobrescritas. Execute de novo com os mesmos IDs/ConfigFolder e confira a lista de saves e os arquivos restaurados.
@@ -62,3 +64,16 @@ O double de Destroying também testa entrega adiada após remover a ancestralida
 18. Arraste a barra com mouse/toque em escalas .75/1/1.5, vários pontos iniciais e resoluções. Pressionar sem mover não deve deslocar; soltar não deve continuar movimento. Confira dropdowns/inputs/campos numéricos e texto com margem consistente.
 
 `docs/visual-concept.png` e `docs/dashboard-concept.png` são ilustrações geradas a partir da paleta; não são capturas de tela da GUI em execução.
+
+## Conferência adicional da 1.7
+
+1. Execute examples/contrast-showcase.lua. Alterne os seis temas sem recriar widgets; observe os quatro cards das capturas, plots/legendas/escalas, porcentagem em 0/25/50/75/100%, console e tooltips. O relatório numérico complementa a inspeção visual.
+2. Execute examples/advanced-components.lua: role 2.000 itens, procure/filtre, atualize dados com IDs estáveis, ordene tabelas e role horizontalmente; teste seleção, botão direito, toque longo e teclas de lista/árvore.
+3. Execute examples/theme-studio.lua: crie variação, edite, restaure, salve/carregue catálogo, duplique, exporte/importe e exclua com confirmação; oficiais devem continuar preservados. LoadThemeCatalog não deve acionar flags do script.
+4. Execute examples/runtime-inspector.lua: inicie tarefa, enfileire ação no grupo, gere erro intencional, observe estados e selecione detalhes. Cancelamento aparece só quando habilitado e deve confirmar. Destrua/reabra o painel e confira limpeza.
+5. Execute examples/dashboard-builder.lua: mude ordem/span/altura, redimensione a janela, salve layout e restaure; updates de valores não devem recriar controles.
+6. Execute examples/command-palette.lua: F4, pesquisa, seleção por clique/teclado, navegar sem executar função, comando registrado e confirmação. Teste Escape, clique fora, troca de aba e ocultação durante overlays.
+7. Execute examples/help-accessibility.lua: descrição longa em tela pequena, preferência global, tooltip com descrição oculta, badge/toque, .2 s padrão, Tab/Shift+Tab/Enter/Espaço e texto em .8/1/1.4.
+8. Crie dois perfis e exclua um pela UI. Cancele/confirme, confira lista e arquivo/índice; sem delfile/Delete, a indisponibilidade deve ser explícita. Excluir AutoSave não deve recriar o arquivo.
+
+A suíte Lua 5.4 não reproduz a coleta de proxies nativos de Instance; o teste confirma ownership forte e registro persistente, com comportamento explicado pela documentação Roblox. O simulador também não comprova clip/hover/rolagem/seleção no renderizador real. **Todos os novos componentes/ferramentas foram implementados e testados localmente; a validação no cliente Roblox permanece pendente.**
