@@ -8,6 +8,12 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 *Illustrative concept, not an in-game screenshot. The library renders native Roblox GUI objects.*
 
+## Version 1.8 themes
+
+Six new official palettes: **Hacker, Dracula, Nord, Sakura, Ocean and Amber**, bringing the total to twelve. Select one in Settings or call `window:SetTheme("Hacker")`. Existing widgets update in place; profiles and editable Theme Studio copies support the new palettes.
+
+See the [theme guide](docs/THEMES.md), [runnable gallery](examples/themes-gallery.lua) and [1.8 release report](docs/RELEASE-1.8.md).
+
 ## Pixel art identity
 
 46 built-in 12×12 icons draw directly with native GUI rectangles and follow the theme. Use `Icon = "home"`, `"folder"`, `"palette"`, `"settings"` or another name on windows, tabs, categories and controls. Notifications and dialogs also accept Icon. Call `SetIcon(name)` to change it and `SetIcon(nil)` to remove it. Asset IDs and legacy emoji/text remain supported.
@@ -47,7 +53,7 @@ The executor needs `loadstring` and `game:HttpGet`. [Loader.lua](Loader.lua) add
 
 - Retro beveled windows; drag, resize, minimize, maximize and RightShift visibility shortcut.
 - Automatic LocalPlayer avatar, display name and username at the bottom left, beside the settings gear.
-- Six themes, custom palettes, accent colors, UI scale and optional CRT scanlines.
+- Twelve themes, custom palettes, accent colors, UI scale and optional CRT scanlines.
 - Tabs, sections, search, responsive columns and touch input.
 - Built-in Settings tab with named saves, a persistent profile list and overwrite confirmation.
 - Search results navigate to the matching tab/control without running its action.
@@ -126,6 +132,6 @@ print(window.StorageMode) -- file, memory or custom
 
 [Quick start](examples/quickstart.lua), [full showcase](examples/showcase.lua), [custom theme](examples/custom-theme.lua), [storage](examples/storage-adapter.lua), [tooltips](examples/tooltips.lua), [workflows](examples/workflows.lua), [pixel icons](examples/icons.lua), [live dashboard](examples/dashboard.lua), [runtime integration](examples/runtime-integration.lua), and [contrast showcase](examples/contrast-showcase.lua), [advanced datasets](examples/advanced-components.lua), [Theme Studio](examples/theme-studio.lua), [Runtime Inspector](examples/runtime-inspector.lua), [Dashboard Builder](examples/dashboard-builder.lua), [Command Palette](examples/command-palette.lua), [help/accessibility](examples/help-accessibility.lua), and [native executor smoke test](tests/executor-smoke.lua). Their URLs use the existing source path. Dashboard/integration require version 1.6.0 there; use the PR commit before merge or adjust URLs if you move the source.
 
-187 local logic tests passed, including 16 examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
+190 local logic tests passed, including 17 examples, yielding workers, scheduler races, migrations and simulated drag geometry. These tests use a Lua 5.4 engine double and simulated HTTP/filesystem capabilities. A real Roblox executor was unavailable; rendering and specific executor compatibility, including Unbound, remain unverified. See [validation](docs/VALIDATION.md).
 
 MIT · Mano Gustavo · 2026

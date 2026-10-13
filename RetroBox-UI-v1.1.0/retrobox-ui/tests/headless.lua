@@ -356,7 +356,7 @@ test("all shipped examples use the public API and clean up",function()
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration","contrast-showcase","advanced-components","theme-studio","runtime-inspector","dashboard-builder","command-palette","help-accessibility"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration","contrast-showcase","advanced-components","theme-studio","runtime-inspector","dashboard-builder","command-palette","help-accessibility","themes-gallery"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -365,9 +365,16 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==16 and #loaded==16)
+    assert(requests==17 and #loaded==17)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
+            if window.Id=="themes-gallery" then
+                for _,name in ipairs({"Hacker","Dracula","Nord","Sakura","Ocean","Amber"}) do
+                    window:SetFlag("gallery-theme",name); Mock.pump(); assert(window.Theme==name)
+                end
+                window:SetFlag("gallery-progress",0); Mock.pump()
+                window:SetFlag("gallery-progress",100); Mock.pump()
+            end
             if window.Id=="dashboard-demo" then
                 assert(window:SetFlags({simulate=true,interval=.3})); Mock.pump()
                 Mock.Services.RunService.RenderStepped:Fire(.1); Mock.pump()

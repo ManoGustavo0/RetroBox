@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.0 · 2026-10-13
+
+- Seis temas oficiais: Hacker, Dracula, Nord, Sakura, Ocean e Amber; doze paletas no total. Tokens completos de superfícies, tinta, relevos, destaque e estados.
+- Integração com Configurações, perfis e Theme Studio, preservando as paletas oficiais e o esquema dos saves.
+- Galeria com widgets reais e dados simulados; prévias de cores e guia de uso.
+- Regressões de contraste nos mesmos componentes, restauração via UI/save/load e variações editáveis dos novos temas.
+- Versão, documentação, pacote e prompt atualizados. Conferência em executor Roblox real segue pendente.
+
 ## 1.7.0 · 2026-10-13
 
 - Registro de estilos com ownership explícito; propriedades de binding combinadas; fundos repintados antes de resolver texto relativo à superfície. Corrige cards/gráficos presos nas cores anteriores. Contraste sRGB contextual, percentuais com duas regiões de tinta e atualização sem recriar widgets.
