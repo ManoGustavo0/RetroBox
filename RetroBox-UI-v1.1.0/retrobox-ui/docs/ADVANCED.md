@@ -1,4 +1,4 @@
-# Componentes e ferramentas · RetroBox 1.7.0
+# Componentes e ferramentas · RetroBox 1.8.0
 
 A 1.7 mantém o arquivo raw independente e a API da 1.6. Os exemplos usam dados simulados. [VALIDATION.md](VALIDATION.md) separa os testes locais da conferência pendente no executor real.
 
@@ -10,7 +10,7 @@ Bindings de estilo passam a combinar propriedades. A atualização de tema aplic
 
 `Library:ContrastRatio(color, background)` calcula a razão de luminância sRGB. `Library:ReadableColor(color, background, minimum=4.5)` mantém uma cor que já atende à razão; caso contrário aproxima sua luminosidade do extremo legível. Não substitui todos os textos por uma cor global. O alvo do texto normal é 4.5; séries/gráficos usam 3. Cores originais do tema permanecem disponíveis no editor e na exportação. `window:CheckThemeContrast(name?)` lista Role, Surface, Ratio, Target e Pass da paleta original; a renderização contextual pode corrigir uma combinação indicada nesse relatório.
 
-[contrast-showcase.lua](../examples/contrast-showcase.lua) reproduz os quatro cards das capturas e acrescenta Line/Bar/Progress/Sparkline, legendas, console e campos. Alterne entre os seis temas sem recriar os componentes.
+[contrast-showcase.lua](../examples/contrast-showcase.lua) reproduz os quatro cards das capturas e acrescenta Line/Bar/Progress/Sparkline, legendas, console e campos. Alterne entre os doze temas sem recriar os componentes.
 
 ## Descrições, ajuda e acesso
 
@@ -166,6 +166,6 @@ SaveConfig/LoadConfig/ExportConfig/ImportConfig, ConfigVersion e migrações con
 
 A API de armazenamento acrescenta `Delete(name) -> true | false,reason`. Sem Delete, a library informa indisponibilidade e mantém os dados. O adaptador de arquivos usa delfile quando disponível; atualiza o índice e tenta restaurá-lo se a remoção falhar. Falha de restauração é reportada explicitamente. Os demais perfis não são removidos.
 
-![Contraste nos seis temas](contrast-themes.png)
+![Contraste nos doze temas](contrast-themes.png)
 
 Composição ilustrativa das propriedades reais exportadas pelo código, não uma captura de jogo. Para reconstruí-la: `python3 tests/run_headless.py tools/export_contrast.lua`, depois `python3 tools/build_contrast_preview.py`. O fixture tests/fixtures/contrast-regression.json descreve a combinação ruim das capturas e é exercitado pela suíte.

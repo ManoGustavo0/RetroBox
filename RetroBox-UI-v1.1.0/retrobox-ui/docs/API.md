@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.7.0
+# RetroBox UI API · 1.8.0
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -383,3 +383,8 @@ Use `window:OnDestroy(callback)` para desconectar eventos criados pelo seu scrip
 - Control: SetDescriptionVisible e SetContextMenu.
 
 O [guia avançado](ADVANCED.md) contém contratos, exemplos, limites, padrões, fontes de dados e limpeza. Novas preferências/catálogos/layouts ficam em Appearance.Advanced, mantendo Schema=1 e ConfigVersion próprio do script.
+
+
+## Temas oficiais da 1.8
+
+`Hacker`, `Dracula`, `Nord`, `Sakura`, `Ocean` e `Amber` somam-se a `Retro98`, `Terminal`, `GameBoy`, `Paper`, `Midnight` e `Monokai`. Use `CreateWindow({Theme = "Hacker"})`, `window:SetTheme("Ocean")` ou o seletor de Configurações. Os nomes são persistidos pelos perfis; duplique uma paleta para editar no Theme Studio. Veja [THEMES.md](THEMES.md) e [themes-gallery.lua](../examples/themes-gallery.lua).

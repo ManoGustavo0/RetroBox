@@ -7,6 +7,44 @@ return function(Mock,Library,test)
     local function finish(w)
         w:Destroy(); Mock.pump(100); Mock.MousePosition=nil; Mock.Warnings={}; assert(Mock.Connections==0,"Advanced control leaked connections")
     end
+    test("new official palettes have complete roles and remain protected in Theme Studio",function()
+        local w=fixture()
+        for _,name in ipairs({"Hacker","Dracula","Nord","Sakura","Ocean","Amber"}) do
+            for _,role in ipairs(w:GetThemeRoles()) do assert(Library.Themes[name][role],name.." missing "..role) end
+            w:SetTheme(name)
+            assert(not pcall(function() w:DeleteTheme(name) end),"Official palette was deletable")
+            assert(Library:ContrastRatio(w.Palette.Text,w.Palette.Inset)>=4.5)
+            assert(Library:ContrastRatio(w.Palette.Muted,w.Palette.Inset)>=4.5)
+            assert(Library:ContrastRatio(w.Palette.AccentText,w.Palette.Accent)>=4.5)
+        end
+        finish(w)
+    end)
+    test("new palettes round trip Settings saves and restore existing widgets",function()
+        local w,s=fixture(); local card=s:AddStatCard({Value=128,Subtitle="Saved theme"})
+        local surface=card.ValueLabel.Parent
+        for _,name in ipairs({"Hacker","Dracula","Nord","Sakura","Ocean","Amber"}) do
+            w._settingsControls.Theme._rows[name].Activated:Fire(); Mock.pump()
+            assert(w.Theme==name and w._settingsControls.Theme:GetValue()==name)
+            assert(w:SaveConfig("palette-"..name)); w:SetTheme("Retro98")
+            assert(w:LoadConfig("palette-"..name)); Mock.pump()
+            assert(w.Theme==name and card.ValueLabel.Parent==surface and surface.BackgroundColor3==Library.Themes[name].Inset)
+        end
+        finish(w)
+    end)
+    test("each new palette supports editable copies without changing its official colors",function()
+        local w=fixture()
+        for _,name in ipairs({"Hacker","Dracula","Nord","Sakura","Ocean","Amber"}) do
+            local original=Library.Themes[name].Accent
+            local custom=name.." copy"
+            w:DuplicateTheme(name,custom); w:SetTheme(custom)
+            w:SetThemeColor(custom,"Accent","#7294F0")
+            assert(Library.Themes[name].Accent==original and w.Palette.Accent==Color3.fromRGB(114,148,240))
+            w:RestoreTheme(custom); assert(w.Palette.Accent==original)
+            w:DeleteTheme(custom); assert(w.Theme==name and not w._customThemes[custom])
+            assert(not w:ImportTheme(w:ExportTheme(name),{Name=name,Replace=true}))
+        end
+        finish(w)
+    end)
     test("surface registry retains native proxies and repeated bindings merge roles",function()
         local w,s=fixture(); local card=s:AddStatCard({Value=12})
         assert(not getmetatable(w._skin) or not getmetatable(w._skin).__mode)

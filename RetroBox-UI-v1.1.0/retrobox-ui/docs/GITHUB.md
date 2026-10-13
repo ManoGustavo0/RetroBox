@@ -51,3 +51,6 @@ Confira usuário, nome do repositório, branch e caminho exato. Nomes de arquivo
 Se publicar a pasta `retrobox-ui` como uma subpasta, o caminho passa a ser `main/retrobox-ui/RetroBox.lua`. Se houver outra pasta por fora, ela também entra na URL, como no repositório atual mostrado acima.
 
 Use `Loader.lua` para receber mensagens distintas para falha de download, compilação e inicialização. Teste `examples/showcase.lua` no executor que você pretende suportar e depois execute `tests/executor-smoke.lua`.
+
+
+A 1.8.0 acrescenta seis temas oficiais e a galeria `examples/themes-gallery.lua`. A galeria requer a 1.8.0 ou posterior; antes do merge, substitua `main` pelo hash da PR no raw. O diretório histórico é preservado. Consulte [RELEASE-1.8.md](RELEASE-1.8.md).

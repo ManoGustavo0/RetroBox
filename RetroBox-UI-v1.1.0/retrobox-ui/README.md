@@ -2,11 +2,17 @@
 
 Library de GUI em Luau para desenvolvedores de scripts executados no cliente Roblox por executores. Um arquivo independente, carregado pelo link **raw do GitHub**, com visual retrô e API para conectar componentes às funções do seu script.
 
-[English](README.en.md) · [API completa](docs/API.md) · [Runtime](docs/RUNTIME.md) · [Integração de runtime](docs/INTEGRATION.md) · [Componentes e ferramentas 1.7](docs/ADVANCED.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
+[English](README.en.md) · [API completa](docs/API.md) · [Runtime](docs/RUNTIME.md) · [Integração de runtime](docs/INTEGRATION.md) · [Componentes e ferramentas](docs/ADVANCED.md) · [Publicar no GitHub](docs/GITHUB.md) · [Validação](docs/VALIDATION.md)
 
 ![Conceito visual da RetroBox UI](docs/visual-concept.png)
 
 *A imagem é um conceito visual, com perfil ilustrativo. A GUI usa objetos nativos do Roblox; a renderização em executor ainda precisa ser conferida.*
+
+## Temas da 1.8
+
+A 1.8 adiciona **Hacker, Dracula, Nord, Sakura, Ocean e Amber**, totalizando doze paletas oficiais. Escolha o tema em Configurações ou use `window:SetTheme("Hacker")`. Os temas acompanham os componentes existentes, os saves e as cópias editáveis do Theme Studio.
+
+Veja o [guia de temas](docs/THEMES.md), a [galeria executável](examples/themes-gallery.lua) e o [relatório da 1.8](docs/RELEASE-1.8.md).
 
 ## Carregar no executor
 
@@ -59,7 +65,7 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 
 - Janela arrastável, redimensionável, minimizável e maximizável, com título, descrição, ícone e atalho.
 - Avatar e nomes no canto inferior esquerdo; engrenagem de personalização ao lado.
-- Seis temas: **Retro98, Terminal, GameBoy, Paper, Midnight e Monokai**, além de temas próprios.
+- Doze temas: **Retro98, Terminal, GameBoy, Paper, Midnight, Monokai, Hacker, Dracula, Nord, Sakura, Ocean e Amber**, além de temas próprios.
 - Identidade em pixel art: 46 ícones embutidos, símbolo de caixa próprio, detalhes discretos e desenhos que acompanham os temas.
 - Bordas em relevo, fonte monoespaçada, cores de destaque e linhas CRT opcionais.
 - Abas, categorias, busca e colunas que se empilham em telas menores.
@@ -262,7 +268,8 @@ Use `ConfigVersion=2` e `Migrations={[1]=function(profile) ... end}` em CreateWi
 | [icons.lua](examples/icons.lua) | Catálogo, troca de ícones, temas e registro de pixel art própria |
 | [dashboard.lua](examples/dashboard.lua) | Dados simulados, cards/gráficos, estados, tarefas, dependências e ações canceláveis |
 | [runtime-integration.lua](examples/runtime-integration.lua) | Grupo compartilhado, Await, status, BindTask e migração de perfil com dados simulados |
-| [contrast-showcase.lua](examples/contrast-showcase.lua) | Cards das capturas, seis temas, gráficos, legendas e medidas de contraste |
+| [themes-gallery.lua](examples/themes-gallery.lua) | Seis paletas novas em cards, gráficos, console e tabela |
+| [contrast-showcase.lua](examples/contrast-showcase.lua) | Cards das capturas, todos os temas, gráficos, legendas e medidas de contraste |
 | [advanced-components.lua](examples/advanced-components.lua) | Lista com 2.000 itens, tabela, filtros, árvore e menu de linha |
 | [theme-studio.lua](examples/theme-studio.lua) | Editor e catálogo de paletas com armazenamento de perfis |
 | [runtime-inspector.lua](examples/runtime-inspector.lua) | Diagnóstico de tarefas/ações/grupos, dados simulados e cancelamento confirmado |
@@ -279,6 +286,6 @@ Os sete exemplos novos requerem `RetroBox.lua` 1.7.0. Loader e exemplos usam o r
 
 ## Validação e licença
 
-187 testes locais passaram, incluindo carregamento simulado do código raw, os 16 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+190 testes locais passaram, incluindo carregamento simulado do código raw, os 17 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026

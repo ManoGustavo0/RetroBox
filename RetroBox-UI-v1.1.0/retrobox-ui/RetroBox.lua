@@ -1,4 +1,4 @@
--- RetroBox UI 1.7.0 | Mano Gustavo | MIT License
+-- RetroBox UI 1.8.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.7.0", Themes = {}, Windows = {} }
+local Library = { Version = "1.8.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -186,6 +186,32 @@ Library.Themes.Midnight = palette({
 Library.Themes.Monokai = palette({
     {39,40,34},{53,55,46},{28,30,25},{248,248,242},{195,198,178},{98,103,84},
     {108,113,91},{18,20,16},{166,226,46},{31,39,20},{166,226,46},{249,139,151},
+})
+
+-- Additional official palettes: every surface owns its matching ink roles.
+Library.Themes.Hacker = palette({
+    {8,13,10},{16,27,19},{5,10,7},{213,255,224},{141,187,153},{53,92,65},
+    {78,128,89},{2,5,3},{57,237,117},{5,23,11},{104,240,162},{255,137,145},
+})
+Library.Themes.Dracula = palette({
+    {33,30,46},{44,40,61},{25,22,36},{245,240,255},{191,180,213},{101,88,125},
+    {120,104,144},{17,13,25},{189,147,249},{32,19,50},{142,230,176},{255,143,168},
+})
+Library.Themes.Nord = palette({
+    {36,45,58},{48,61,77},{28,37,49},{236,239,244},{180,196,214},{88,111,135},
+    {113,136,159},{18,25,35},{136,192,208},{16,40,49},{163,217,165},{240,154,163},
+})
+Library.Themes.Sakura = palette({
+    {240,223,230},{250,237,242},{255,248,251},{73,44,60},{121,83,105},{171,133,152},
+    {255,255,255},{182,141,159},{149,73,111},{255,246,250},{50,109,81},{166,55,81},
+})
+Library.Themes.Ocean = palette({
+    {16,37,46},{25,53,64},{11,27,35},{229,248,252},{161,200,210},{64,106,121},
+    {84,132,147},{6,18,25},{82,217,208},{8,44,44},{139,225,181},{255,155,152},
+})
+Library.Themes.Amber = palette({
+    {32,23,12},{48,35,19},{21,15,7},{255,240,204},{207,183,140},{122,91,50},
+    {153,116,68},{11,7,3},{244,188,89},{43,26,5},{187,214,139},{246,156,123},
 })
 
 -- BEGIN PIXEL ICONS
@@ -5330,7 +5356,7 @@ end
 -- BEGIN RETRO170 THEMES
 -- Local editable theme catalogs persist in the normal profile envelope.
 do
-    local official={Retro98=true,Terminal=true,GameBoy=true,Paper=true,Midnight=true,Monokai=true}
+    local official={Retro98=true,Terminal=true,GameBoy=true,Paper=true,Midnight=true,Monokai=true,Hacker=true,Dracula=true,Nord=true,Sakura=true,Ocean=true,Amber=true}
     local function themeName(name)
         assert(type(name)=="string" and #name>=1 and #name<=48 and not name:find("[%c]") and not name:match("^__retrobox/"),"Theme name must be 1–48 bytes without control characters")
         return name

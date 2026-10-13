@@ -193,6 +193,7 @@ def visual_concept():
     text(x + w - 219, footer_y + 29, f"Visual | v{VERSION}", "Muted", 13)
     text(116, 853, "CONCEITO VISUAL  /  perfil ilustrativo  /  validação visual no executor pendente", "Muted", 13)
     text(116, 891, "Retro98   Terminal   GameBoy   Paper   Midnight   Monokai", "Accent", 15)
+    text(116, 918, "Hacker   Dracula   Nord   Sakura   Ocean   Amber", "Accent", 15)
     image.save(ROOT / "docs/visual-concept.png", optimize=True)
 
 
