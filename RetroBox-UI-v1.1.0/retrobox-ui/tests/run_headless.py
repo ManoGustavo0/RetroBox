@@ -25,7 +25,8 @@ try:
         status = lua.luaL_loadfilex(state, str(source).encode(), None)
         if status:
             sys.exit(lua.lua_tolstring(state, -1, None).decode())
-    status = lua.luaL_loadfilex(state, b"tests/headless.lua", None)
+    target = sys.argv[1] if len(sys.argv)>1 else "tests/headless.lua"
+    status = lua.luaL_loadfilex(state, target.encode(), None)
     if not status:
         status = lua.lua_pcallk(state, 0, -1, 0, 0, None)
     if status:

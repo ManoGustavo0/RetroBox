@@ -335,6 +335,8 @@ dofile("tests/animation.lua")(Mock,Library,test)
 dofile("tests/interaction.lua")(Mock,Library,test)
 dofile("tests/integration.lua")(Mock,Library,test)
 dofile("tests/migrations.lua")(Mock,Library,test)
+dofile("tests/advanced.lua")(Mock,Library,test)
+dofile("tests/tools.lua")(Mock,Library,test)
 test("diagnostic loader reports HTTP, compile and library errors",function()
     loadstring=load
     for _,response in ipairs({function() error("HTTP failed") end,function() return "local" end,function() return "return {}" end,function() return "" end}) do
@@ -354,7 +356,7 @@ test("all shipped examples use the public API and clean up",function()
         local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
         return source
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration"}) do
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration","contrast-showcase","advanced-components","theme-studio","runtime-inspector","dashboard-builder","command-palette","help-accessibility"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
@@ -363,7 +365,7 @@ test("all shipped examples use the public API and clean up",function()
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==9 and #loaded==9)
+    assert(requests==16 and #loaded==16)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
             if window.Id=="dashboard-demo" then
