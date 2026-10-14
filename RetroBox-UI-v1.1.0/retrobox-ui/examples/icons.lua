@@ -1,5 +1,5 @@
 -- Requires RetroBox 1.9.1+. Use the release's pinned raw before merging.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/6486c4be4db877e4eb2e94f714f4ae4da3fdf762/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 RetroBox:RegisterIcon("gem",{
     "..####..", ".#ahha#.", "#ahhhha#", "#aaaaaa#",
     ".#aaaa#.", "..#aa#..", "...##...", "........",
