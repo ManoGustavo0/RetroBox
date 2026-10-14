@@ -57,3 +57,5 @@ A 1.8.0 acrescenta seis temas oficiais e a galeria `examples/themes-gallery.lua`
 
 
 A 1.9.0 mantém o mesmo artefato independente e o raw histórico. Loader.lua verifica a versão esperada; antes do merge, substitua main pelo commit confirmado da 1.9, nunca por um arquivo local obrigatório. Consulte [DISTRIBUTION.md](DISTRIBUTION.md), [RELEASE-1.9.md](RELEASE-1.9.md) e o prompt entregue, fixado no commit efetivamente verificado.
+
+A 1.9.1 acrescenta 30 ícones, totalizando 76. O loader e a galeria de ícones usam o raw publicado e fixado no commit da implementação; confira [RELEASE-1.9.1.md](RELEASE-1.9.1.md) e [ICONS.md](ICONS.md).

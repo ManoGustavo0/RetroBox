@@ -8,6 +8,10 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 *Illustrative concept, not an in-game screenshot. The library renders native Roblox GUI objects.*
 
+## Version 1.9.1
+
+Thirty new pixel icons bring the built-in catalog to **76**: diamonds, money, coins, tools, equipment and rewards. Each 12×12 drawing follows the window's theme and works in existing components and script hub entries. See [ICONS.md](docs/ICONS.md), [the runnable gallery](examples/icons.lua) and [RELEASE-1.9.1.md](docs/RELEASE-1.9.1.md).
+
 ## Version 1.9
 
 Optional [Script Hub Mode](docs/SCRIPT-HUB.md) reuses the same window, recycled lists, flags, profiles, scopes and action runtime. Game/script catalogs, thumbnails, search, favorites, explicit Play/teleport and game selection are available. Detection and profile loading never execute scripts or teleport.
@@ -22,7 +26,7 @@ See the [theme guide](docs/THEMES.md), [runnable gallery](examples/themes-galler
 
 ## Pixel art identity
 
-46 built-in 12×12 icons draw directly with native GUI rectangles and follow the theme. Use `Icon = "home"`, `"folder"`, `"palette"`, `"settings"` or another name on windows, tabs, categories and controls. Notifications and dialogs also accept Icon. Call `SetIcon(name)` to change it and `SetIcon(nil)` to remove it. Asset IDs and legacy emoji/text remain supported.
+76 built-in 12×12 icons draw directly with native GUI rectangles and follow the theme. Use `Icon = "home"`, `"folder"`, `"palette"`, `"settings"` or another name on windows, tabs, categories and controls. Notifications and dialogs also accept Icon. Call `SetIcon(name)` to change it and `SetIcon(nil)` to remove it. Asset IDs and legacy emoji/text remain supported.
 
 `GetIconNames()` lists the catalog, `GetIcon(name)` returns a copy of its pixel rows and `RegisterIcon(name, rows)` registers a custom pattern. The pattern supports 4–16 rows and columns; see the [icon guide](docs/ICONS.md) for names, theme characters and validation.
 

@@ -1,4 +1,5 @@
 return function(Mock,Library,test)
+    local newIcons={"diamond","coins","money","wallet","bank","credit-card","tools","wrench","hammer","screwdriver","pickaxe","axe","shovel","toolbox","sword","bow","chest","backpack","potion","key","crown","trophy","gift","rocket","fish","magnet","clock","map","skull","leaf"}
     local function count(t) local n=0; for _ in pairs(t) do n=n+1 end; return n end
     local function fixture(options)
         options=options or {}; options.Id=options.Id or "pixel-test"; options.ReducedMotion=true; options.FileStorage=false
@@ -10,7 +11,8 @@ return function(Mock,Library,test)
         w:Destroy(); Mock.pump(40); assert(Mock.Connections==0 and next(w._icons)==nil)
     end
     test("pixel catalog is embedded, sorted, bounded and returned as copies",function()
-        local names=Library:GetIconNames(); assert(#names==46)
+        local names=Library:GetIconNames(); assert(#names==76)
+        for _,name in ipairs(newIcons) do assert(table.find(names,name),"Missing built-in icon: "..name) end
         for index,name in ipairs(names) do
             if index>1 then assert(names[index-1]<name) end
             local rows=Library:GetIcon(name); assert(#rows==12 and #rows[1]==12)
@@ -48,10 +50,18 @@ return function(Mock,Library,test)
     end)
     test("pixel icons follow theme roles and active tab contrast",function()
         local w,tab,s=fixture(); local c=s:AddToggle({Icon="eye"})
+        local previews={}
+        for _,name in ipairs(newIcons) do previews[#previews+1]=s:AddLabel({Title=name,Icon="pixel:"..name,Height=40}) end
         for _,theme in ipairs(Library:GetThemeNames()) do
             w:SetTheme(theme)
             assert(tab._titleIcon.Foreground[1].BackgroundColor3==w.Palette.AccentText)
             assert(c._titleIcon.Foreground[1].BackgroundColor3==w.Palette.Text)
+            for index,preview in ipairs(previews) do
+                assert(preview.Icon:GetAttribute("RetroBoxIcon")==newIcons[index])
+                assert(preview._titleIcon.Foreground[1].BackgroundColor3==w.Palette.Text)
+                preview:SetDisabled(true); assert(preview._titleIcon.Nodes[1].BackgroundTransparency==.5)
+                preview:SetDisabled(false); assert(preview._titleIcon.Nodes[1].BackgroundTransparency==0)
+            end
         end
         w:SetAccent("#FFFFFF"); assert(tab._titleIcon.Foreground[1].BackgroundColor3==w.Palette.AccentText)
         local other=w:CreateTab({Title="Other",Icon="home"}); other:Select()
@@ -138,8 +148,9 @@ return function(Mock,Library,test)
         local w,tab,s=fixture(); local c=s:AddToggle({Icon="bolt"})
         local handles=count(w._icons); local connections=Mock.Connections
         local old=c._titleIcon.Nodes[1]
-        for i=1,30 do
-            c:SetIcon(i%2==0 and "eye" or "code")
+        for _,name in ipairs(newIcons) do
+            c:SetIcon(name)
+            assert(c.Icon:GetAttribute("RetroBoxIcon")==name)
             local note=w:Notify({Icon="info"}); note:Destroy()
             local dialog=w:Confirm({Content="Test"}); dialog:Close()
         end

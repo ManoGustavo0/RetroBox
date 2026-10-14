@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.9.0
+# RetroBox UI API · 1.9.1
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -130,7 +130,7 @@ Veja [RUNTIME.md](RUNTIME.md) para todos os contratos novos: cards/gráficos, re
 
 ## Ícones em pixel art
 
-Há 46 ícones padrão embutidos, com grade de 12×12 e cores da paleta. `Icon = "folder"` escolhe um nome; `Icon = "pixel:folder"` exige que ele exista. IDs numéricos positivos, imagens rbxassetid:// e texto curto/emoji também são aceitos. `Icon=false` remove na criação; `SetIcon(nil/false)` remove depois. Se omitido na criação, o ícone automático é retrobox na janela, grid nas abas, settings na aba Configurações e folder nas categorias. Controles não têm ícone de título automático.
+Há 76 ícones padrão embutidos, com grade de 12×12 e cores da paleta. `Icon = "folder"` escolhe um nome; `Icon = "pixel:folder"` exige que ele exista. IDs numéricos positivos, imagens rbxassetid:// e texto curto/emoji também são aceitos. `Icon=false` remove na criação; `SetIcon(nil/false)` remove depois. Se omitido na criação, o ícone automático é retrobox na janela, grid nas abas, settings na aba Configurações e folder nas categorias. Controles não têm ícone de título automático.
 
 Window, Tab, Section e Control oferecem `SetIcon(value)`. Tab também oferece `SetTitle(text)`. Notify, Dialog e Confirm aceitam Icon; ícones de notificações padrão são info/success/error, e Confirm com Kind=danger usa warning. Eles acompanham PixelIcons quando não foram escolhidos explicitamente.
 
