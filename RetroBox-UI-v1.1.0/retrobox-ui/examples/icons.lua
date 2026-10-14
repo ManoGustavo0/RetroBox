@@ -1,4 +1,4 @@
--- Requires RetroBox 1.4.0+ at this raw path. Adjust it if you move the source.
+-- Requires RetroBox 1.9.1+. Use the release's pinned raw before merging.
 local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
 RetroBox:RegisterIcon("gem",{
     "..####..", ".#ahha#.", "#ahhhha#", "#aaaaaa#",
@@ -6,7 +6,7 @@ RetroBox:RegisterIcon("gem",{
 })
 local window=RetroBox:CreateWindow({
     Id="pixel-showcase", Title="RetroBox / Pixel art", Icon="retrobox",
-    Subtitle="Ícones com nomes simples, cores do tema e desenho próprio.",
+    Subtitle="76 ícones nativos: economia, ferramentas, equipamentos e recompensas.",
     ConfigFolder="RetroBox/PixelShowcase", PixelIcons=true, PixelDecorations=true,
 })
 local tab=window:CreateTab({Title="Ícones",Icon="grid"})
@@ -26,6 +26,12 @@ actions:AddButton({Title="Notificar",Icon="notification",Callback=function()
 end})
 actions:AddButton({Title="Diálogo",Icon="info",Callback=function()
     window:Confirm({Title="Pixel art",Content="Ícones funcionam em diálogos também.",Icon="star"})
+end})
+local equipment=tab:CreateSection({Title="Novos ícones em componentes",Icon="tools"})
+equipment:AddStatCard({Title="Diamantes · exemplo",Icon="diamond",Value=25})
+equipment:AddStatCard({Title="Dinheiro · exemplo",Icon="money",Value=1000})
+equipment:AddButton({Title="Prévia de recompensa",Icon="gift",Callback=function()
+    window:Notify({Title="Recompensa · demonstração",Content="Ícones embutidos funcionam em avisos e componentes.",Icon="trophy"})
 end})
 local gallery=tab:CreateSection({Title="Catálogo completo",Icon="grid"})
 local row

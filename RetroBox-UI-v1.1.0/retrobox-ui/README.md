@@ -8,6 +8,10 @@ Library de GUI em Luau para desenvolvedores de scripts executados no cliente Rob
 
 *A imagem é um conceito visual, com perfil ilustrativo. A GUI usa objetos nativos do Roblox; a renderização em executor ainda precisa ser conferida.*
 
+## Versão 1.9.1
+
+Mais 30 ícones em pixel art, totalizando **76 desenhos embutidos**: diamante, dinheiro, moedas, ferramentas, equipamentos e recompensas. Usam as cores dos temas e funcionam nos controles e no Script Hub. Veja [ICONS.md](docs/ICONS.md) e [RELEASE-1.9.1.md](docs/RELEASE-1.9.1.md).
+
 ## Versão 1.9
 
 [Script Hub Mode](docs/SCRIPT-HUB.md) opcional com catálogo, pesquisa, miniaturas, favoritos, metadados, Play e teleporte explícito. Usa as mesmas listas virtuais, flags, perfis, scopes e ações. A detecção automática seleciona o jogo cadastrado sem executar scripts.
@@ -74,7 +78,7 @@ O executor precisa disponibilizar `loadstring` e `game:HttpGet` para esse carreg
 - Janela arrastável, redimensionável, minimizável e maximizável, com título, descrição, ícone e atalho.
 - Avatar e nomes no canto inferior esquerdo; engrenagem de personalização ao lado.
 - Doze temas: **Retro98, Terminal, GameBoy, Paper, Midnight, Monokai, Hacker, Dracula, Nord, Sakura, Ocean e Amber**, além de temas próprios.
-- Identidade em pixel art: 46 ícones embutidos, símbolo de caixa próprio, detalhes discretos e desenhos que acompanham os temas.
+- Identidade em pixel art: 76 ícones embutidos, símbolo de caixa próprio, detalhes discretos e desenhos que acompanham os temas.
 - Bordas em relevo, fonte monoespaçada, cores de destaque e linhas CRT opcionais.
 - Abas, categorias, busca e colunas que se empilham em telas menores.
 - Aba Configurações com saves nomeados, salvar/carregar/excluir e confirmações de sobrescrita/exclusão.

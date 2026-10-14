@@ -1,8 +1,12 @@
-# Pixel art · RetroBox UI 1.4.0
+# Pixel art · RetroBox UI 1.9.1
 
-A identidade usa uma caixa em pixels, bordas em relevo e pequenos detalhes estáticos. Os 46 desenhos padrão usam uma grade de 12×12. O catálogo Lua é a fonte dos ícones da GUI, dos SVGs e da imagem abaixo.
+A identidade usa uma caixa em pixels, bordas em relevo e pequenos detalhes estáticos. Os 76 desenhos padrão usam uma grade de 12×12. A 1.9.1 acrescenta 30 ícones e preserva os 46 desenhos anteriores. O catálogo Lua é a fonte dos ícones da GUI, dos SVGs e da imagem abaixo.
 
 ![Catálogo de ícones](pixel-icons.png)
+
+## Novos desenhos da 1.9.1
+
+![30 novos ícones](pixel-icons-new.png)
 
 ## Escolher um ícone
 
@@ -30,6 +34,24 @@ window:Confirm({ Title = "Continuar?", Content = "Aplicar a mudança?", Icon = "
 | Ações | `close`, `minimize`, `maximize`, `restore`, `reset`, `refresh`, `chevron-down`, `chevron-right` |
 | Destaques | `star`, `heart`, `bolt`, `spark` |
 | Proteção | `shield`, `lock`, `unlock` |
+| Economia e recursos · novos | `diamond`, `coins`, `money`, `wallet`, `bank`, `credit-card` |
+| Ferramentas · novos | `tools`, `wrench`, `hammer`, `screwdriver`, `pickaxe`, `axe`, `shovel`, `toolbox` |
+| Equipamentos · novos | `sword`, `bow`, `chest`, `backpack`, `potion`, `key` |
+| Recompensas · novos | `crown`, `trophy`, `gift` |
+| Atividades · novos | `rocket`, `fish`, `magnet` |
+| Contexto · novos | `clock`, `map`, `skull`, `leaf` |
+
+Os novos nomes funcionam nos componentes existentes, inclusive `Icon` dos scripts cadastrados no Script Hub. Não precisam de upload de assets ou download de imagens.
+
+```lua
+section:AddStatCard({Title="Diamantes", Icon="diamond", Value=25})
+section:AddStatCard({Title="Dinheiro", Icon="money", Value=1000})
+section:AddButton({Title="Ferramentas", Icon="tools", Callback=function()
+    window:Notify({Title="Ferramentas", Content="Ação de demonstração.", Icon="wrench"})
+end})
+-- Dentro de um registro em Games[i].Scripts:
+-- {Id="minerar", Title="Meu script", Icon="pickaxe", Callback=function(ctx) ... end}
+```
 
 `RetroBox:GetIconNames()` retorna os nomes em ordem alfabética, incluindo os registrados pelo dev. `RetroBox:GetIcon(name)` retorna uma cópia das linhas do desenho, ou nil se não existir.
 
