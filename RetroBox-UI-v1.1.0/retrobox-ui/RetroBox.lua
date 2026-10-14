@@ -1,4 +1,4 @@
--- RetroBox UI 1.9.1 | Mano Gustavo | MIT License
+-- RetroBox UI 1.9.2 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.9.1", Themes = {}, Windows = {} }
+local Library = { Version = "1.9.2", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -2216,11 +2216,14 @@ function Section:AddLabel(options)
     local self = base(self,"Label",options,options.Height or 62)
     self.Persist = false
     self.TitleLabel.TextWrapped = true; self.TitleLabel.TextTruncate = Enum.TextTruncate.None
+    self.TitleLabel.TextYAlignment = Enum.TextYAlignment.Top
     self.DescriptionLabel.TextWrapped = true; self.DescriptionLabel.TextTruncate = Enum.TextTruncate.None
     self.DescriptionLabel.Size = UDim2.new(1,0,1,-22); self.DescriptionLabel.TextYAlignment = Enum.TextYAlignment.Top
     function self:_normalize(value) return tostring(value) end
     function self:_render() self.TitleLabel.Text = self.Value end
     function self:SetText(value) self.Title=tostring(value); return self:SetValue(tostring(value),true) end
+    connect(self,self.TitleLabel:GetPropertyChangedSignal("Text"),function() self:_layoutDescription() end)
+    connect(self,self.TitleLabel:GetPropertyChangedSignal("AbsoluteSize"),function() self:_layoutDescription() end)
     return init(self,options,self.Title)
 end
 function Section:AddSeparator(options)
@@ -4809,6 +4812,7 @@ do
         local layout=self._descriptionLayout
         if not layout or self.Destroyed or self._describing or self.Type=="Separator" or self._inlineParent then return end
         self._describing=true
+        if self.Type=="Label" then self:_syncHelpBadge() end
         local allowed=self._descriptionEnabled~=false and self._window.ShowDescriptions~=false and #self.Description>0
         local width=self.Frame.AbsoluteSize.X/math.max(.01,self._window._actualScale or 1)
         width=math.max(60,width+self.DescriptionLabel.Size.X.Offset)
@@ -4820,7 +4824,25 @@ do
         local reserve=allowed and height+4 or 0; local delta=reserve-layout.Reserve
         self.DescriptionLabel.Visible=allowed; self.DescriptionLabel.Size=UDim2.new(1,self.DescriptionLabel.Size.X.Offset,0,height)
         local total=layout.Height+delta
-        if self.Type=="Label" then total=self._explicitHeight and math.max(layout.Height,allowed and 26+height or 0) or allowed and math.max(30,26+height) or math.min(layout.Height,42) end
+        if self.Type=="Label" then
+            -- SetText may contain several lines (hub descriptions and status).
+            -- Height is a minimum; the text rectangle must grow with its content.
+            local titleWidth=self.Frame.AbsoluteSize.X/math.max(.01,self._window._actualScale or 1)*self.TitleLabel.Size.X.Scale+self.TitleLabel.Size.X.Offset
+            local ok,size=pcall(TextService.GetTextSize,TextService,self.TitleLabel.Text,self.TitleLabel.TextSize,self.TitleLabel.Font,Vector2.new(math.max(1,titleWidth),100000))
+            local titleHeight
+            if ok and finite(size.Y) then titleHeight=math.max(21,size.Y+3)
+            else
+                local lines=0
+                for line in (self.TitleLabel.Text.."\n"):gmatch("(.-)\n") do
+                    lines=lines+math.max(1,math.ceil(#line*self.TitleLabel.TextSize*.7/math.max(1,titleWidth)))
+                end
+                titleHeight=math.max(21,lines*(self.TitleLabel.TextSize+4)+3)
+            end
+            self.TitleLabel.Size=UDim2.new(self.TitleLabel.Size.X.Scale,self.TitleLabel.Size.X.Offset,0,titleHeight)
+            self.DescriptionLabel.Position=UDim2.new(self.DescriptionLabel.Position.X.Scale,self.DescriptionLabel.Position.X.Offset,0,titleHeight+5)
+            local minimum=self._explicitHeight and layout.Height or allowed and 30 or math.min(layout.Height,42)
+            total=math.max(minimum,titleHeight+(allowed and height+5 or 0))
+        end
         if self.Type=="Dropdown" then total=(self.Open and 272 or 80)+delta end
         if self.Type=="ColorPicker" then total=(self.Open and 334 or 80)+delta end
         for object,data in pairs(layout.Children) do

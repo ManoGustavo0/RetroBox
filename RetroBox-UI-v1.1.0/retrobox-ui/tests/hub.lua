@@ -13,6 +13,36 @@ return function(Mock,Library,test)
         options.Games=options.Games or {gameRecord("current",game.PlaceId),gameRecord("other",2222)}
         return Library:CreateScriptHub(options)
     end
+    local function readable(control)
+        local scale=math.max(.01,control._window._actualScale or 1)
+        local size=Mock.Services.TextService:GetTextSize(control.TitleLabel.Text,control.TitleLabel.TextSize,control.TitleLabel.Font,Vector2.new(math.max(1,control.TitleLabel.AbsoluteSize.X/scale),100000))
+        assert(control.TitleLabel.Size.Y.Offset>=size.Y,"Hub detail text is clipped")
+        assert(control.Frame.Size.Y.Offset>=control.TitleLabel.Size.Y.Offset,"Hub detail text exceeds its row")
+        assert(control.TitleLabel.TextWrapped and control.TitleLabel.TextYAlignment==Enum.TextYAlignment.Top)
+    end
+    test("game and script descriptions remain readable after selection and text scaling",function()
+        local calls=0; local rec=gameRecord("current",game.PlaceId,function() calls=calls+1 end)
+        rec.Description="Descrição do jogo.\nSegunda linha do jogo.\nTerceira linha."
+        rec.Scripts[1].Description="Descrição do script.\nOutra linha de instruções.\nMais informações do script."
+        local h=fixture({Games={rec}}); Mock.pump()
+        assert(h.GameDetails.TitleLabel.Text:find(rec.Description,1,true))
+        assert(h.ScriptDetails.TitleLabel.Text:find(rec.Scripts[1].Description,1,true))
+        for _,scale in ipairs({.8,1,1.4}) do h.Window:SetTextScale(scale); readable(h.GameDetails); readable(h.ScriptDetails) end
+        h.Window:SetDescriptions(false); readable(h.GameDetails); readable(h.ScriptDetails)
+        assert(h.GameDetails.TitleLabel.Text:find(rec.Description,1,true) and calls==0)
+        h:Hide(); h:Show(); readable(h.GameDetails); readable(h.ScriptDetails); finish(h)
+    end)
+    test("description edits expand long details and reclaim space when content becomes short",function()
+        local h=fixture(); Mock.pump()
+        local long=("Informações adicionais sobre o jogo e seus scripts. "):rep(25)
+        h:UpdateGame("current",{Description=long}); h:UpdateScript("current","main",{Description=long})
+        readable(h.GameDetails); readable(h.ScriptDetails)
+        local gameHeight,scriptHeight=h.GameDetails.Frame.Size.Y.Offset,h.ScriptDetails.Frame.Size.Y.Offset
+        h:UpdateGame("current",{Description="Breve descrição."}); h:UpdateScript("current","main",{Description="Texto curto."})
+        readable(h.GameDetails); readable(h.ScriptDetails)
+        assert(h.GameDetails.Frame.Size.Y.Offset<gameHeight and h.ScriptDetails.Frame.Size.Y.Offset<scriptHeight)
+        finish(h)
+    end)
     test("hub is optional and empty catalogs have no fabricated entries or actions",function()
         local w=Library:CreateWindow({Id="traditional",FileStorage=false}); assert(not w._scriptHubs); w:Destroy(); Mock.pump(100)
         local h=fixture({Games={}}); assert(#h:GetGames()==0 and not h.SelectedGameId and h.PlayButton.Disabled and h.FavoriteButton.Disabled)

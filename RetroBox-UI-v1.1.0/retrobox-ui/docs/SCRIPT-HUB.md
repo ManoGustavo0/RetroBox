@@ -70,6 +70,8 @@ Callbacks de scripts recebem `(ctx, hub, gameMetadata, scriptMetadata)`. Coopere
 
 ## Perfis e imagens
 
+As descrições do jogo selecionado aparecem em **Jogo selecionado**. A descrição do script selecionado aparece abaixo do **Catálogo de scripts**, junto dos créditos e da versão. Na 1.9.2, esses campos medem o texto completo: crescem para acomodar quebras de linha e textos longos e recalculam ao atualizar o cadastro, redimensionar a janela ou alterar a escala do texto. São conteúdo do catálogo; desligar as descrições auxiliares dos controles não remove esses dados.
+
 Favoritos, ordenação e jogo selecionado usam flags estáveis `hub/<HubId>/favorites`, `hub/<HubId>/sort`, `hub/<HubId>/games`. Construa o catálogo antes de LoadConfig. Restauração silenciosa atualiza a interface pelas flags observáveis. Favoritos ausentes do catálogo são descartados; uma seleção inexistente é normalizada para nil e uma entrada disponível é escolhida. Dados dos jogos, callbacks, busca, imagens e execuções não entram no perfil. Schema/ConfigVersion permanecem compatíveis com perfis anteriores.
 
 As linhas são recicladas, com pool máximo 64. Miniaturas usam `rbxthumb://type=GameIcon&id=<UniverseId>&w=150&h=150`; sem UniverseId, `GameThumbnail` usa PlaceId e 256×144. ContentProvider:PreloadAsync roda fora da criação da interface, no máximo quatro pedidos simultâneos; cache/pendências são limitados a 128 URIs. Sem serviço, sem imagem ou em erro, permanece o fallback em pixel art. Ocultar/reabrir preserva a seleção. Destruir cancela os scopes, observadores, trabalhos de imagem e ações gerenciadas.
