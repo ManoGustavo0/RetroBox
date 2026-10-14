@@ -1,6 +1,6 @@
--- Run with RetroBox 1.9.0+. Before merging the release, replace main with its commit.
+-- Run with RetroBox API 2 through its permanent bootstrap.
 -- Only registered callbacks execute. The extra empty game is a catalog demonstration.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local placeId = game.PlaceId > 0 and game.PlaceId or nil
 local universeId = game.GameId > 0 and game.GameId or nil
 local hub = RetroBox:CreateScriptHub({
@@ -11,7 +11,7 @@ local hub = RetroBox:CreateScriptHub({
             Description = "Catálogo desta sessão, com ações locais de demonstração.", Order = 1,
             Scripts = {
                 {Id = "hello", Title = "Mostrar aviso", Author = "Mano Gustavo", Version = "1.0", Icon = "info",
-                    Description = "Demonstra o botão Play e o feedback da ação concluída.",
+                    Description = "Demonstra o botão Executar script e o feedback da ação concluída.",
                     Callback = function(_, activeHub) activeHub.Window:Notify({Title = "Olá!", Content = "Ação de demonstração executada."}); return {Shown = true} end},
                 {Id = "managed", Title = "Operação cancelável", Author = "Mano Gustavo", Version = "1.0", Confirm = "Executar a demonstração?",
                     Description = "Três etapas simuladas, usando o runtime da library.",

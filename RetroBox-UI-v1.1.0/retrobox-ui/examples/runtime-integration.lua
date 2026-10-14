@@ -1,5 +1,5 @@
 -- RetroBox 1.6.0+: simulated inventory, shared groups and script migrations.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window=RetroBox:CreateWindow({
     Id="runtime-integration-demo",Title="RetroBox / Runtime integrado",Icon="terminal",
     Subtitle="Demonstração com dados simulados",ConfigFolder="RetroBox/RuntimeIntegration",

@@ -1,5 +1,5 @@
 -- RetroBox 1.7.0+: recycled datasets, tables, trees and contextual actions.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window=RetroBox:CreateWindow({Id="advanced-components-demo",Title="RetroBox / Dados",Subtitle="Listas, tabelas e hierarquias"})
 local tab=window:CreateTab({Title="Dados",Icon="folder",Columns=2})
 local section=tab:CreateSection({Title="Lista virtual",Icon="grid"})

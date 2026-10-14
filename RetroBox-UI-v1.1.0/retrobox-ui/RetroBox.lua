@@ -1,4 +1,4 @@
--- RetroBox UI 1.9.2 | Mano Gustavo | MIT License
+-- RetroBox UI 2.0.0 | Mano Gustavo | MIT License
 -- Standalone GUI library for Roblox client executors.
 -- Load the raw GitHub source with loadstring(game:HttpGet(URL))().
 
@@ -9,7 +9,7 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Library = { Version = "1.9.2", Themes = {}, Windows = {} }
+local Library = { Version = "2.0.0", Themes = {}, Windows = {} }
 local Window = {}; Window.__index = Window
 local Tab = {}; Tab.__index = Tab
 local Section = {}; Section.__index = Section
@@ -3170,9 +3170,12 @@ function Window:FocusControl(control)
     local navigation=self:CreateScope(); self._focusNavigation=navigation
     local function scrollAndFocus()
         if self.Destroyed or control.Destroyed or tab.Destroyed or self.ActiveTab~=tab or self._overlay or self._dialog or self._shown==false or self.Minimized then return end
-        local canvas=tab.Frame.CanvasPosition or Vector2.new(0,0)
-        local y=canvas.Y+(control.Frame.AbsolutePosition.Y-tab.Frame.AbsolutePosition.Y)/math.max(.1,self._actualScale)
-        tab.Frame.CanvasPosition=Vector2.new(canvas.X,math.max(0,y-12))
+        local scroller=control.Frame.Parent
+        while scroller and scroller~=tab.Frame and not (scroller:IsA("ScrollingFrame") and scroller.ScrollingEnabled~=false) do scroller=scroller.Parent end
+        scroller=scroller or tab.Frame
+        local canvas=scroller.CanvasPosition or Vector2.new(0,0)
+        local y=canvas.Y+(control.Frame.AbsolutePosition.Y-scroller.AbsolutePosition.Y)/math.max(.1,self._actualScale)
+        scroller.CanvasPosition=Vector2.new(canvas.X,math.max(0,y-12))
         if not control.Disabled then
             local target=control.Input or control.Button or control.TitleLabel
             if control.Viewport and control._onKey then
@@ -6152,6 +6155,312 @@ end
 
 -- END RETRO170 PREFERENCES
 
+-- BEGIN RETRO200 UPDATE CORE
+local UpdateCore=(function()
+-- RetroBox update protocol v1. Embedded into the standalone library and loader.
+-- HTTPS origin is the publisher trust boundary. SHA-256 detects damaged bytes;
+-- it is not a signature and does not protect a compromised publishing account.
+local Core={ProtocolVersion=1,OfficialRoot="https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main"}
+local Client={}; Client.__index=Client
+local function clone(value)
+    if type(value)~="table" then return value end
+    local out={}; for k,v in pairs(value) do out[k]=clone(v) end; return out
+end
+local function integer(n) return type(n)=="number" and n==n and n>=0 and n%1==0 and n<=9007199254740991 end
+local function bounded(value,maximum,name)
+    assert(type(value)=="string" and #value>0 and #value<=maximum,name.." must be bounded text"); return value
+end
+function Core.ParseVersion(value)
+    bounded(value,128,"Version")
+    local base,build=value:match("^(.-)%+(.+)$"); base=base or value
+    if build then
+        assert(not build:find("[^%w%.%-]") and not build:find("%.%.") and build:sub(1,1)~="." and build:sub(-1)~=".","Invalid semantic version build")
+    end
+    local numeric,pre=base:match("^(%d+%.%d+%.%d+)%-(.+)$"); numeric=numeric or base
+    local a,b,c=numeric:match("^(%d+)%.(%d+)%.(%d+)$"); assert(a,"Expected MAJOR.MINOR.PATCH")
+    local parts={a,b,c}; for _,part in ipairs(parts) do assert((#part==1 or part:sub(1,1)~="0") and integer(tonumber(part)),"Invalid semantic version number") end
+    local prerelease={}
+    if pre then
+        assert(not pre:find("[^%w%.%-]") and not pre:find("%.%.") and pre:sub(1,1)~="." and pre:sub(-1)~=".","Invalid prerelease")
+        for part in pre:gmatch("[^%.]+") do
+            assert(not part:match("^%d+$") or #part==1 or part:sub(1,1)~="0","Prerelease numbers cannot have leading zeroes")
+            prerelease[#prerelease+1]=part
+        end
+    end
+    return {Major=tonumber(a),Minor=tonumber(b),Patch=tonumber(c),Prerelease=prerelease,Build=build,Text=value}
+end
+function Core.CompareVersions(a,b)
+    a=Core.ParseVersion(a); b=Core.ParseVersion(b)
+    for _,k in ipairs({"Major","Minor","Patch"}) do if a[k]~=b[k] then return a[k]<b[k] and -1 or 1 end end
+    if #a.Prerelease==0 and #b.Prerelease==0 then return 0 end
+    if #a.Prerelease==0 then return 1 elseif #b.Prerelease==0 then return -1 end
+    for i=1,math.max(#a.Prerelease,#b.Prerelease) do
+        local x,y=a.Prerelease[i],b.Prerelease[i]
+        if x==nil then return -1 elseif y==nil then return 1 elseif x~=y then
+            local xn,yn=x:match("^%d+$"),y:match("^%d+$")
+            if xn and yn then
+                if #x~=#y then return #x<#y and -1 or 1 end
+                return x<y and -1 or 1
+            elseif xn then return -1 elseif yn then return 1 end
+            return x<y and -1 or 1
+        end
+    end
+    return 0
+end
+function Core.SHA256(source)
+    assert(type(source)=="string","SHA256 needs bytes")
+    assert(type(bit32)=="table" and type(bit32.bxor)=="function","SHA-256 needs the Luau bit32 library")
+    local band,bxor,bnot,rshift,ror=bit32.band,bit32.bxor,bit32.bnot,bit32.rshift,bit32.rrotate
+    local constants={
+        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+    }
+    local h={0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19}
+    local function word(n) return string.char(rshift(n,24),band(rshift(n,16),255),band(rshift(n,8),255),band(n,255)) end
+    local bits=#source*8
+    local padded=source.."\128"..string.rep("\0",(55-#source)%64)..word(math.floor(bits/4294967296))..word(bits%4294967296)
+    for offset=1,#padded,64 do
+        local w={}
+        for i=0,15 do local a,b,c,d=padded:byte(offset+i*4,offset+i*4+3); w[i+1]=a*16777216+b*65536+c*256+d end
+        for i=17,64 do
+            local x,y=w[i-15],w[i-2]
+            local s0=bxor(ror(x,7),ror(x,18),rshift(x,3)); local s1=bxor(ror(y,17),ror(y,19),rshift(y,10))
+            w[i]=(w[i-16]+s0+w[i-7]+s1)%4294967296
+        end
+        local a,b,c,d,e,f,g,j=table.unpack(h)
+        for i=1,64 do
+            local s1=bxor(ror(e,6),ror(e,11),ror(e,25)); local ch=bxor(band(e,f),band(bnot(e),g))
+            local t1=(j+s1+ch+constants[i]+w[i])%4294967296
+            local s0=bxor(ror(a,2),ror(a,13),ror(a,22)); local maj=bxor(band(a,b),band(a,c),band(b,c))
+            local t2=(s0+maj)%4294967296
+            j,g,f,e,d,c,b,a=g,f,e,(d+t1)%4294967296,c,b,a,(t1+t2)%4294967296
+        end
+        local v={a,b,c,d,e,f,g,j}; for i=1,8 do h[i]=(h[i]+v[i])%4294967296 end
+    end
+    local out={}; for i=1,8 do out[i]=string.format("%08x",h[i]) end; return table.concat(out)
+end
+local function path(value)
+    bounded(value,512,"Artifact path")
+    assert(not value:find("[^%w_%.%/%-]") and value:sub(1,1)~="/" and value:sub(-1)~="/" and not value:find("//",1,true),"Only origin-relative paths are allowed")
+    for segment in value:gmatch("[^/]+") do assert(segment~="." and segment~="..","Path traversal is forbidden") end
+    return value
+end
+local function channel(value)
+    assert(value=="stable" or value=="preview" or value=="pinned","Channel must be stable, preview or pinned"); return value
+end
+local function json(service,bytes,limit)
+    assert(type(bytes)=="string" and #bytes>0 and #bytes<=limit,"Response is empty or exceeds its size limit")
+    local value=service:JSONDecode(bytes); assert(type(value)=="table","Expected a JSON record"); return value
+end
+local function validate(client,m)
+    local o=client.Options
+    assert(type(m)=="table" and m.SchemaVersion==1 and m.Kind==o.Kind,"Unsupported distribution manifest")
+    local version=Core.ParseVersion(m.Version)
+    assert(version.Major==o.Major,"Incompatible release major")
+    assert(o.Channel~="stable" or #version.Prerelease==0,"Stable cannot resolve a prerelease")
+    assert(o.Channel=="pinned" or m.Channel==o.Channel,"Manifest belongs to a different channel")
+    assert(o.Channel~="pinned" or m.Version==o.Version,"Pinned manifest does not match the requested version")
+    assert(integer(m.APIVersion) and (not o.APIVersion or m.APIVersion==o.APIVersion),"Incompatible API version")
+    if o.MinVersion then assert(Core.CompareVersions(m.Version,o.MinVersion)>=0,"Release is below MinVersion") end
+    if o.MaxVersion then assert(Core.CompareVersions(m.Version,o.MaxVersion)<0,"Release is at or above exclusive MaxVersion") end
+    if o.HubId then assert(m.HubId==o.HubId,"Manifest belongs to a different hub") end
+    bounded(m.Build,128,"Build")
+    local a=m.Artifact; assert(type(a)=="table","Artifact metadata is missing"); path(a.Path)
+    assert(type(a.SHA256)=="string" and #a.SHA256==64 and a.SHA256:match("^[0-9a-f]+$"),"Invalid SHA-256 digest")
+    assert(integer(a.Bytes) and a.Bytes>0 and a.Bytes<=o.MaxArtifactBytes,"Invalid artifact length")
+    assert(o.Kind=="RetroBox" or type(m.Library)=="table","Hub manifest needs RetroBox compatibility metadata")
+    if m.Library then
+        assert(type(m.Library)=="table" and type(o.LibraryVersion)=="string","Library compatibility cannot be determined")
+        assert(type(m.Library.MinVersion)=="string" and integer(m.Library.APIVersion),"Hub manifest needs a minimum RetroBox version and API")
+        if m.Library.MinVersion then assert(Core.CompareVersions(o.LibraryVersion,m.Library.MinVersion)>=0,"Hub needs a newer RetroBox") end
+        if m.Library.MaxVersion then assert(Core.CompareVersions(o.LibraryVersion,m.Library.MaxVersion)<0,"Hub does not support this RetroBox") end
+        if m.Library.APIVersion then assert(m.Library.APIVersion==o.LibraryAPIVersion,"Hub needs a different RetroBox API") end
+    end
+    return clone(m)
+end
+function Core.New(options)
+    options=options or {}; assert(type(options)=="table","Updater options must be a table")
+    local o={}; for k,v in pairs(options) do o[k]=v end
+    o.Channel=channel(o.Channel or "stable"); o.Kind=o.Kind or "RetroBox"; o.Major=o.Major or 2
+    o.APIVersion=o.APIVersion or (o.Kind=="RetroBox" and 2 or 1)
+    assert(o.Kind=="RetroBox" or o.Kind=="Hub" or o.Kind=="HubCatalog","Unsupported update kind")
+    assert(integer(o.Major) and o.Major>0,"Major must be a positive integer")
+    if o.Kind~="RetroBox" then assert(o.Root,"Hub updates need an explicit publisher Root") end
+    o.Root=bounded(o.Root or Core.OfficialRoot,1024,"Root"):gsub("/+$","")
+    assert(o.Root:match("^https://[%w%.%-]+/[A-Za-z0-9_%.%/%-]+$") and not o.Root:find("/%.%./") and not o.Root:find("/%.%./?$"),"Root must be an explicit HTTPS origin and path without traversal")
+    if o.Version then Core.ParseVersion(o.Version) end
+    assert(o.Channel~="pinned" or o.Version,"Pinned needs Version")
+    if o.CurrentVersion then Core.ParseVersion(o.CurrentVersion) end
+    if o.MinVersion then Core.ParseVersion(o.MinVersion) end; if o.MaxVersion then Core.ParseVersion(o.MaxVersion) end
+    assert(o.APIVersion==nil or integer(o.APIVersion),"APIVersion must be an integer")
+    if o.ManifestPath then path(o.ManifestPath) end
+    o.MaxArtifactBytes=o.MaxArtifactBytes or (o.Kind=="HubCatalog" and 524288 or 2097152)
+    assert(integer(o.MaxArtifactBytes) and o.MaxArtifactBytes>=1 and o.MaxArtifactBytes<=8388608,"MaxArtifactBytes must be 1–8388608")
+    o.Service=o.Service or game:GetService("HttpService")
+    o.Fetch=o.Fetch or function(url)
+        local ok,fn=pcall(function() return game.HttpGet end); assert(ok and type(fn)=="function","Environment does not provide HttpGet")
+        return fn(game,url,true)
+    end
+    assert(type(o.Fetch)=="function","Fetch must be a developer function")
+    assert(o.Cache==nil or o.Cache==false or o.Cache==true or type(o.Cache)=="table","Cache must be boolean or an adapter")
+    if type(o.Cache)=="table" then assert(type(o.Cache.Get)=="function" and type(o.Cache.Set)=="function","Cache needs Get and Set") end
+    local self=setmetatable({Options=o,Report={State="Idle",Channel=o.Channel,CurrentVersion=o.CurrentVersion,Kind=o.Kind,Root=o.Root}},Client)
+    return self
+end
+function Client:GetStatus() return clone(self.Report) end
+function Client:SetChannel(value,version)
+    assert(not self._busy,"Cannot change channel during an update operation")
+    value=channel(value); if version then Core.ParseVersion(version) end
+    assert(value~="pinned" or version or self.Options.Version,"Pinned needs Version")
+    self.Options.Channel=value; if version then self.Options.Version=version end
+    self._manifest=nil; self.Report={State="Idle",Channel=value,CurrentVersion=self.Options.CurrentVersion,Kind=self.Options.Kind,Root=self.Options.Root}
+    return self
+end
+function Client:_manifestPath()
+    if self.Options.ManifestPath then return self.Options.ManifestPath end
+    if self.Options.Channel=="pinned" then return "dist/releases/"..self.Options.Version.."/manifest.json" end
+    return "dist/channels/"..self.Options.Channel.."/v"..self.Options.Major..".json"
+end
+function Client:Check()
+    if self._busy then return nil,"Update operation is already running" end
+    self._busy=true; self.Report.State="Checking"; self.Report.LastCheck=os.time(); self.Report.Error=nil
+    self.Report.Compatible=nil; self.Report.AvailableVersion=nil; self.Report.Build=nil
+    local ok,result=pcall(function() return validate(self,json(self.Options.Service,self.Options.Fetch(self.Options.Root.."/"..self:_manifestPath()),65536)) end)
+    self._busy=false
+    if not ok then self.Report.State="Failed"; self.Report.Error=tostring(result); return nil,self.Report.Error end
+    self._manifest=result; self.Report.AvailableVersion=result.Version; self.Report.Build=result.Build; self.Report.Compatible=true
+    local current=self.Options.CurrentVersion
+    local comparison=current and Core.CompareVersions(result.Version,current) or 1
+    self.Report.State=comparison==0 and "UpToDate" or comparison<0 and "RollbackAvailable" or "Available"
+    return clone(result)
+end
+function Client:_cacheKey()
+    local o=self.Options
+    return Core.SHA256(o.Root.."|"..self:_manifestPath().."|"..o.Kind.."|"..tostring(o.HubId or ""))
+end
+function Client:_cache(get,value)
+    local o=self.Options; if not o.Cache then return nil end
+    local key=self:_cacheKey()
+    if type(o.Cache)=="table" then if get then return o.Cache:Get(key) else return o.Cache:Set(key,value) end end
+    local env=_G; if type(getgenv)=="function" then local ok,v=pcall(getgenv); if ok and type(v)=="table" then env=v end end
+    env.__RetroBoxUpdateCache=env.__RetroBoxUpdateCache or {}; local memory=env.__RetroBoxUpdateCache
+    self.Report.Cache="session"
+    local fileMode=type(readfile)=="function" and type(writefile)=="function" and type(makefolder)=="function"
+    if fileMode then
+        local folder=path(o.CacheFolder or "RetroBox/Updates"); local filename=folder.."/"..key..".json"
+        self.Report.Cache="file"
+        if get then
+            if memory[key] then return clone(memory[key]) end
+            local ok,bytes=pcall(readfile,filename)
+            if ok then return json(o.Service,bytes,o.MaxArtifactBytes*3+65536) end
+        else
+            local accumulated=""; for segment in folder:gmatch("[^/]+") do accumulated=accumulated=="" and segment or accumulated.."/"..segment; pcall(makefolder,accumulated) end
+            writefile(filename,o.Service:JSONEncode(value)); memory[key]=clone(value)
+        end
+    elseif get then return clone(memory[key]) else memory[key]=clone(value) end
+end
+function Client:_verified(m,bytes,mode)
+    m=validate(self,m)
+    assert(type(bytes)=="string" and #bytes==m.Artifact.Bytes and #bytes<=self.Options.MaxArtifactBytes,"Artifact length differs from the manifest")
+    assert(Core.SHA256(bytes)==m.Artifact.SHA256,"Artifact SHA-256 does not match")
+    if mode=="json" then
+        assert(m.Kind=="HubCatalog","Only catalogs can be loaded as JSON")
+        local value=json(self.Options.Service,bytes,self.Options.MaxArtifactBytes)
+        assert(value.SchemaVersion==1 and value.Kind=="HubCatalog" and value.Version==m.Version and value.HubId==m.HubId,"Catalog does not match its manifest")
+        if self.Options.ValidateData then assert(self.Options.ValidateData(value,m)==true,"Catalog validation failed") end
+        return value,m
+    end
+    assert(type(loadstring)=="function","Environment does not provide loadstring")
+    local chunk,reason=loadstring(bytes,"@RetroBox-"..m.Kind.."-"..m.Version); assert(chunk,"Artifact compilation failed: "..tostring(reason))
+    local value=chunk()
+    assert(type(value)=="table" and value.Version==m.Version,"Artifact reports a different version")
+    if m.Kind=="RetroBox" then assert(type(value.CreateWindow)=="function" and type(value.CreateScriptHub)=="function" and value.APIVersion==m.APIVersion,"Artifact does not implement the declared RetroBox API")
+    elseif m.Kind=="Hub" then assert(type(value.Start)=="function","Hub module must return Version and Start")
+    else error("A catalog must be loaded as data") end
+    return value,m
+end
+function Client:Load(mode)
+    assert(mode==nil or mode=="json","Load mode must be json or omitted")
+    local m,checkError=self:Check(); if self._busy then return nil,checkError end
+    self._busy=true
+    local ok,value,verified,bytes=pcall(function()
+        assert(m,checkError); local source=self.Options.Fetch(self.Options.Root.."/"..m.Artifact.Path)
+        local item,manifest=self:_verified(m,source,mode); return item,manifest,source
+    end)
+    if ok then
+        self.Report.State="Loaded"; self.Report.CurrentVersion=verified.Version; self.Report.AvailableVersion=verified.Version; self.Report.Fallback=false; self.Report.Error=nil
+        self.Options.CurrentVersion=verified.Version
+        local saved,reason=pcall(self._cache,self,false,{Manifest=verified,Source=bytes,Root=self.Options.Root})
+        if not saved then self.Report.CacheError=tostring(reason) end
+        self._busy=false; return value,self:GetStatus()
+    end
+    local liveError=tostring(value)
+    if self.Options.Cache and self.Options.Fallback~=false then
+        local recovered,item,manifest=pcall(function()
+            local cached=self:_cache(true); assert(type(cached)=="table" and cached.Root==self.Options.Root,"No validated cache for this origin")
+            return self:_verified(cached.Manifest,cached.Source,mode)
+        end)
+        if recovered then
+            self.Report.State="Fallback"; self.Report.CurrentVersion=manifest.Version; self.Report.Fallback=true; self.Report.Error=liveError
+            self.Options.CurrentVersion=manifest.Version; self._busy=false
+            warn("[RetroBox] Using validated cached "..self.Options.Kind.." "..manifest.Version..": "..liveError)
+            return item,self:GetStatus()
+        end
+        self.Report.CacheError=tostring(item)
+    end
+    self.Report.State="Failed"; self.Report.Error=liveError; self._busy=false; return nil,liveError
+end
+Core.Client=Client
+return Core
+
+end)()
+-- Public update APIs. All network work is explicit or opted into by the hub.
+do
+    Library.APIVersion=2
+    Library.Build="retrobox-"..Library.Version
+    Library.MinimumVersion="2.0.0"
+    Library.MaximumVersion="3.0.0" -- exclusive
+    function Library:GetVersion() return self.Version end
+    function Library:ParseVersion(value) return UpdateCore.ParseVersion(value) end
+    function Library:CompareVersions(a,b) return UpdateCore.CompareVersions(a,b) end
+    function Library:SHA256(bytes) return UpdateCore.SHA256(bytes) end
+    function Library:CreateUpdater(options) return UpdateCore.New(options) end
+    function Library:CheckForUpdates(options)
+        if options or not self._distributionUpdater then
+            local settings={}; for k,v in pairs(options or {}) do settings[k]=v end
+            settings.Kind="RetroBox"; settings.Major=2; settings.APIVersion=2; settings.CurrentVersion=self.Version
+            settings.MinVersion=settings.MinVersion or "2.0.0"; settings.MaxVersion=settings.MaxVersion or "3.0.0"
+            self._distributionUpdater=UpdateCore.New(settings)
+        end
+        local _,reason=self._distributionUpdater:Check()
+        return self._distributionUpdater:GetStatus(),reason
+    end
+    function Library:GetUpdateStatus()
+        return self._distributionUpdater and self._distributionUpdater:GetStatus() or {State="Idle",CurrentVersion=self.Version,Channel="stable",Kind="RetroBox"}
+    end
+    function Library:LoadHub(options)
+        assert(type(options)=="table" and options.Root,"LoadHub needs an explicit publisher Root")
+        local settings={}; for k,v in pairs(options) do if k~="Settings" then settings[k]=v end end
+        settings.Kind="Hub"; settings.Major=options.Major or 1; settings.LibraryVersion=self.Version; settings.LibraryAPIVersion=self.APIVersion
+        local updater=UpdateCore.New(settings)
+        local module,report=updater:Load()
+        if not module then return nil,report end
+        local ok,hub=pcall(module.Start,self,options.Settings or {})
+        if not ok then return nil,"Hub initialization failed: "..tostring(hub) end
+        if type(hub)~="table" or not hub.Window or type(hub.RunScript)~="function" then return nil,"Hub Start did not return a Script Hub" end
+        hub.Version=module.Version; hub.CodeDistribution=report; hub._codeUpdater=updater
+        return hub,report
+    end
+end
+
+-- END RETRO200 UPDATE CORE
+
 -- BEGIN RETRO190 SCRIPT HUB
 -- This optional mode uses native tabs, recycled lists, flags, scopes and actions.
 do
@@ -6261,8 +6570,9 @@ do
         assert(value=="Order" or value=="Alphabetical" or value=="Favorites","Sort must be Order, Alphabetical or Favorites")
         self.Sort:SetValue(value); return self
     end
-    function Hub:_thumbnailURI(rec)
+    function Hub:_thumbnailURI(rec,large)
         if rec.Image then return rec.Image end
+        if large and rec.PlaceId then return "rbxthumb://type=GameThumbnail&id="..string.format("%.0f",rec.PlaceId).."&w=256&h=144" end
         if rec.UniverseId then return "rbxthumb://type=GameIcon&id="..string.format("%.0f",rec.UniverseId).."&w=150&h=150" end
         if rec.PlaceId then return "rbxthumb://type=GameThumbnail&id="..string.format("%.0f",rec.PlaceId).."&w=256&h=144" end
         return nil
@@ -6280,10 +6590,14 @@ do
     function Hub:_refreshImages()
         if self.Destroyed then return end
         self.GameList:_render()
-        local rec=self:_game(self.SelectedGameId); local uri=rec and self:_thumbnailURI(rec)
-        local cached=uri and self._thumbs[uri]
-        self.GameImage:SetValue(cached and cached.Status=="Loaded" and uri or "",true)
-        self.ImageStatus:SetText(cached and cached.Status=="Loading" and self.Window:_t17("Carregando miniatura…","Loading thumbnail…") or cached and cached.Status=="Loaded" and "" or self.Window:_t17("Miniatura indisponível","Thumbnail unavailable"))
+        local rec=self:_game(self.SelectedGameId); local uri=rec and self:_thumbnailURI(rec,true)
+        local cached=uri and self._thumbs[uri]; local loaded=cached and cached.Status=="Loaded"
+        self.GameImage:SetValue(loaded and uri or "",true)
+        self.GameImage.Image.Visible=not not loaded
+        if self.ImageFallback then self.ImageFallback.Frame.Visible=not loaded end
+        local status=cached and cached.Status or "Unavailable"
+        self.ImageStatus:SetText((not rec or loaded) and "" or self.Window:_t17(status=="Loading" and "Carregando imagem…" or "Imagem indisponível",status=="Loading" and "Loading image…" or "Image unavailable"))
+        self.ImageStatus:SetVisible(rec~=nil and not loaded)
     end
     function Hub:_pumpThumbnails()
         while not self.Destroyed and self._thumbActive<4 and #self._thumbQueue>0 do
@@ -6306,8 +6620,8 @@ do
             self.Scope:Add(thread,function(value) if coroutine.status(value)~="dead" then pcall(task.cancel,value) end end,resourceKey)
         end
     end
-    function Hub:_requestThumbnail(rec)
-        local uri=self:_thumbnailURI(rec); if not uri or self._thumbs[uri] then return uri end
+    function Hub:_requestThumbnail(rec,large)
+        local uri=self:_thumbnailURI(rec,large); if not uri or self._thumbs[uri] then return uri end
         if #self._thumbOrder>=128 then
             local evict
             for index,key in ipairs(self._thumbOrder) do if self._thumbs[key].Status~="Loading" then evict=index; break end end
@@ -6318,12 +6632,15 @@ do
         self._thumbQueue[#self._thumbQueue+1]=cached; self:_pumpThumbnails(); return uri
     end
     function Hub:RetryThumbnail(id)
-        local rec=assert(self:_game(id),"Unknown game"); local uri=self:_thumbnailURI(rec)
-        if uri then
-            local cached=self._thumbs[uri]; if cached and cached.Status=="Loading" then return self end
-            self._thumbs[uri]=nil; local index=table.find(self._thumbOrder,uri); if index then table.remove(self._thumbOrder,index) end
+        local rec=assert(self:_game(id),"Unknown game")
+        for _,large in ipairs({false,true}) do
+            local uri=self:_thumbnailURI(rec,large); local cached=uri and self._thumbs[uri]
+            if uri and (not cached or cached.Status~="Loading") then
+                self._thumbs[uri]=nil; local index=table.find(self._thumbOrder,uri); if index then table.remove(self._thumbOrder,index) end
+                self:_requestThumbnail(rec,large)
+            end
         end
-        self:_requestThumbnail(rec); self:_refreshImages(); return self
+        self:_refreshImages(); return self
     end
     function Hub:IsScriptAvailable(gameId,scriptId)
         local spec,rec=self:_script(gameId,scriptId); if not spec then return false,"Script is unavailable" end
@@ -6366,19 +6683,48 @@ do
         local spec,rec=self:_script(self.SelectedGameId,self.ScriptList:GetValue())
         local available,reason=false,self.Window:_t17("Selecione um script.","Select a script.")
         if spec then available,reason=self:IsScriptAvailable(rec.Id,spec.Id) end
-        self.PlayButton:SetDisabled(not available or spec and self._pendingScripts[rec.Id.."/"..spec.Id]~=nil)
-        local info=spec and (spec.Title.."\n"..spec.Description..(spec.Author~="" and "\n"..spec.Author or "")..(spec.Version~="" and " · "..spec.Version or "")..(not available and "\n"..tostring(reason) or "")) or self.Window:_t17("Nenhum script disponível\nEste jogo ainda não possui scripts cadastrados.","No scripts available\nThis game has no registered scripts yet.")
-        self.ScriptDetails:SetText(info)
+        local handle=spec and self._pendingScripts[rec.Id.."/"..spec.Id]
+        local status=spec and self:GetScriptStatus(rec.Id,spec.Id) or {Status="Unavailable"}
+        self.PlayButton._normalText=handle and self.Window:_t17("Executando…","Running…") or self.Window:_t17("Executar script","Run Script")
+        self.PlayButton:SetDisabled(not available or handle~=nil and handle~=false)
+        if self.CancelButton then self.CancelButton:SetVisible(not not handle); self.CancelButton:SetDisabled(not handle or status.Status=="Cancelling") end
+        local parts={}
+        if spec then
+            parts[#parts+1]=spec.Title
+            if spec.Description~="" then parts[#parts+1]=spec.Description end
+            local credit=spec.Author..(spec.Version~="" and (spec.Author~="" and " · " or "")..spec.Version or "")
+            if credit~="" then parts[#parts+1]=credit end
+            if spec.Status~="" then parts[#parts+1]=spec.Status end
+            if #spec.Requires>0 then parts[#parts+1]=self.Window:_t17("Requer: ","Requires: ")..table.concat(spec.Requires,", ") end
+            if not available then parts[#parts+1]=tostring(reason) end
+        end
+        self.ScriptDetails:SetText(#parts>0 and table.concat(parts,"\n") or self.Window:_t17("Nenhum script disponível","No scripts available"))
+        if self.ExecutionStatus then
+            local pt={Available="Disponível",Unavailable="Indisponível",Queued="Na fila",Running="Executando",Cancelling="Cancelando",Completed="Concluído",Failed="Falha",Cancelled="Cancelado"}
+            local message=self.Window:_t17(pt[status.Status] or status.Status,status.Status)
+            if status.Progress and handle then message=message.." · "..math.floor(status.Progress*100+.5).."%" end
+            if status.Message and status.Message~="" then message=message.."\n"..status.Message end
+            if status.Error and status.Status=="Failed" then message=message.."\n"..tostring(status.Error) end
+            self.ExecutionStatus:SetText(message)
+        end
+        self:_layoutHub()
     end
     function Hub:RefreshScripts()
         if self.Destroyed then return self end
+        self._refreshingScripts=true
         self.ScriptList:SetItems(self:_scriptRows()); self:_filterScripts()
+        local preferred=self._selectedScripts and self._selectedScripts[self.SelectedGameId]
+        if preferred and self.ScriptList._keyIndex[preferred] then self.ScriptList:SetValue(preferred,true) end
         if not self.ScriptList:GetValue() and #self.ScriptList.Items>0 then self.ScriptList:SetValue(self.ScriptList.Items[1].Id,true) end
-        self:_refreshScriptDetails(); return self
+        if self.SelectedGameId then self._selectedScripts[self.SelectedGameId]=self.ScriptList:GetValue() end
+        self._refreshingScripts=false; self:_refreshScriptDetails(); return self
     end
     function Hub:_filterScripts()
-        local query=lower(self.ScriptSearch:GetValue())
+        local query=lower(self.ScriptSearch:GetValue()); local position=self.ScriptList.Viewport.CanvasPosition
+        local preserve=self._lastScriptQuery==query; self._lastScriptQuery=query
         self.ScriptList:SetFilter(function(row) return query=="" or lower(row.Text.." "..row.Description):find(query,1,true)~=nil end)
+        if preserve then self.ScriptList.Viewport.CanvasPosition=position end
+        self:_layoutHub()
     end
     function Hub:_refreshGames()
         if self.Destroyed or self._refreshingGames then return end
@@ -6397,19 +6743,22 @@ do
         self.Favorites:SetOptions(ids,true)
         self.GameList:SetItems(rows)
         local query=lower(self.GameSearch:GetValue())
-        self.GameList:SetFilter(function(row) return query=="" or lower(row.Name):find(query,1,true)~=nil end)
+        self.GameList:SetFilter(function(row) return query=="" or lower(row.Name.." "..(self._games[row.Id].Description or "")):find(query,1,true)~=nil end)
+        self:_layoutHub()
         self._refreshingGames=false
     end
     function Hub:SelectGame(id)
         if self.Destroyed or not self._games[id] then return false,"Game is unavailable" end
         if self._selecting then return true end
-        self._selecting=true; self.SelectedGameId=id
+        self._selecting=true
+        if self.SelectedGameId and self.SelectedGameId~=id then self._selectedScripts[self.SelectedGameId]=self.ScriptList:GetValue(); self.ScriptList:SetValue(nil,true) end
+        self.SelectedGameId=id
         self.GameList:SetValue(id,true)
         local rec=self._games[id]
         self.GameDetails:SetText(rec.Name..(self:IsCurrentGame(id) and self.Window:_t17(" · Jogo atual"," · Current game") or "").."\n"..rec.Description)
         self.FavoriteButton.Button.Text=self:IsFavorite(id) and self.Window:_t17("Remover favorito","Remove favorite") or self.Window:_t17("Favoritar","Favorite")
         self.TeleportButton:SetDisabled(not rec.PlaceId or rec.PlaceId==game.PlaceId or self._teleportPending~=nil)
-        self:_requestThumbnail(rec); self:_refreshImages(); self:RefreshScripts(); self._selecting=false
+        self:_requestThumbnail(rec); self:_requestThumbnail(rec,true); self:_refreshImages(); self:RefreshScripts(); self._selecting=false
         return true
     end
     function Hub:_afterCatalog()
@@ -6552,6 +6901,240 @@ do
         if not self.Tab.Destroyed then self.Tab:Destroy() end
         if self.OwnsWindow and not self.Window.Destroyed then self.Window:Destroy() end
     end
+-- BEGIN RETRO200 HUB UPDATES
+-- Embedded inside the Script Hub scope, after its existing catalog methods.
+local gameFields={Id=true,Name=true,PlaceId=true,UniverseId=true,Description=true,Image=true,Order=true,Scripts=true}
+local scriptFields={Id=true,Title=true,Description=true,Icon=true,Author=true,Version=true,Status=true,Enabled=true,CurrentGameOnly=true,Requires=true,Confirm=true,Action=true}
+local function declarative(record,fields,label)
+    assert(type(record)=="table",label.." must be a record")
+    for field,value in pairs(record) do
+        assert(fields[field],"Unknown "..label.." field: "..tostring(field))
+        assert(type(value)~="function" and type(value)~="thread" and typeof(value)~="Instance","Catalogs cannot contain executable values")
+    end
+end
+function Hub:_prepareCatalog(document)
+    assert(not self.Destroyed,"Hub has been destroyed")
+    assert(document.SchemaVersion==1 and document.Kind=="HubCatalog" and document.HubId==self.Id,"Catalog belongs to a different hub or protocol")
+    local fields={SchemaVersion=true,Kind=true,HubId=true,Version=true,Games=true}
+    for name in pairs(document) do assert(fields[name],"Unknown catalog field: "..tostring(name)) end
+    UpdateCore.ParseVersion(document.Version)
+    local entries={}
+    for index,value in ipairs(array(document.Games,512,"Games")) do
+        declarative(value,gameFields,"game")
+        local rec={}; for k,v in pairs(value) do if k~="Scripts" then rec[k]=copy(v) end end; rec.Scripts={}
+        for _,item in ipairs(array(value.Scripts or {},128,"Scripts")) do
+            declarative(item,scriptFields,"script")
+            assert(item.Enabled==nil or type(item.Enabled)=="boolean","Catalog Enabled must be boolean")
+            assert(item.Icon==nil or type(item.Icon)=="string","Catalog Icon must be text")
+            local spec={}; for k,v in pairs(item) do if k~="Action" then spec[k]=copy(v) end end
+            local old=self:_script(value.Id,item.Id)
+            if item.Action then
+                key(item.Action,"Action")
+                spec.Callback=self._catalogActions[item.Action]
+            elseif old then
+                spec.Callback=old.Callback
+                if item.Enabled==nil then spec.Enabled=old.Enabled end
+                if item.Confirm==nil then spec.Confirm=old.Confirm end
+                if item.Requires==nil then spec.Requires=old.Requires end
+            end
+            rec.Scripts[#rec.Scripts+1]=spec
+        end
+        entries[index]=rec
+    end
+    return normalizeGames(entries)
+end
+function Hub:GetVersion() return self.Version end
+function Hub:GetUpdateStatus()
+    return {Version=self.Version,CatalogVersion=self.CatalogVersion,LibraryVersion=Library.Version,
+        Catalog=self._catalogUpdater and self._catalogUpdater:GetStatus() or {State="Disabled"},
+        Code=self._codeUpdater and self._codeUpdater:GetStatus() or {State="Disabled"}}
+end
+function Hub:CheckForUpdates()
+    if self.Destroyed then return nil,"Hub has been destroyed" end
+    local errors={}
+    for _,updater in ipairs({self._catalogUpdater or false,self._codeUpdater or false}) do
+        if updater then local _,reason=updater:Check(); if reason then errors[#errors+1]=reason end end
+    end
+    return self:GetUpdateStatus(),#errors>0 and table.concat(errors,"\n") or nil
+end
+function Hub:SetUpdateChannel(value,version)
+    assert(not self.Destroyed,"Hub has been destroyed")
+    assert(value=="stable" or value=="preview" or value=="pinned","Unknown update channel")
+    if version then UpdateCore.ParseVersion(version) end
+    for _,updater in ipairs({self._catalogUpdater or false,self._codeUpdater or false}) do assert(not updater or not updater._busy,"Cannot change channel during an update operation") end
+    if value=="pinned" then
+        for _,updater in ipairs({self._catalogUpdater or false,self._codeUpdater or false}) do assert(not updater or version or updater.Options.Version,"Pinned needs Version") end
+    end
+    for _,updater in ipairs({self._catalogUpdater or false,self._codeUpdater or false}) do if updater then updater:SetChannel(value,version) end end
+    return self
+end
+function Hub:ReloadCatalog(context)
+    if self.Destroyed then return false,"Hub has been destroyed" end
+    if not self._catalogUpdater then return false,"Catalog updates are not configured" end
+    if self._reloadingCatalog then return false,"Catalog update is already running" end
+    self._reloadingCatalog=true
+    local ok,reason=pcall(function()
+        if context then context:ThrowIfCancelled() end
+        self._preparedCatalog=nil
+        local document,report=self._catalogUpdater:Load("json")
+        assert(document,report)
+        assert(not self.Destroyed,"Hub was destroyed during the update")
+        if context then context:ThrowIfCancelled() end
+        local initial=self._preparedCatalog or self:_prepareCatalog(document)
+        local games,order={},{}
+        for _,rec in ipairs(initial) do games[rec.Id]=rec; order[#order+1]=rec.Id end
+        -- Validation is complete. Mutate the catalog once and keep native controls.
+        for id in pairs(self._games) do self:_cancelScripts(id) end
+        self._games,self._order=games,order; self._scriptStatus={}; self.CatalogVersion=document.Version
+        self:_afterCatalog()
+        return report
+    end)
+    self._preparedCatalog=nil; self._reloadingCatalog=false
+    if not ok then self._catalogUpdater.Report.State="Failed"; self._catalogUpdater.Report.Error=tostring(reason); return false,tostring(reason) end
+    return true,reason
+end
+function Hub:_setupUpdates(options)
+    self.Version=options.Version or "1.0.0"; self.CatalogVersion=options.CatalogVersion or self.Version
+    self._catalogActions={}
+    for name,callback in pairs(options.Actions or {}) do key(name,"Action"); assert(type(callback)=="function","Actions must contain developer callbacks"); self._catalogActions[name]=callback end
+    local function configured(value,kind,current)
+        assert(type(value)=="table","Update settings must be a table")
+        local settings={}; for k,v in pairs(value) do settings[k]=v end
+        settings.Kind=kind; settings.Major=value.Major or 1; settings.APIVersion=1; settings.HubId=self.Id
+        settings.CurrentVersion=current; settings.LibraryVersion=Library.Version; settings.LibraryAPIVersion=Library.APIVersion
+        return settings
+    end
+    if options.CatalogUpdate then
+        local settings=configured(options.CatalogUpdate,"HubCatalog",self.CatalogVersion)
+        settings.ValidateData=function(document) self._preparedCatalog=self:_prepareCatalog(document); return true end
+        self._catalogUpdater=UpdateCore.New(settings)
+    end
+    if options.CodeUpdate then self._codeUpdater=UpdateCore.New(configured(options.CodeUpdate,"Hub",self.Version)) end
+end
+function Hub:SelectScript(id)
+    if not self:_script(self.SelectedGameId,id) then return false,"Script is unavailable" end
+    self.ScriptList:SetValue(id); self._selectedScripts[self.SelectedGameId]=id; self:_refreshScriptDetails(); return true
+end
+function Hub:GetSelectedScript() return self:GetScript(self.SelectedGameId,self.ScriptList:GetValue()) end
+function Hub:_layoutHub()
+    if self.Destroyed or self._layoutHubBusy or not self.ScriptList then return end
+    self._layoutHubBusy=true
+    local scale=math.max(.01,self.Window._actualScale or 1)
+    local width=math.max(1,self.GameImage.Frame.AbsoluteSize.X/scale)
+    self.GameImage.Frame.Size=UDim2.new(1,0,0,math.max(80,math.floor(width*9/16)))
+    self.GameImage.Image.Position=U2(0,0); self.GameImage.Image.Size=UDim2.fromScale(1,1)
+    local textScale=self.Window.TextScale or 1
+    local function resize(view,maximum)
+        view.RowHeight=math.ceil(48*textScale)
+        local rows=math.max(1,#view._indices)
+        local height=math.min(rows,maximum)*view.RowHeight+8
+        view.Frame.Size=UDim2.new(1,0,0,height); view.Viewport.Position=U2(0,0); view.Viewport.Size=UDim2.fromScale(1,1)
+        view:_render()
+    end
+    resize(self.ScriptList,self.ScriptListMaxRows)
+    resize(self.GameList,self.LayoutMode=="columns" and self.GameListMaxRows or math.min(self.GameListMaxRows,4))
+    self._layoutHubBusy=false
+end
+local function compact(control,target,kind)
+    function control:_layoutDescription()
+        if self.Destroyed then return end
+        self.TitleLabel.Visible=false; self.DescriptionLabel.Visible=false
+        if self._titleIcon then
+            if kind=="button" then
+                self._titleIcon.Frame.Parent=target; self._titleIcon.Frame.Position=UDim2.new(0,10,.5,-8); self._titleIcon.Frame.Visible=true
+            else self._titleIcon.Frame.Visible=false end
+        end
+        local height=math.ceil((kind=="button" and 36 or 34)*(self._window.TextScale or 1))
+        if UserInputService.TouchEnabled then height=math.max(44,height) end
+        self.Frame.Size=UDim2.new(self.Frame.Size.X.Scale,self.Frame.Size.X.Offset,0,height)
+        self._rowHeight=height; target.Position=U2(0,0); target.Size=UDim2.fromScale(1,1)
+        if self._section._isRow then self._section:_layout() end
+    end
+    control:_layoutDescription()
+end
+function Hub:_installResponsiveLayout(options)
+    local tab,window=self.Tab,self.Window; local hub=self
+    self.ScriptListMaxRows=options.ScriptListMaxRows or 4; self.GameListMaxRows=options.GameListMaxRows or 7
+    assert(finite(self.ScriptListMaxRows) and self.ScriptListMaxRows%1==0 and self.ScriptListMaxRows>=1 and self.ScriptListMaxRows<=12,"ScriptListMaxRows must be 1–12")
+    assert(finite(self.GameListMaxRows) and self.GameListMaxRows%1==0 and self.GameListMaxRows>=2 and self.GameListMaxRows<=16,"GameListMaxRows must be 2–16")
+    local ratio=options.NavigationRatio or .45; local stackAt=options.StackAt or 620
+    assert(finite(ratio) and ratio>=.3 and ratio<=.55,"NavigationRatio must be .3–.55")
+    assert(finite(stackAt) and stackAt>=480 and stackAt<=1000,"Hub StackAt must be 480–1000")
+    local function scroll(order)
+        return ui(window,"ScrollingFrame",{Parent=tab.Container,LayoutOrder=order,Size=UDim2.new(.5,-6,1,0),CanvasSize=U2(0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0,Active=true,ClipsDescendants=true},{ScrollBarImageColor3="Border"})
+    end
+    self.NavigationScroll=scroll(1); self.DetailsScroll=scroll(2)
+    function tab:_layout()
+        if self.Destroyed or self._hubLayingOut then return end; self._hubLayingOut=true
+        local width=self.Frame.AbsoluteSize.X/math.max(.01,window._actualScale or 1)
+        local columns=width>=stackAt*(window.TextScale or 1)
+        hub.LayoutMode=columns and "columns" or "stacked"
+        self.ColumnLayout.FillDirection=columns and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
+        self.Container.AutomaticSize=columns and Enum.AutomaticSize.None or Enum.AutomaticSize.Y
+        self.Container.Size=UDim2.new(1,-10,columns and 1 or 0,0)
+        self.Frame.ScrollingEnabled=not columns; self.Frame.ScrollBarThickness=columns and 0 or 5
+        self.Frame.AutomaticCanvasSize=columns and Enum.AutomaticSize.None or Enum.AutomaticSize.Y
+        if columns then
+            self.Frame.CanvasPosition=Vector2.new(0,0); self.Frame.CanvasSize=U2(0,0)
+            self.Left.Parent=hub.NavigationScroll; self.Right.Parent=hub.DetailsScroll
+            hub.NavigationScroll.Size=UDim2.new(ratio,-6,1,0); hub.DetailsScroll.Size=UDim2.new(1-ratio,-6,1,0)
+        else self.Left.Parent=self.Container; self.Right.Parent=self.Container end
+        hub.NavigationScroll.Visible=columns; hub.DetailsScroll.Visible=columns
+        self.Left.Size=UDim2.new(1,columns and -6 or 0,0,0); self.Right.Size=UDim2.new(1,columns and -6 or 0,0,0); self.Right.Visible=true
+        self._hubLayingOut=false; hub:_layoutHub()
+    end
+    connect(self,self.GameImage.Frame:GetPropertyChangedSignal("AbsoluteSize"),function() hub:_layoutHub() end)
+    connect(self,self.GameDetails.TitleLabel:GetPropertyChangedSignal("TextSize"),function() tab:_layout() end)
+    for _,control in ipairs({self.GameList,self.ScriptList,self.GameImage}) do
+        control.TitleLabel.Visible=false; control.DescriptionLabel.Visible=false
+        function control:_layoutDescription() if not self.Destroyed then self.TitleLabel.Visible=false; self.DescriptionLabel.Visible=false; hub:_layoutHub() end end
+    end
+    for _,control in ipairs({self.FavoriteButton,self.TeleportButton,self.PlayButton,self.CancelButton}) do compact(control,control.Button,"button") end
+    window:_bind(self.PlayButton.Button,{BackgroundColor3="Accent",TextColor3="AccentText"})
+    if self.PlayButton._titleIcon then self.PlayButton._titleIcon:SetRole("AccentText") end
+    for _,control in ipairs({self.GameSearch,self.ScriptSearch}) do
+        compact(control,control.Input,"input")
+        local clear=button(window,control,control.Frame,"×",{Position=UDim2.new(1,-30,0,0),Size=U2(30,30)},function() control:SetValue("") end)
+        control.ClearButton=clear
+        local layout=control._layoutDescription
+        function control:_layoutDescription() layout(self); self.Input.Size=UDim2.new(1,-34,1,0); clear.Size=UDim2.new(0,30,1,0) end
+        control:_layoutDescription()
+        function control:_syncClear() clear.Visible=self:GetValue()~="" end
+        self.Scope:Add(window:GetFlagState(control.Id):Subscribe(function() control:_syncClear() end,true),"Disconnect")
+    end
+    compact(self.Sort,self.Sort.Button,"input")
+    local sortLayout,sortRender=self.Sort._layoutDescription,self.Sort._render
+    local sortPanel
+    for _,child in ipairs(self.Sort.Frame:GetChildren()) do if child.ClassName=="Frame" and child.Size.Y.Offset==184 then sortPanel=child; break end end
+    function self.Sort:_layoutDescription()
+        sortLayout(self)
+        local height=math.ceil(34*(window.TextScale or 1))
+        self.Button.Size=UDim2.new(1,0,0,height)
+        if sortPanel then sortPanel.Position=U2(0,height+4) end
+        if self.Open then self.Frame.Size=UDim2.new(1,0,0,height+192) end
+    end
+    function self.Sort:_render()
+        sortRender(self)
+        local labels={Order=window:_t17("Cadastro","Registration order"),Alphabetical=window:_t17("Nome","Name"),Favorites=window:_t17("Favoritos","Favorites")}
+        self.Button.Text=labels[self.Value] or self.Button.Text
+        for name,item in pairs(self._rows or {}) do item.Text=(self.Value==name and "[X] " or "[ ] ")..(labels[name] or name) end
+    end
+    self.Sort:_layoutDescription(); self.Sort:_render()
+    local sortOpen=self.Sort.SetOpen
+    function self.Sort:SetOpen(value)
+        local previous=self.Frame.Size; sortOpen(self,value)
+        window:_cancelTrack(self.Frame,"expand",false); self:_layoutDescription()
+        local target=self.Frame.Size; self.Frame.Size=previous
+        window:_animate(self.Frame,{Size=target},.12,"expand",self)
+        return self
+    end
+    self.GameImage.Title=""; self.GameImage.TitleLabel.Text=""
+    window:_bind(self.GameImage.Frame,{BackgroundColor3="Inset",BorderColor3="Border"}); self.GameImage.Frame.BackgroundTransparency=0; self.GameImage.Frame.BorderSizePixel=1
+    self.ImageFallback=iconSlot(window,self.GameImage.Frame,"gamepad",nil,48,UDim2.new(.5,-24,.5,-24),"Muted")
+    tab:_layout()
+end
+
+-- END RETRO200 HUB UPDATES
     function Window:CreateScriptHub(options)
         assert(type(options)=="table","Script Hub options must be a table")
         local id=key(options.Id or "script-hub","Hub Id"); self._scriptHubs=self._scriptHubs or {}; assert(not self._scriptHubs[id],"Hub Id already registered")
@@ -6559,7 +7142,7 @@ do
         assert(options.ConfirmTeleport==nil or type(options.ConfirmTeleport)=="boolean","ConfirmTeleport must be boolean")
         assert(options.Teleporter==nil or type(options.Teleporter)=="function","Teleporter must be a developer callback")
         local initial=normalizeGames(options.Games)
-        local hub=setmetatable({Id=id,Window=self,Scope=self:CreateScope(),_connections={},_games={},_order={},_scriptStatus={},_pendingScripts={},_thumbs={},_thumbOrder={},_thumbQueue={},_thumbActive=0,AutoDetectGame=options.AutoDetectGame~=false,ConfirmTeleport=options.ConfirmTeleport~=false,Teleporter=options.Teleporter},Hub)
+        local hub=setmetatable({Id=id,Window=self,Scope=self:CreateScope(),_selectedScripts={},_connections={},_games={},_order={},_scriptStatus={},_pendingScripts={},_thumbs={},_thumbOrder={},_thumbQueue={},_thumbActive=0,AutoDetectGame=options.AutoDetectGame~=false,ConfirmTeleport=options.ConfirmTeleport~=false,Teleporter=options.Teleporter},Hub)
         for _,rec in ipairs(initial) do hub._games[rec.Id]=rec; hub._order[#hub._order+1]=rec.Id end
         self._scriptHubs[id]=hub
         local function opts(name,title,extra)
@@ -6567,9 +7150,10 @@ do
         end
         local window=self
         local ok,reason=pcall(function()
+            hub:_setupUpdates(options)
             hub.Tab=self:CreateTab({Title=options.Title or "Script Hub",Icon="gamepad",Columns=2}); hub.Tab._toolManager=hub
             local nav=hub.Tab:CreateSection({Title=self:_t17("Jogos","Games"),Icon="gamepad"})
-            hub.GameSearch=nav:AddInput(opts("game-search",self:_t17("Pesquisar jogos","Search games"),{Live=true,MaxLength=256,Persist=false}))
+            hub.GameSearch=nav:AddInput(opts("game-search",self:_t17("Pesquisar jogos","Search games"),{Live=true,MaxLength=256,Persist=false,Placeholder=self:_t17("Pesquisar jogos…","Search games…")}))
             hub.Sort=nav:AddDropdown(opts("sort",self:_t17("Ordenação","Sort"),{Options={"Order","Alphabetical","Favorites"},Default="Order"}))
             hub.Favorites=nav:AddDropdown(opts("favorites","Favorites",{Options={},Multi=true,Default={}})); hub.Favorites:SetVisible(false)
             hub.GameList=nav:AddVirtualList(opts("games",self:_t17("Catálogo de jogos","Game catalog"),{Items={},Searchable=false,Height=360,RowHeight=64,Persist=true,EmptyText=self:_t17("Nenhum jogo encontrado.","No matching games.")}))
@@ -6577,47 +7161,51 @@ do
             function hub.GameList:_normalize(value) if value~=nil and not self._keyIndex[tostring(value)] then return nil end; return normalize(self,value) end
             hub.GameList._renderNode=function(_,row,index)
                 if not row.Thumb then
-                    row.Thumb=ui(window,"ImageLabel",{Parent=row.Button,Position=U2(8,6),Size=U2(48,48),BackgroundTransparency=1,Image="",ScaleType=Enum.ScaleType.Fit})
-                    row.Fallback=iconSlot(window,row.Button,"gamepad",nil,24,U2(20,18),"Muted")
+                    row.Thumb=ui(window,"ImageLabel",{Parent=row.Button,Position=U2(12,6),Size=U2(36,36),BackgroundTransparency=1,Image="",ScaleType=Enum.ScaleType.Fit})
+                    row.Fallback=iconSlot(window,row.Button,"gamepad",nil,24,U2(18,12),"Muted")
+                    row.SelectedMark=label(window,row.Button,"›",{Position=U2(1,0),Size=UDim2.new(0,10,1,0),TextSize=18},"AccentText")
                 end
-                row.Labels[1].Position=U2(66,4); row.Labels[1].Size=UDim2.new(1,-76,1,-8); row.Labels[1].TextWrapped=true
+                row.Labels[1].Position=U2(56,4); row.Labels[1].Size=UDim2.new(1,-64,1,-8); row.Labels[1].TextWrapped=true
+                row.SelectedMark.Visible=hub.GameList:GetValue()==hub.GameList.Items[index].Id
                 local item=hub.GameList.Items[index]; local rec=hub:_game(item.Id)
                 hub:_paintThumbnail(row.Thumb,row.Fallback,rec and hub:_requestThumbnail(rec))
             end
             local details=hub.Tab:CreateSection({Title=self:_t17("Jogo selecionado","Selected game"),Icon="info",Side="Right"})
-            hub.GameDetails=details:AddLabel(opts("game-details",self:_t17("Informações","Information"),{Height=82,Persist=false}))
-            hub.GameImage=details:AddImage(opts("image",self:_t17("Miniatura","Thumbnail"),{Image="",Height=104}))
-            hub.ImageStatus=details:AddLabel(opts("image-status","",{Height=30,Persist=false}))
-            local actions=details:CreateRow()
+            hub.GameImage=details:AddImage(opts("image","",{Image="",Height=104}))
+            hub.ImageStatus=details:AddLabel(opts("image-status","",{Height=22,Persist=false}))
+            hub.GameDetails=details:AddLabel(opts("game-details",self:_t17("Informações","Information"),{Height=26,Persist=false}))
+            local actions=details:CreateRow({StackAt=200,Gap=8})
             hub.FavoriteButton=actions:AddButton(opts("favorite",self:_t17("Favoritar","Favorite"),{Icon="star",Callback=function() if hub.SelectedGameId then hub:SetFavorite(hub.SelectedGameId,not hub:IsFavorite(hub.SelectedGameId)) end end}))
             hub.TeleportButton=actions:AddButton(opts("teleport",self:_t17("Entrar no jogo","Join game"),{Icon="chevron-right",Callback=function()
                 local handle,err=hub:TeleportToGame(hub.SelectedGameId); if not handle and err~="confirmation pending" then window:Notify({Content=tostring(err),Kind="error"}) end
             end}))
-            hub.TeleportStatus=details:AddLabel(opts("teleport-status","",{Height=38,Persist=false}))
+            hub.TeleportStatus=details:AddLabel(opts("teleport-status","",{Height=22,Persist=false})); hub.TeleportStatus:SetVisible(false)
+            local teleportText=hub.TeleportStatus.SetText
+            function hub.TeleportStatus:SetText(value) teleportText(self,value); self:SetVisible(tostring(value)~=""); return self end
             local scripts=hub.Tab:CreateSection({Title=self:_t17("Scripts disponíveis","Available scripts"),Icon="code",Side="Right"})
-            hub.ScriptSearch=scripts:AddInput(opts("script-search",self:_t17("Pesquisar scripts","Search scripts"),{Live=true,MaxLength=256,Persist=false}))
+            hub.ScriptSearch=scripts:AddInput(opts("script-search",self:_t17("Pesquisar scripts","Search scripts"),{Live=true,MaxLength=256,Persist=false,Placeholder=self:_t17("Pesquisar scripts…","Search scripts…")}))
             hub.ScriptList=scripts:AddVirtualList(opts("scripts",self:_t17("Catálogo de scripts","Script catalog"),{Items={},Searchable=false,Height=250,RowHeight=64,EmptyText=self:_t17("Nenhum script disponível","No scripts available"),Persist=false}))
             hub.ScriptList._renderNode=function(_,row,index)
-                if not row.Play then
-                    row.PlayOwner={_connections=row._connections,_section=row._section}
-                    row.Play=button(window,row.PlayOwner,row.Button,"Play",{Position=UDim2.new(1,-66,0,15),Size=U2(58,30)},function()
-                        local item=row.Index and hub.ScriptList.Items[row.Index]
-                        if item then local handle,err=hub:RunScript(hub.SelectedGameId,item.Id); if not handle and err~="confirmation pending" then window:Notify({Content=tostring(err),Kind="error"}) end end
-                    end)
-                end
-                row.Labels[1].Position=U2(36,4); row.Labels[1].Size=UDim2.new(1,-114,1,-8); row.Labels[1].TextWrapped=true
+                row.Labels[1].Position=U2(38,4); row.Labels[1].Size=UDim2.new(1,-46,1,-8); row.Labels[1].TextWrapped=true
                 local item=hub.ScriptList.Items[index]
-                if not row.ScriptIcon then row.ScriptIcon=iconSlot(window,row.Button,false,nil,20,U2(8,22),"Text") end
+                if not row.ScriptIcon then
+                    row.ScriptIcon=iconSlot(window,row.Button,false,nil,20,UDim2.new(0,12,.5,-10),"Text")
+                    row.SelectedMark=label(window,row.Button,"›",{Position=U2(1,0),Size=UDim2.new(0,10,1,0),TextSize=18},"AccentText")
+                end
                 local spec=hub:_script(hub.SelectedGameId,item.Id); row.ScriptIcon:Set(spec and spec.Icon or "code")
-                row.ScriptIcon:SetRole(hub.ScriptList:GetValue()==item.Id and "AccentText" or "Text")
-                local ready=hub:IsScriptAvailable(hub.SelectedGameId,item.Id)
-                row.PlayOwner.Disabled=not ready or hub._pendingScripts[hub.SelectedGameId.."/"..item.Id]~=nil
-                row.Play.Active=not row.PlayOwner.Disabled; row.Play.TextTransparency=row.Play.Active and 0 or .15
+                local selected=hub.ScriptList:GetValue()==item.Id; row.SelectedMark.Visible=selected
+                row.ScriptIcon:SetRole(selected and "AccentText" or "Text")
             end
-            hub.ScriptDetails=scripts:AddLabel(opts("script-details","",{Height=106,Persist=false}))
-            hub.PlayButton=scripts:AddButton(opts("play","Play",{Icon="bolt",Callback=function()
+            hub.ScriptDetails=scripts:AddLabel(opts("script-details","",{Height=26,Persist=false}))
+            hub.ExecutionStatus=scripts:AddLabel(opts("execution-status","",{Height=22,Persist=false}))
+            hub.PlayButton=scripts:AddButton(opts("play",self:_t17("Executar script","Run Script"),{Icon="bolt",Callback=function()
                 local handle,err=hub:RunScript(hub.SelectedGameId,hub.ScriptList:GetValue()); if not handle and err~="confirmation pending" then window:Notify({Content=tostring(err),Kind="error"}) end
             end}))
+            hub.CancelButton=scripts:AddButton(opts("cancel",self:_t17("Cancelar execução","Cancel run"),{Icon="close",Callback=function()
+                local name=tostring(hub.SelectedGameId).."/"..tostring(hub.ScriptList:GetValue()); local handle=hub._pendingScripts[name]
+                if handle then handle:Cancel("user cancelled") end
+            end})); hub.CancelButton:SetVisible(false)
+            hub:_installResponsiveLayout(options)
             hub.Scope:Add(self:GetFlagState(hub.GameList.Id):Subscribe(function(value)
                 if value then hub:SelectGame(value)
                 elseif not hub._selectionQueued then
@@ -6633,7 +7221,12 @@ do
             hub.Scope:Add(self:GetFlagState(hub.Sort.Id):Subscribe(function() hub:_refreshGames() end),"Disconnect")
             hub.Scope:Add(self:GetFlagState(hub.GameSearch.Id):Subscribe(function() hub:_refreshGames() end),"Disconnect")
             hub.Scope:Add(self:GetFlagState(hub.ScriptSearch.Id):Subscribe(function() hub:_filterScripts() end),"Disconnect")
-            hub.Scope:Add(self:GetFlagState(hub.ScriptList.Id):Subscribe(function() hub:_refreshScriptDetails() end),"Disconnect")
+            hub.Scope:Add(self:GetFlagState(hub.ScriptList.Id):Subscribe(function(value)
+                if not hub._selecting and not hub._refreshingScripts then
+                    if hub.SelectedGameId then hub._selectedScripts[hub.SelectedGameId]=value end
+                    hub:_refreshScriptDetails()
+                end
+            end),"Disconnect")
             local teleport=optionalService("TeleportService")
             if teleport and teleport.TeleportInitFailed then hub.Scope:Add(teleport.TeleportInitFailed:Connect(function(player,_,message,placeId)
                 if not hub.Destroyed and player==Players.LocalPlayer and hub._teleportPending and hub._teleportPending.PlaceId==placeId then hub:_endTeleport("Failed",message) end
@@ -6647,7 +7240,16 @@ do
             if hub.Tab then hub:Destroy() else hub.Scope:Destroy(); self._scriptHubs[id]=nil end
             error(reason,2)
         end
-        self:Manage(hub,"Destroy","script-hub:"..id); return hub
+        self:Manage(hub,"Destroy","script-hub:"..id)
+        if options.CatalogUpdate and options.CatalogUpdate.AutoLoad~=false then
+            local action=self:RunAction({Group="hub/"..id.."/catalog",Policy="Reject",Callback=function(ctx)
+                ctx:ThrowIfCancelled(); local updated,err=hub:ReloadCatalog(ctx)
+                if not updated and not hub.Destroyed then window:Notify({Title=window:_t17("Atualização do catálogo","Catalog update"),Content=tostring(err),Kind="warning"}) end
+                return updated,err
+            end})
+            if action then hub.Scope:Add(action,"Cancel","catalog-startup") end
+        end
+        return hub
     end
     function Library:CreateScriptHub(options)
         assert(type(options)=="table","Script Hub options must be a table"); normalizeGames(options.Games)

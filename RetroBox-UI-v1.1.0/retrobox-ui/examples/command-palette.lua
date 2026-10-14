@@ -1,5 +1,5 @@
 -- RetroBox 1.7.0+: navigation + explicitly registered managed commands.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window=RetroBox:CreateWindow({Id="command-palette-demo",Title="RetroBox / Comandos",CommandKey=Enum.KeyCode.F4})
 local s=window:CreateTab("Exemplo"):CreateSection("Componentes")
 s:AddToggle({Id="option",Title="Opção de exemplo",Tooltip="A busca navega até aqui sem ativar a opção."})

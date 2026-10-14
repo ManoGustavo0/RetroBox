@@ -1,5 +1,5 @@
 -- Requires RetroBox 1.6.0+. All data and operations below are simulated.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 assert(type(RetroBox.CreateState)=="function", "Publish RetroBox 1.6.0+ before running this example")
 local window = RetroBox:CreateWindow({
     Id="dashboard-demo", Title="RetroBox / Live dashboard", Icon="terminal",

@@ -1,5 +1,5 @@
 -- Requires RetroBox 1.3.0+ at this raw path; adjust it if you move the library.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window = RetroBox:CreateWindow({
     Id = "workflow-demo", Title = "RetroBox / Recursos 1.3",
     Subtitle = "Saves, atalhos, pesquisa e diálogos.",

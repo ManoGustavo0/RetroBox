@@ -107,3 +107,10 @@ A fonte do raw e o Git tree são verificados na publicação. Sinais, serviços,
 3. Abra o Theme Studio, duplique/edite, feche salvando/descartando/cancelando e reabra. Confira retorno à aba e ausência de tabs/objetos duplicados.
 4. Execute script-hub.lua. Confira imagens com e sem UniverseId, fallback em assets negados, busca, teclado, favoritos, perfis, ocultar/reabrir e todos os temas.
 5. Para testar teleporte, cadastre destinos reais e permitidos; confirme manualmente. Confira TeleportInitFailed e o adapter da experiência. O método cliente legado pode ser rejeitado, e TeleportAsync exige servidor. Não use os registros vazios de demonstração como destinos reais.
+
+
+## Atualização 2.0.0
+
+A suíte atual possui 256 testes de lógica (incluindo 24 exemplos) e 2 testes de pipeline em Python. Execute `python3 tests/run_headless.py`, `python3 tests/test_release_pipeline.py` e os builders/verifier conforme [AUTO-UPDATE.md](AUTO-UPDATE.md). O relatório [RELEASE-2.0.md](RELEASE-2.0.md) separa evidência de lógica/propriedades da conferência visual real.
+
+No executor, conferir: bootstrap/canais publicados; thumbnail em janela grande/pequena/toque/TextScale; listas com 0/1/3/20 registros; um botão de execução; confirmação de teleporte; falha/timeout; consulta/catalog update sem execução ou perda de perfis; ausência de conexões duplicadas após reexecutar. Não usar o resultado do double como screenshot/renderização nativa.

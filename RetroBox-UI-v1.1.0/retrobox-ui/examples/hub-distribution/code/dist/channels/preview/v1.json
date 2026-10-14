@@ -1,0 +1,19 @@
+{
+  "SchemaVersion": 1,
+  "Kind": "Hub",
+  "HubId": "hub-update-demo",
+  "Version": "1.0.0",
+  "APIVersion": 1,
+  "Channel": "preview",
+  "Build": "hub-update-demo-1.0.0",
+  "Library": {
+    "MinVersion": "2.0.0",
+    "MaxVersion": "3.0.0",
+    "APIVersion": 2
+  },
+  "Artifact": {
+    "Path": "dist/releases/1.0.0/Hub.lua",
+    "Bytes": 1003,
+    "SHA256": "100f5a1eb0bcf4722aef8d9c3d0b87557b1580b5aea10e73c2c29d7ab7139320"
+  }
+}

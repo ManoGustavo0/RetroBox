@@ -1,5 +1,15 @@
 -- Minimal engine double. Exercises library logic; does not render Roblox UI.
 local Mock = { Connections=0, Queue={}, Time=0, Warnings={} }
+-- Test-only Lua 5.4 implementation of Luau's bit32 hashing primitives.
+bit32={}
+local bitops=assert(load([[return {
+    band=function(a,b) return (a & b) & 0xffffffff end,
+    bxor=function(a,b,c) local n=a ~ b; if c then n=n ~ c end; return n & 0xffffffff end,
+    bnot=function(a) return (~a) & 0xffffffff end,
+    rshift=function(a,n) return (a & 0xffffffff) >> n end,
+    rrotate=function(a,n) return ((a >> n) | (a << (32-n))) & 0xffffffff end,
+}]]))()
+for name,fn in pairs(bitops) do bit32[name]=fn end
 math.atan2=math.atan -- Lua 5.4 equivalent of the Luau built-in used by chart segments.
 os.clock=function() return Mock.Time end
 function typeof(value)

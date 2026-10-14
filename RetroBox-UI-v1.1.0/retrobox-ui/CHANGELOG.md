@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0
+
+- Bootstrap permanente de API 2; Stable/Preview/Pinned, SemVer, compatibilidade, SHA-256, cache opcional e rollback com histórico imutável.
+- Código do Hub por módulos Version/Start/LoadHub e catálogo JSON por CatalogUpdate/Actions, com origens explícitas e atualizações independentes.
+- Script Hub nativo com imagem ampla, sem rótulo Miniatura, listas adaptativas, seleção por jogo, um Executar script, cancelamento/feedback e panes responsivos.
+- Busca global passa a navegar ao pane correto; APIs, IDs/perfis, temas, ícones e componentes anteriores preservados.
+- Guias, migração, prompt completo, 24 exemplos, builders e verificação de distribuição. 256 testes de lógica e 2 de pipeline aprovados.
+
+
 ## 1.9.0 · 2026-10-13
 
 - Command Palette: seção interna com estado de visibilidade, linhas ativáveis por clique/toque, níveis de GUI corretos, captura estável de abas, foco/scroll após layout, tratamento de alvos removidos e feedback da ação real.

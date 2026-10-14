@@ -340,13 +340,15 @@ dofile("tests/tools.lua")(Mock,Library,test)
 dofile("tests/navigation.lua")(Mock,Library,test)
 dofile("tests/hub.lua")(Mock,Library,test)
 dofile("tests/distribution.lua")(Mock,Library,test)
+dofile("tests/update.lua")(Mock,Library,test)
+dofile("tests/hub-update.lua")(Mock,Library,test)
 test("diagnostic loader reports HTTP, compile and library errors",function()
     loadstring=load
     for _,response in ipairs({function() error("HTTP failed") end,function() return "local" end,function() return "return {}" end,function() return "" end}) do
         game.HttpGet=response
         local ok,err=pcall(dofile,"Loader.lua"); assert(not ok and tostring(err):find("[RetroBox]",1,true))
     end
-    game.HttpGet=function() local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close(); return source end
+    game.HttpGet=Mock.distributionHTTP
     local library=dofile("Loader.lua"); assert(library.Version==Library.Version and type(library.CreateWindow)=="function")
     loadstring=nil; game.HttpGet=nil
 end)
@@ -354,21 +356,20 @@ test("all shipped examples use the public API and clean up",function()
     local loaded={}
     local requests=0
     game.HttpGet=function(_,url)
-        assert(url:match("^https://raw%.githubusercontent%.com/.+/RetroBox%.lua$"))
         requests=requests+1
-        local file=assert(io.open("RetroBox.lua","r")); local source=file:read("*a"); file:close()
-        return source
+        return Mock.distributionHTTP(game,url)
     end
-    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration","contrast-showcase","advanced-components","theme-studio","runtime-inspector","dashboard-builder","command-palette","help-accessibility","themes-gallery","script-hub","remote-loader"}) do
+    local seen={}
+    for _,file in ipairs({"quickstart","showcase","custom-theme","storage-adapter","tooltips","workflows","icons","dashboard","runtime-integration","contrast-showcase","advanced-components","theme-studio","runtime-inspector","dashboard-builder","command-palette","help-accessibility","themes-gallery","script-hub","remote-loader","loader-stable","loader-preview","loader-pinned","hub-bootstrap","hub-catalog"}) do
         loadstring=function(source,name)
             local chunk,err=load(source,name)
             if not chunk then return nil,err end
-            return function(...) local library=chunk(...); table.insert(loaded,library); return library end
+            return function(...) local library=chunk(...); if type(library)=="table" and type(library.CreateWindow)=="function" and not seen[library] then seen[library]=true; table.insert(loaded,library) end; return library end
         end
         dofile("examples/"..file..".lua")
         Mock.pump()
     end
-    assert(requests==19 and #loaded==19)
+    assert(requests>=72 and #loaded==24)
     for _,library in ipairs(loaded) do
         for window in pairs(library.Windows) do
             if window.Id=="themes-gallery" then

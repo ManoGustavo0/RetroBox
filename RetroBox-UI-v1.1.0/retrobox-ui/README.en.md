@@ -8,6 +8,12 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 *Illustrative concept, not an in-game screenshot. The library renders native Roblox GUI objects.*
 
+## Version 2.0.0
+
+Permanent API 2 bootstrap, independent Stable/Preview/Pinned channels, semantic versions, SHA-256 integrity, optional cache and rollback. Hub catalogs and code modules update independently. The native hub now has a large image, compact adaptive lists, separate script selection, independent desktop panes and one **Run Script** action. Existing controls and profiles remain compatible.
+
+[Distribution](docs/AUTO-UPDATE.md) · [Hub updates](docs/HUB-AUTO-UPDATE.md) · [Migration](docs/MIGRATION-2.0.md) · [Release report](docs/RELEASE-2.0.md)
+
 ## Version 1.9.2
 
 Game and script descriptions in the hub now have room for their full text. Multiline labels grow with their content, width and text scale while preserving existing fields and profiles. See [RELEASE-1.9.2.md](docs/RELEASE-1.9.2.md).
@@ -45,7 +51,7 @@ Default icons appear in the title, tabs/categories, search, settings, window act
 Use this repository's published source path. Adjust the URL if you host the library elsewhere:
 
 ```lua
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window = RetroBox:CreateWindow({
     Id = "my-script",
     Title = "My script",

@@ -1,6 +1,6 @@
 -- Remote distribution contract: HTTP -> library -> window -> tab -> section -> controls.
--- For pre-merge testing use the verified 1.9.2 release commit.
-local RETROBOX_URL = "https://raw.githubusercontent.com/ManoGustavo0/RetroBox/4eb987097a9ee37ea9b84bf87ab797a93123590b/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"
+-- The permanent bootstrap resolves compatible API 2 releases.
+local RETROBOX_URL = "https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"
 local ok, Library = pcall(function()
     assert(type(loadstring) == "function", "loadstring is unavailable")
     local hasHTTP, getter = pcall(function() return game.HttpGet end)
@@ -12,7 +12,7 @@ local ok, Library = pcall(function()
     return chunk()
 end)
 if not ok then warn("[RetroBox] " .. tostring(Library)); return end
-if type(Library) ~= "table" or Library.Version ~= "1.9.2" then warn("[RetroBox] Use the confirmed 1.9.2 raw URL"); return end
+if type(Library) ~= "table" or Library.APIVersion ~= 2 then warn("[RetroBox] Use the confirmed 2.0.0 raw URL"); return end
 local window = Library:CreateWindow({Id = "remote-loader-demo", Title = "RetroBox / Remoto", Theme = "Retro98", Locale = "pt-BR"})
 local tab = window:CreateTab({Title = "Principal", Icon = "home"})
 local section = tab:CreateSection({Title = "Funções", Icon = "code"})
