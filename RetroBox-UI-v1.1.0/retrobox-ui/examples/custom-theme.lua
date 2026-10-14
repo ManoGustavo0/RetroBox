@@ -1,5 +1,5 @@
 -- Run in your executor. Update this raw URL if you move the published library.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 
 -- Partial palettes inherit any omitted colors from Retro98.
 RetroBox:RegisterTheme("Azulejo", {

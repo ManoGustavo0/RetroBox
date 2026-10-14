@@ -1,11 +1,19 @@
-# Publicar RetroBox UI no GitHub
+# Publicação RetroBox 2.0
+
+O caminho histórico `RetroBox-UI-v1.1.0/retrobox-ui` permanece. A distribuição de API 2 vive na pasta **dist da raiz do repositório**, incluindo bootstrap, canais e releases imutáveis. Atualizar somente a fonte histórica não promove o Stable.
+
+Use os builders e a verificação descritos em [AUTO-UPDATE.md](AUTO-UPDATE.md). Publique o ZIP preservando as duas pastas (`RetroBox-UI-v1.1.0` e `dist`), ou mescle a PR. Em um fork, configure Root e o bootstrap da sua origem explícita; não altere fontes/canais de terceiros.
+
+Os exemplos de módulos e catálogos atualizáveis pertencem ao repositório de demonstração e usam dados fictícios. Para publicar seu próprio hub, use [HUB-AUTO-UPDATE.md](HUB-AUTO-UPDATE.md). Os endereços abaixo da raiz só ficam disponíveis após commit/merge na branch referenciada. Sempre confira os RAWs e suas versões.
+
+# Caminho histórico e integração tradicional
 
 ## Repositório atual
 
 No repositório [ManoGustavo0/RetroBox](https://github.com/ManoGustavo0/RetroBox), a fonte está em `RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua`. O raw é:
 
 ```lua
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 ```
 
 Para atualizar, substitua os arquivos dentro de `RetroBox-UI-v1.1.0/retrobox-ui` pelo conteúdo da pasta `retrobox-ui` do novo ZIP, ou mescle a pull request da atualização. O nome antigo da pasta pode continuar: a versão da library é `Library.Version`, dentro do arquivo. Manter esse caminho preserva o raw usado pelos scripts.

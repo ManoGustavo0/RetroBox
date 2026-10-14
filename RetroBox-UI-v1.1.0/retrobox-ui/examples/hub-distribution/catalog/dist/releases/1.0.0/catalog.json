@@ -1,0 +1,16 @@
+{
+  "SchemaVersion": 1,
+  "Kind": "HubCatalog",
+  "HubId": "hub-update-demo",
+  "Version": "1.0.0",
+  "Games": [
+    {
+      "Id": "demo",
+      "Name": "Jogo fictício / demonstração",
+      "Description": "Metadados publicados em JSON. Nenhum script é executado ao baixar este catálogo.",
+      "Scripts": [
+        {"Id": "notice", "Title": "Mostrar aviso", "Description": "Usa somente a ação notice registrada no módulo do hub.", "Icon": "info", "Author": "Mano Gustavo", "Version": "1.0.0", "Action": "notice"}
+      ]
+    }
+  ]
+}

@@ -397,3 +397,10 @@ O [guia avançado](ADVANCED.md) contém contratos, exemplos, limites, padrões, 
 - A Command Palette mantém GetCommandResults/Choose/RegisterCommand/ExecuteCommand. Clique/toque percorrem o mesmo fluxo de Enter; alvos removidos/ocultos são rejeitados, e os comandos revalidam disponibilidade/confirmam/mostram o resultado da ação. Navegar a um controle não executa seu callback.
 - `FocusControl` expande, seleciona, rola e destaca; aplica foco quando possível e faz ajuste único após o frame de layout.
 - [DISTRIBUTION.md](DISTRIBUTION.md) fixa o contrato do raw. O loader principal e o prompt não exigem readfile ou ModuleScript no Workspace.
+
+
+## Adições 2.0
+
+Library: GetVersion, ParseVersion, CompareVersions, SHA256, CreateUpdater, CheckForUpdates, GetUpdateStatus e LoadHub. APIVersion=2, Build e limites compatíveis são metadados independentes de ConfigVersion. Veja [AUTO-UPDATE.md](AUTO-UPDATE.md) e [HUB-AUTO-UPDATE.md](HUB-AUTO-UPDATE.md).
+
+Hub: SelectScript/GetSelectedScript, GetVersion, CheckForUpdates, GetUpdateStatus, SetUpdateChannel e ReloadCatalog. CatalogUpdate e CodeUpdate são opções explícitas, com versões e origens próprias. O layout nativo remove a ação duplicada, preservando RunScript e a referência PlayButton. [SCRIPT-HUB.md](SCRIPT-HUB.md) detalha opções e layout; [MIGRATION-2.0.md](MIGRATION-2.0.md) explica a troca inicial de loader.

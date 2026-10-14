@@ -1,21 +1,13 @@
-# Contrato permanente de distribuição
+# Contrato permanente de distribuição · API 2
 
-A distribuição principal da RetroBox usa um arquivo Luau independente no raw do GitHub. O caminho histórico é `RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua`; o nome da pasta não representa a versão atual do conteúdo.
+**RAW do bootstrap confirmado → HttpGet → loadstring → Library → CreateWindow → CreateTab → CreateSection → controles.**
 
-**Raw confirmado → HttpGet → loadstring → Library → CreateWindow → CreateTab → CreateSection → controles.**
+A URL permanente é https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua. O bootstrap usa manifesto de canal e artefato imutável, com hash/tamanho e compatibilidade. Stable é o padrão; Preview e Pinned são opt-ins separados. Ver [AUTO-UPDATE.md](AUTO-UPDATE.md).
 
-O script final exige HTTP e loadstring disponibilizados pelo ambiente. Não exige readfile para obter a library, um ModuleScript no Workspace nem arquivos de desenvolvimento. Arquivos locais são uma alternativa de desenvolvimento; perfis usam readfile/writefile apenas quando disponíveis, com fallback de sessão conforme a API existente.
+A fonte histórica `RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua` continua standalone. Arquivos locais/ModuleScript/Studio não são requisitos. readfile/writefile/makefolder são opcionais para cache/perfis, com sessão quando ausentes. HTTP/loadstring e bit32 requeridos são verificados. Uma falha não é substituída por instalação local obrigatória.
 
-O raw de main recebe uma versão depois do merge. Antes disso, use o commit realmente publicado e verificado da release. Não apresente marcadores, links inexistentes ou uma versão anterior como se fossem a nova. [Loader.lua](../Loader.lua) verifica capacidades, HTTP, conteúdo vazio, compilação, inicialização, APIs e versão esperada. [remote-loader.lua](../examples/remote-loader.lua) mostra o fluxo tradicional.
+Scripts fixados em commits antigos precisam migrar o loader uma vez; eles não podem receber novos bytes no mesmo commit. Após a migração, releases 2.x compatíveis chegam na próxima execução. Uma janela ativa não recebe hot swap. Código de Hub tem bootstrap e versão próprios: [HUB-AUTO-UPDATE.md](HUB-AUTO-UPDATE.md).
 
-O `Prompt-RetroBox-IA.md` entregue em cada atualização preserva sua API e organização e usa o raw fixado daquela versão. Antes de entregá-lo:
+Antes da entrega: execute o builder, a suíte, verify_distribution.py e validate_prompt.py; compare os RAWs publicados com os SHA-256/bytes do Git tree e execute o exemplo extraído do prompt com o bootstrap, sem capacidades de arquivo do executor. As verificações de fonte/rede/semântica não são uma renderização do cliente Roblox.
 
-1. Publique a fonte e confirme o raw, sua versão e seu conteúdo contra o Git tree.
-2. Execute `python3 tools/validate_prompt.py --prompt /caminho/Prompt-RetroBox-IA.md --commit SHA_CONFIRMADO`.
-3. Execute o exemplo principal no runner com a fonte baixada, sem capacidades de arquivo do executor.
-4. Confira dependências e métodos reais; se a publicação falhar, informe a URL pendente e não converta um loader local em novo requisito geral.
-
-O validator detecta versão/header antigos, marcador ou caminho incorreto, loader local/ModuleScript, ordem de montagem alterada e métodos desconhecidos no exemplo. A suíte também testa HTTP ausente, erros de download/compilação/inicialização e versões erradas. A execução por HTTP no Roblox real continua sendo uma conferência separada, descrita em [VALIDATION.md](VALIDATION.md).
-
-
-Raw verificado da 1.9.2: [4eb9870](https://raw.githubusercontent.com/ManoGustavo0/RetroBox/4eb987097a9ee37ea9b84bf87ab797a93123590b/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua). A fonte distribuída declara 1.9.2 e foi executada no runner sem readfile/writefile do executor. A conferência dentro do cliente Roblox segue separada.
+Um commit de branch não torna um canal de main disponível. Só informe publicado depois de merge e verificação pública do bootstrap, manifesto e artefato. O prompt completo deve manter APIs, sequência tradicional, temas, ícones, runtime, perfis e exemplos; sua validação é adaptada à API 2.

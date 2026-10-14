@@ -1,6 +1,6 @@
 -- Replace this file's URL if you publish the library somewhere else.
 -- Requires the updated RetroBox.lua (version 1.2.0+) at the published path.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 
 local window = RetroBox:CreateWindow({
     Id = "tooltip-showcase", Title = "RetroBox / Tooltips",

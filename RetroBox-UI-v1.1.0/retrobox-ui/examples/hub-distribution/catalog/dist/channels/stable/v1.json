@@ -1,0 +1,19 @@
+{
+  "SchemaVersion": 1,
+  "Kind": "HubCatalog",
+  "HubId": "hub-update-demo",
+  "Version": "1.0.0",
+  "APIVersion": 1,
+  "Channel": "stable",
+  "Build": "hub-update-demo-1.0.0",
+  "Library": {
+    "MinVersion": "2.0.0",
+    "MaxVersion": "3.0.0",
+    "APIVersion": 2
+  },
+  "Artifact": {
+    "Path": "dist/releases/1.0.0/catalog.json",
+    "Bytes": 543,
+    "SHA256": "012b5f880029906b05585aadf752c24626465c422f54b2efea5272c0a04ea2b6"
+  }
+}

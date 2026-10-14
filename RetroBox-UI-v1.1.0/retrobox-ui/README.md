@@ -8,6 +8,12 @@ Library de GUI em Luau para desenvolvedores de scripts executados no cliente Rob
 
 *A imagem é um conceito visual, com perfil ilustrativo. A GUI usa objetos nativos do Roblox; a renderização em executor ainda precisa ser conferida.*
 
+## Versão 2.0.0
+
+Bootstrap permanente, Stable/Preview/Pinned, integridade SHA-256, versões semânticas, cache opcional e rollback. Hubs podem distribuir catálogos JSON e módulos de código separadamente. O hub nativo tem imagem grande, seleção de scripts, listas com altura dinâmica, rolagem independente e um único botão **Executar script**. A API tradicional e os perfis permanecem.
+
+[Auto-update](docs/AUTO-UPDATE.md) · [Hub atualizável](docs/HUB-AUTO-UPDATE.md) · [Migração](docs/MIGRATION-2.0.md) · [Relatório 2.0](docs/RELEASE-2.0.md)
+
 ## Versão 1.9.2
 
 As descrições de jogos e scripts do hub agora têm espaço para todo o texto. Labels com várias linhas crescem com o conteúdo, a largura e a escala do texto, preservando os campos e os perfis existentes. Veja [RELEASE-1.9.2.md](docs/RELEASE-1.9.2.md).
@@ -35,7 +41,7 @@ Veja o [guia de temas](docs/THEMES.md), a [galeria executável](examples/themes-
 A fonte deste repositório fica no caminho abaixo. Se publicar em outro lugar, ajuste usuário, repositório, branch e caminho. Veja [como publicar e atualizar](docs/GITHUB.md).
 
 ```lua
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 
 local window = RetroBox:CreateWindow({
     Id = "meu-script", -- estável: executar de novo substitui esta janela

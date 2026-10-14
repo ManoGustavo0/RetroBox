@@ -1,0 +1,9 @@
+{
+  "SchemaVersion": 1,
+  "Releases": [
+    {
+      "Version": "2.0.0",
+      "Manifest": "dist/releases/2.0.0/manifest.json"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 -- RetroBox 1.7.0+: real widgets for native theme/contrast verification.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window=RetroBox:CreateWindow({Id="contrast-showcase",Title="RetroBox / Contraste",Subtitle="Casos das capturas · valores simulados",Debug=true})
 local tab=window:CreateTab({Title="Contraste",Icon="eye",Columns=2})
 local stats=tab:CreateSection({Title="Esta execução",Icon="star"})

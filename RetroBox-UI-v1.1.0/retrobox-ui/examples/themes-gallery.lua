@@ -1,6 +1,6 @@
 -- RetroBox 1.8.0+: six new palettes on real widgets, with simulated data.
 -- Before the release is merged, replace main with the commit from its PR.
-local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox = loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 assert(RetroBox.Themes.Hacker, "Publish RetroBox 1.8.0+ or use the release commit in the raw URL")
 
 local themes = {"Hacker", "Dracula", "Nord", "Sakura", "Ocean", "Amber"}

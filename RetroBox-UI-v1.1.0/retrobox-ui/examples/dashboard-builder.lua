@@ -1,5 +1,5 @@
 -- RetroBox 1.7.0+: responsive layout with real existing cards/charts.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window=RetroBox:CreateWindow({Id="dashboard-builder-demo",Title="RetroBox / Dashboard",ConfigFolder="RetroBox/DashboardBuilder"})
 local s=window:CreateTab("Dashboard"):CreateSection("Dados simulados")
 local d=s:CreateDashboard({Id="layout",Title="Widgets",Columns=2,Editable=true})

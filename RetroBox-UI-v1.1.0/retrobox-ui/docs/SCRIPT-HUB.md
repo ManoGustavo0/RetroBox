@@ -1,4 +1,4 @@
-# Script Hub Mode · RetroBox 1.9.0
+# Script Hub 2.0 · RetroBox 2.0.0
 
 O hub é opcional. A sequência normal `HTTP → CreateWindow → CreateTab → CreateSection → controles` continua disponível. O modo usa a mesma janela, as listas virtuais, as flags, os perfis, os temas, os scopes e as ações da RetroBox.
 
@@ -20,7 +20,7 @@ Jogo: `{Id, Name, PlaceId?, UniverseId?, Description?, Image?, Order?, Scripts={
 
 Script: `{Id, Title, Description?, Icon?, Author?, Version?, Status?, Enabled?, CurrentGameOnly?, Requires?, Confirm?, Callback?}`. Até 128 por jogo, IDs únicos dentro dele. Title/Author até 128 bytes, Description até 2048, Version 64, Status 128, Confirm 4096. Sem Callback, a entrada permanece indisponível. Icon usa o catálogo pixel art existente. Enabled é bool ou `function(hub, gameMetadata, scriptMetadata)`; CurrentGameOnly restringe a disponibilidade ao contexto correspondente.
 
-`Requires` pode conter `HttpGet`, `loadstring`, `readfile`, `writefile` ou `setclipboard`. Essas capacidades pertencem à ação cadastrada: o hub e a library não exigem `readfile` para carregar. Nenhuma URL de código é interpretada pelo catálogo; Play chama somente o Callback registrado em código pelo desenvolvedor.
+`Requires` pode conter `HttpGet`, `loadstring`, `readfile`, `writefile` ou `setclipboard`. Essas capacidades pertencem à ação cadastrada: o hub e a library não exigem `readfile` para carregar. Nenhuma URL de código é interpretada pelo catálogo; Executar script chama somente o Callback registrado em código pelo desenvolvedor.
 
 ```lua
 -- Carregue a RetroBox primeiro pelo raw confirmado da versão, como no prompt.
@@ -85,3 +85,16 @@ O fluxo nativo compatível no cliente usa `TeleportService:Teleport(placeId, Loc
 Fontes oficiais: [URIs de assets](https://create.roblox.com/docs/projects/assets), [TeleportService](https://create.roblox.com/docs/reference/engine/classes/TeleportService), [migração de teleportes](https://create.roblox.com/docs/projects/teleport#migrate-to-secure-teleports).
 
 Veja [script-hub.lua](../examples/script-hub.lua), [distribuição remota](DISTRIBUTION.md) e [validação](VALIDATION.md).
+
+
+## Layout 2.0
+
+O painel começa pela imagem sem título Miniatura: largura útil inteira, proporção 16:9 e ScaleType.Fit, com placeholder pixel art no tema. Image tem prioridade. Na imagem principal, PlaceId usa GameThumbnail 256×144; as linhas usam UniverseId/GameIcon quando presente. Textos de status vazios são ocultos.
+
+A navegação usa linhas compactas, marcador de seleção, pesquisa com limpeza e sort traduzido sem alterar os IDs das opções. No desktop, as duas colunas rolam independentemente; em largura pequena, empilham. NavigationRatio aceita .3–.55 (padrão .45), StackAt 480–1000 (padrão 620), ScriptListMaxRows 1–12 (padrão 4) e GameListMaxRows 2–16 (padrão 7). TextScale também aumenta o ponto de empilhamento e altura das linhas.
+
+A lista de scripts seleciona, sem botão de execução por linha. Um script é escolhido automaticamente; SelectScript(id) e GetSelectedScript() permitem controlar a escolha. A última seleção válida por jogo fica na sessão. PlayButton conserva sua referência/ID, agora com texto Executar script / Run Script. ExecutionStatus mostra estado/progresso/erro real. CancelButton só aparece quando há execução e solicita cancelamento cooperativo. Entrar no jogo continua sendo exclusivamente teleporte.
+
+## Atualizações
+
+Version, CatalogVersion, Actions, CatalogUpdate e CodeUpdate separam código/dados/ação/compatibilidade. GetVersion, CheckForUpdates, GetUpdateStatus, SetUpdateChannel e ReloadCatalog estão descritos em [HUB-AUTO-UPDATE.md](HUB-AUTO-UPDATE.md). JSON não cria callbacks nem executa URLs. O catálogo é validado antes da mutação; preserva controles e preferências ainda válidas. Código e library são aplicados na próxima inicialização.

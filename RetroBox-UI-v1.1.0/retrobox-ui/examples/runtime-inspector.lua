@@ -1,5 +1,5 @@
 -- RetroBox 1.7.0+: simulated operations; optional developer inspector.
-local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"))()
+local RetroBox=loadstring(game:HttpGet("https://raw.githubusercontent.com/ManoGustavo0/RetroBox/main/dist/bootstrap/v2.lua"))()
 local window=RetroBox:CreateWindow({Id="runtime-inspector-demo",Title="RetroBox / Inspector",Debug=true})
 local s=window:CreateTab("Simulação"):CreateSection("Operações")
 local total=window:CreateState(0); s:AddStatCard({Title="Total",State=total,TwoWay=false})
