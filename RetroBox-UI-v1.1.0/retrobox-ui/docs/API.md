@@ -1,4 +1,4 @@
-# RetroBox UI API · 1.9.1
+# RetroBox UI API · 1.9.2
 
 Os nomes públicos são em inglês. `Locale` aceita `"pt-BR"` e `"en-US"`. Textos dos controles pertencem ao seu script.
 
@@ -188,7 +188,7 @@ Callbacks comuns usam task.spawn e xpcall. Liberações de Hold durante destrui�
 | `AddColorPicker` | (color, opacity, state) | HSV/HEX/RGB, opacidade e animação |
 | `AddProgress` | number | Min, Max; porcentagem |
 | `AddConsole` | string | Height, MaxLines; Append(message), Clear() |
-| `AddLabel` | string | Height, descrição, SetText(text) |
+| `AddLabel` | string | Height mínimo, texto com quebra de linha, descrição, SetText(text); altura acompanha conteúdo e largura |
 | `AddSeparator` | string | Divisor com título |
 | `AddImage` | string de imagem | Image, Height |
 | `AddStatCard` | number/string/nil | Unit, Subtitle, Trend, Loading/Unavailable, Format e sparkline opcional |

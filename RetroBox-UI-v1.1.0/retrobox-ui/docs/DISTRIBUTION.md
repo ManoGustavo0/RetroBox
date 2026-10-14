@@ -18,4 +18,4 @@ O `Prompt-RetroBox-IA.md` entregue em cada atualização preserva sua API e orga
 O validator detecta versão/header antigos, marcador ou caminho incorreto, loader local/ModuleScript, ordem de montagem alterada e métodos desconhecidos no exemplo. A suíte também testa HTTP ausente, erros de download/compilação/inicialização e versões erradas. A execução por HTTP no Roblox real continua sendo uma conferência separada, descrita em [VALIDATION.md](VALIDATION.md).
 
 
-Raw verificado da 1.9.1: [6486c4b](https://raw.githubusercontent.com/ManoGustavo0/RetroBox/6486c4be4db877e4eb2e94f714f4ae4da3fdf762/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua). A fonte distribuída declara 1.9.1 e foi executada no runner sem readfile/writefile do executor. A conferência dentro do cliente Roblox segue separada.
+Raw verificado da 1.9.2: [4eb9870](https://raw.githubusercontent.com/ManoGustavo0/RetroBox/4eb987097a9ee37ea9b84bf87ab797a93123590b/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua). A fonte distribuída declara 1.9.2 e foi executada no runner sem readfile/writefile do executor. A conferência dentro do cliente Roblox segue separada.

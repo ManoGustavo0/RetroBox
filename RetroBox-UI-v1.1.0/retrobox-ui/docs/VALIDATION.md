@@ -1,9 +1,11 @@
-# Validação · RetroBox UI 1.9.1
+# Validação · RetroBox UI 1.9.2
 
 ## Executado
 
+- Três regressões da 1.9.2 verificam descrições multiline de jogos/scripts, ajustes de escala, atualização de textos longos/curtos, posição da descrição auxiliar, largura e fallback de medição.
+
 - Compilação sintática de todos os arquivos Lua pelo subconjunto compatível com Lua 5.4.
-- **221 testes de lógica** com sinais, instâncias e serviços simulados; os 151 testes da 1.6 continuam na suíte.
+- **224 testes de lógica** com sinais, instâncias e serviços simulados; os 151 testes da 1.6 continuam na suíte.
 - Carregamento dos 19 exemplos por HTTP simulado + compilação do conteúdo real de `RetroBox.lua`; dashboard inicia simulação/conclui ação, e runtime-integration carrega um perfil antigo, sincroniza toggles e executa coleta/venda no grupo compartilhado.
 - Loader com respostas inválidas, falha de download e erro de compilação.
 - GUI por gethui/CoreGui/PlayerGui: preferência, fallback quando falta permissão, Parent explícito, falhas e limpeza ao executar de novo.
@@ -45,7 +47,7 @@ O double de Destroying também testa entrega adiada após remover a ancestralida
 
 ## Conferir no executor
 
-1. Use o raw verificado da 1.9.1 indicado no prompt ou em DISTRIBUTION.md; ele funciona mesmo antes do merge da PR.
+1. Use o raw verificado da 1.9.2 indicado no prompt ou em DISTRIBUTION.md; ele funciona mesmo antes do merge da PR.
 2. Execute o showcase e confira perfil, temas, textos, rolagem, arraste, redimensionamento, minimizar/maximizar e RightShift.
 3. Confira HSV, R/G/B, HEX, opacidade, RGB e velocidade. O círculo do showcase é um exemplo de ligação por callback.
 4. Na aba Configurações, crie saves com nomes próprios, selecione/carregue e confira callbacks/valores. Confirme e cancele sobrescritas. Execute de novo com os mesmos IDs/ConfigFolder e confira a lista de saves e os arquivos restaurados.

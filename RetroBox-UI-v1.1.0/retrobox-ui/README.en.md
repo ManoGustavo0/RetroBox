@@ -8,6 +8,10 @@ A standalone Luau GUI library for scripts running through Roblox client executor
 
 *Illustrative concept, not an in-game screenshot. The library renders native Roblox GUI objects.*
 
+## Version 1.9.2
+
+Game and script descriptions in the hub now have room for their full text. Multiline labels grow with their content, width and text scale while preserving existing fields and profiles. See [RELEASE-1.9.2.md](docs/RELEASE-1.9.2.md).
+
 ## Version 1.9.1
 
 Thirty new pixel icons bring the built-in catalog to **76**: diamonds, money, coins, tools, equipment and rewards. Each 12×12 drawing follows the window's theme and works in existing components and script hub entries. See [ICONS.md](docs/ICONS.md), [the runnable gallery](examples/icons.lua) and [RELEASE-1.9.1.md](docs/RELEASE-1.9.1.md).

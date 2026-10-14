@@ -1,6 +1,6 @@
 -- Optional diagnostic loader. Update URL if you move the published library.
-local URL = "https://raw.githubusercontent.com/ManoGustavo0/RetroBox/6486c4be4db877e4eb2e94f714f4ae4da3fdf762/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"
-local EXPECTED_VERSION = "1.9.1"
+local URL = "https://raw.githubusercontent.com/ManoGustavo0/RetroBox/4eb987097a9ee37ea9b84bf87ab797a93123590b/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"
+local EXPECTED_VERSION = "1.9.2"
 assert(type(loadstring) == "function", "[RetroBox] This executor does not expose loadstring")
 local hasHTTP, httpGet = pcall(function() return game.HttpGet end)
 assert(hasHTTP and type(httpGet) == "function", "[RetroBox] This executor does not expose game:HttpGet")

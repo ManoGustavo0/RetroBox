@@ -7,7 +7,7 @@ return function(Mock,Library,test)
             assert(url:match("^https://raw%.githubusercontent%.com/ManoGustavo0/RetroBox/.+/RetroBox%-UI%-v1%.1%.0/retrobox%-ui/RetroBox%.lua$"))
             requests=requests+1; return source
         end
-        local remote=dofile("Loader.lua"); assert(requests==1 and remote.Version=="1.9.1" and type(remote.CreateScriptHub)=="function")
+        local remote=dofile("Loader.lua"); assert(requests==1 and remote.Version=="1.9.2" and type(remote.CreateScriptHub)=="function")
         local window=remote:CreateWindow({Id="no-local-file",FileStorage=false})
         local tab=window:CreateTab("Tab"); local section=tab:CreateSection("Section"); local calls=0
         local toggle=section:AddToggle({Id="remote-toggle",Callback=function() calls=calls+1 end}); toggle:SetValue(true); Mock.pump(); assert(calls==1)

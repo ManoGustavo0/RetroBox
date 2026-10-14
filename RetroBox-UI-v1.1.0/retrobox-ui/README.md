@@ -8,6 +8,10 @@ Library de GUI em Luau para desenvolvedores de scripts executados no cliente Rob
 
 *A imagem é um conceito visual, com perfil ilustrativo. A GUI usa objetos nativos do Roblox; a renderização em executor ainda precisa ser conferida.*
 
+## Versão 1.9.2
+
+As descrições de jogos e scripts do hub agora têm espaço para todo o texto. Labels com várias linhas crescem com o conteúdo, a largura e a escala do texto, preservando os campos e os perfis existentes. Veja [RELEASE-1.9.2.md](docs/RELEASE-1.9.2.md).
+
 ## Versão 1.9.1
 
 Mais 30 ícones em pixel art, totalizando **76 desenhos embutidos**: diamante, dinheiro, moedas, ferramentas, equipamentos e recompensas. Usam as cores dos temas e funcionam nos controles e no Script Hub. Veja [ICONS.md](docs/ICONS.md) e [RELEASE-1.9.1.md](docs/RELEASE-1.9.1.md).
@@ -300,6 +304,6 @@ Os sete exemplos novos requerem `RetroBox.lua` 1.7.0. Loader e exemplos usam o r
 
 ## Validação e licença
 
-221 testes locais passaram, incluindo carregamento simulado do código raw, os 19 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
+224 testes locais passaram, incluindo carregamento simulado do código raw, os 19 exemplos, integração de tarefas/grupos, corridas de conclusão/cancelamento, migrações, arraste com inset/escala, gráficos, lotes, animações, saves e limpeza. [VALIDATION.md](docs/VALIDATION.md) descreve os limites: a library ainda não foi executada em um executor real neste ambiente. Compatibilidade com um executor específico, incluindo Unbound, precisa desse teste.
 
 MIT · Mano Gustavo · 2026
