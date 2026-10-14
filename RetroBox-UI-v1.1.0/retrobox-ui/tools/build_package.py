@@ -282,10 +282,17 @@ def release_zip():
             if not link.startswith(("https://", "http://", "#")):
                 assert (file.parent / link.split("#", 1)[0]).exists(), f"Broken link: {file.name}: {link}"
     out = ROOT.parent / f"RetroBox-UI-v{VERSION}.zip"
-    files = sorted(p for p in ROOT.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
+    repository = ROOT.parent.parent if ROOT.parent.name == "RetroBox-UI-v1.1.0" else ROOT.parent
+    files = [(p, "RetroBox-UI-v1.1.0/retrobox-ui/" + p.relative_to(ROOT).as_posix())
+             for p in sorted(ROOT.rglob("*")) if p.is_file() and "__pycache__" not in p.parts]
+    files += [(p, "dist/" + p.relative_to(repository / "dist").as_posix())
+              for p in sorted((repository / "dist").rglob("*")) if p.is_file()]
+    prompt = repository / "Prompt-RetroBox-IA.md"
+    if prompt.is_file():
+        files.append((prompt, "Prompt-RetroBox-IA.md"))
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for file in files:
-            archive.write(file, "retrobox-ui/" + file.relative_to(ROOT).as_posix())
+        for file, name in files:
+            archive.write(file, name)
     with zipfile.ZipFile(out) as archive:
         assert archive.testzip() is None
         assert len(archive.namelist()) == len(files)
