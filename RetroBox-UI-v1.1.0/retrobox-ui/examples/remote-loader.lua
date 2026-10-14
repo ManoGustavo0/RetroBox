@@ -1,6 +1,6 @@
 -- Remote distribution contract: HTTP -> library -> window -> tab -> section -> controls.
 -- For pre-merge testing use the verified 1.9.2 release commit.
-local RETROBOX_URL = "https://raw.githubusercontent.com/ManoGustavo0/RetroBox/6486c4be4db877e4eb2e94f714f4ae4da3fdf762/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"
+local RETROBOX_URL = "https://raw.githubusercontent.com/ManoGustavo0/RetroBox/4eb987097a9ee37ea9b84bf87ab797a93123590b/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua"
 local ok, Library = pcall(function()
     assert(type(loadstring) == "function", "loadstring is unavailable")
     local hasHTTP, getter = pcall(function() return game.HttpGet end)

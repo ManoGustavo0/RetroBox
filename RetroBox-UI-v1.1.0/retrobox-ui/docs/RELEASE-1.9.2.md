@@ -11,3 +11,9 @@ Selecione o jogo para ler sua descrição em **Jogo selecionado**. Selecione o s
 **224/224 testes de lógica e 19 exemplos aprovados.** A reprodução da versão anterior mostrava uma caixa de 21 pixels para um texto que precisava de 48. Após a correção, ela reserva 51 pixels. As regressões cobrem descrições de jogo/script, escala do texto, atualização de textos longos/curtos, largura, dicas, descrição auxiliar e falha de medição.
 
 O cliente Roblox não está disponível neste ambiente; os testes verificam conteúdo, geometria calculada, comportamento e limpeza em uma simulação.
+
+Raw da implementação: https://raw.githubusercontent.com/ManoGustavo0/RetroBox/4eb987097a9ee37ea9b84bf87ab797a93123590b/RetroBox-UI-v1.1.0/retrobox-ui/RetroBox.lua
+
+A fonte publicada foi comparada byte a byte ao código testado.
+
+O Loader e o exemplo do prompt inicializaram a fonte publicada sem funções de arquivo do executor e limparam seus recursos. O Mano Gustavo Hub atualizado passou nas 15 verificações de integração. A atualização altera seu carregador; `CONFIG.Games`, os IDs, os callbacks e os perfis permanecem compatíveis.
